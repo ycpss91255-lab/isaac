@@ -4,7 +4,7 @@
 # streams, and only then push it (isaac#223 / isaac#252).
 #
 # Run by publish-stream-source.yaml through the org reusable workflow
-# ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml, which owns
+# ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml, which owns
 # the self-hosted GPU runner, the fork-PR gate, the workspace reclaim, the
 # checkout, Buildx, the GHCR login and the failure upload of .producer-smoke/.
 # These steps used to be inline workflow steps; they keep their old names as
@@ -24,7 +24,7 @@
 # Guard: test/unit/pytest/test_stream_source_producer.py.
 set -euo pipefail
 
-readonly IMAGE_REPO="ghcr.io/ycpss91255-docker/isaac-stream-source"
+readonly IMAGE_REPO="ghcr.io/ycpss91255-lab/isaac-stream-source"
 # A docker tag: [A-Za-z0-9_] then up to 127 of [A-Za-z0-9_.-]. The same
 # pattern the workflow's validate job applies to the dispatch input.
 readonly TAG_PATTERN='^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'

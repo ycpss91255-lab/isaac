@@ -2,11 +2,11 @@
 
 **[English](README.md)** | **[繁體中文](doc/README.zh-TW.md)** | **[简体中文](doc/README.zh-CN.md)** | **[日本語](doc/README.ja.md)**
 
-NVIDIA Isaac Sim 6.2.0 Docker development environment, built on top of [`ycpss91255-docker/base`](https://github.com/ycpss91255-docker/base) (previously `ycpss91255-docker/template`).
+NVIDIA Isaac Sim 6.2.0 Docker development environment, built on top of [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) (previously `ycpss91255-lab/template`).
 
 Image scope covers Isaac Sim itself plus the env wiring needed for its bundled ROS 2 bridge to talk cross-container. NVIDIA Isaac Lab 3.0 (`v3.0.0`) is also baked in as the scene-spawn backend (`sim_utils` spawners, `UrdfConverter`, `AppLauncher`; ADR-0018). Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
 
-The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD/URDF models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-research/isaac` and `ycpss91255-docker/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-docker/isaac/issues/78).
+The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD/URDF models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-lab/isaac` and `ycpss91255-lab/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-lab/isaac/issues/78).
 
 ## Prerequisites
 
@@ -36,7 +36,7 @@ Then pick **one** path. The stages are independent: build only the stage you are
 | An interactive shell to develop in | `just docker build` (devel) | `just docker run` |
 | Watch the sim over WebRTC | `just docker build -t stream` | `just docker run -t stream -d`, then [Connecting to the WebRTC livestream](#connecting-to-the-webrtc-livestream) |
 
-A cold first build takes about an hour. It pulls the 20.7 GB NGC base image and then installs Isaac Lab; GitHub-hosted CI builds took 45 to 84 min ([45 min](https://github.com/ycpss91255-docker/isaac/actions/runs/42550974606/job/128946327237), [58 min](https://github.com/ycpss91255-docker/isaac/actions/runs/42545601510/job/128929863953), [84 min](https://github.com/ycpss91255-docker/isaac/actions/runs/42491566385/job/128764928999)). Later builds reuse the layer cache, and the other stages share those layers, so building a second stage takes seconds to minutes.
+A cold first build takes about an hour. It pulls the 20.7 GB NGC base image and then installs Isaac Lab; GitHub-hosted CI builds took 45 to 84 min ([45 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237), [58 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953), [84 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)). Later builds reuse the layer cache, and the other stages share those layers, so building a second stage takes seconds to minutes.
 
 Production stages (both idle on startup — exec driver scripts into the running container):
 
@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage tree: `devel-base` -> `devel` (shared layer: isaac code + common config) -> `gui` / `stream` / `headless`. Only the `gui` service mounts X11 (`[stage:gui] gui.mode = auto` in `.setup.conf`; top-level `[gui]` is `off`, so `devel` and the other stages mount none): `just docker run -t gui`. Two stages auto-emitted as profile-gated compose services per [base #215](https://github.com/ycpss91255-docker/base/issues/215): `headless` (pure sim, `ISAAC_LIVESTREAM=0`) and `stream` (sim + WebRTC, `ISAAC_LIVESTREAM=2`). Both idle on startup — the container stays up and you exec driver scripts in via `just docker exec -t <stage> <cmd>`. Use `just docker run -t <stage> -d` to launch.
+> Stage tree: `devel-base` -> `devel` (shared layer: isaac code + common config) -> `gui` / `stream` / `headless`. Only the `gui` service mounts X11 (`[stage:gui] gui.mode = auto` in `.setup.conf`; top-level `[gui]` is `off`, so `devel` and the other stages mount none): `just docker run -t gui`. Two stages auto-emitted as profile-gated compose services per [base #215](https://github.com/ycpss91255-lab/base/issues/215): `headless` (pure sim, `ISAAC_LIVESTREAM=0`) and `stream` (sim + WebRTC, `ISAAC_LIVESTREAM=2`). Both idle on startup — the container stays up and you exec driver scripts in via `just docker exec -t <stage> <cmd>`. Use `just docker run -t <stage> -d` to launch.
 
 ### Headless: bring Isaac up and run a scene
 
@@ -108,7 +108,7 @@ Do not use a bare `pkill -f <script>`. The containers run with `pid: host`, so t
 
 ### One image and one compose project per checkout
 
-Every checkout of this repo on a host used to resolve the same image tag (`<hub>/isaac:<stage>`) and the same compose project (`<hub>-isaac`). `just docker build` then pruned the image another checkout had built, and `just docker stop` / `run` removed another checkout's containers (upstream: [base#1550](https://github.com/ycpss91255-docker/base/issues/1550), [base#1551](https://github.com/ycpss91255-docker/base/issues/1551), [base#1552](https://github.com/ycpss91255-docker/base/issues/1552)). Until base fixes that:
+Every checkout of this repo on a host used to resolve the same image tag (`<hub>/isaac:<stage>`) and the same compose project (`<hub>-isaac`). `just docker build` then pruned the image another checkout had built, and `just docker stop` / `run` removed another checkout's containers (upstream: [base#1550](https://github.com/ycpss91255-lab/base/issues/1550), [base#1551](https://github.com/ycpss91255-lab/base/issues/1551), [base#1552](https://github.com/ycpss91255-lab/base/issues/1552)). Until base fixes that:
 
 - `./script/checkout_identity.sh isolate` writes `[image] rule_1 = string:isaac-<dir>-<hash>` into the gitignored `.setup.conf.local`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
 - The pre build / run / stop hooks refuse to act on the shared names. `ISAAC_ALLOW_SHARED_IDENTITY=1` overrides that; CI's build steps use it.
@@ -126,7 +126,7 @@ Every checkout of this repo on a host used to resolve the same image tag (`<hub>
   ```
 
   The filters match the exact slug only. Do not widen them to `isaac*` and do not run `docker image prune -a`: the shared `test-tools:<base version>` image (next bullet) must not be removed by this procedure.
-- One image stays shared: every build also builds the lint/bats tool image `test-tools:<base version>` (now `test-tools:v0.42.0`), named by the pinned base version only. Every checkout and every repo on the host that pins the same base version writes the same tag, so do not delete it while another checkout may be building. `just docker build --clean-tools` removes it for all of them. It comes from base's `build.sh` and is tracked upstream on [base#1551](https://github.com/ycpss91255-docker/base/issues/1551).
+- One image stays shared: every build also builds the lint/bats tool image `test-tools:<base version>` (now `test-tools:v0.42.0`), named by the pinned base version only. Every checkout and every repo on the host that pins the same base version writes the same tag, so do not delete it while another checkout may be building. `just docker build --clean-tools` removes it for all of them. It comes from base's `build.sh` and is tracked upstream on [base#1551](https://github.com/ycpss91255-lab/base/issues/1551).
 - Containers started before isolating stay in the shared project. List them with `docker compose -p <hub>-isaac ps -a` and stop yours by name. `ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` stops the whole shared project, other checkouts' containers included.
 
 ## Connecting to the WebRTC livestream
@@ -139,7 +139,7 @@ Isaac Sim 6.2.0 uses the NVCF (`omni.services.livestream.nvcf`) livestream proto
 
 ### Browser-based viewer (omniverse_web_viewer)
 
-The [`omniverse_web_viewer`](https://github.com/ycpss91255-docker/omniverse_web_viewer) repo provides a browser-based client as a sidecar container. Bundled as a submodule at `web_viewer/` in this repo.
+The [`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo provides a browser-based client as a sidecar container. Bundled as a submodule at `web_viewer/` in this repo.
 
 ```bash
 # First time: init submodules + create per-host config
@@ -184,9 +184,9 @@ Notes:
 
 ### Deterministic stream-source producer (GHCR image, isaac#223)
 
-For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-docker/omniverse_web_viewer/issues/48), consumed by the Tier B browser-frames smoke isaac#173), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, camera framed at `eye=[15,-15,11]` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
+For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48), consumed by the Tier B browser-frames smoke isaac#173), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, camera framed at `eye=[15,-15,11]` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
 
-- **Image**: `ghcr.io/ycpss91255-docker/isaac-stream-source:<tag>` (pinned, immutable tag — not `:latest`). Built from the `producer` Dockerfile stage.
+- **Image**: `ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>` (pinned, immutable tag — not `:latest`). Built from the `producer` Dockerfile stage.
 - **Driver**: `src/script/stream_source_producer.py`, baked at `/opt/isaac-producer/stream_source_producer.py` and launched by the image `CMD`.
 - **Publish**: manual only via the `Publish Stream-Source Producer (GHCR)` workflow (`workflow_dispatch`, input `tag`, default `0.0.1`). There is no push/tag trigger, so nothing publishes on merge.
 
@@ -199,7 +199,7 @@ Run it:
 docker run --rm --network=host --gpus all \
   -e PUBLIC_IP=<host-lan-ip> \
   -e ISAAC_SIGNAL_PORT=49100 \
-  ghcr.io/ycpss91255-docker/isaac-stream-source:0.0.2
+  ghcr.io/ycpss91255-lab/isaac-stream-source:0.0.2
 
 # Then connect a browser / the omniverse_web_viewer to <host-lan-ip> (see above).
 ```
@@ -222,7 +222,7 @@ The table is a convenience view. The authority is the image itself --
 ask it directly when it matters:
 
 ```bash
-docker inspect ghcr.io/ycpss91255-docker/isaac-stream-source:<tag> \
+docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
   --format '{{index .Config.Labels "org.opencontainers.image.base.name"}}'
 ```
 <!-- producer-versions:end -->

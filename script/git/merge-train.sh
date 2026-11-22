@@ -17,12 +17,12 @@
 # Emits one line per state change; exits when all are merged or one fails.
 #
 # Environment:
-#   REPO             OWNER/REPO (default ycpss91255-docker/isaac)
+#   REPO             OWNER/REPO (default ycpss91255-lab/isaac)
 #   CLEANUP_SCRIPT   cleanup script (default: sibling cleanup-merged-worktree.sh)
 
 set -uo pipefail
 
-readonly REPO="${REPO:-ycpss91255-docker/isaac}"
+readonly REPO="${REPO:-ycpss91255-lab/isaac}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly CLEANUP_SCRIPT="${CLEANUP_SCRIPT:-${SCRIPT_DIR}/cleanup-merged-worktree.sh}"

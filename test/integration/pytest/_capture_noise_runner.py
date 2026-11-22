@@ -25,7 +25,7 @@ from pathlib import Path
 
 # ---------------------------------------------------------------------------
 # Converged-still render recipe (inlined from the former viz_render.py,
-# which moved to ycpss91255-docker/isaac_physics_test with the experiment
+# which moved to ycpss91255-lab/isaac_physics_test with the experiment
 # drivers).  Only the subset _capture_noise_runner actually calls is kept.
 # ---------------------------------------------------------------------------
 _CONVERGED_RENDER_MODE = "PathTracing"

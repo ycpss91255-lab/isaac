@@ -91,7 +91,7 @@ print(job["uses"] if field == "uses" else job["with"][field])
 @test "core-gpu passes the run-scoped reap-container-filter" {
   run _gpu_integration_field uses
   [ "${status}" -eq 0 ]
-  [ "${output}" = "ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0" ]
+  [ "${output}" = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0" ]
 
   run _gpu_integration_field reap-container-filter
   [ "${status}" -eq 0 ]

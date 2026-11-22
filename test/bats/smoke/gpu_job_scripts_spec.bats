@@ -6,7 +6,7 @@
 #   script/ci/stream_smoke_job.sh     (ci-stream-smoke.yaml stream-smoke)
 #
 # Both jobs now run through the org reusable workflow
-# ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml, which owns
+# ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml, which owns
 # the runner, the fork-PR gate, the pre-checkout workspace reclaim and the
 # checkout, and then runs ONE repo script. These scripts hold the step logic
 # the two workflows used to carry inline, so this spec pins what those steps

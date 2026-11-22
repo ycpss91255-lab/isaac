@@ -33,7 +33,7 @@ CI_FREE_JOBS = ("changes", "gate", "release")
 # jobs still follow the job rule, except where the reason says otherwise.
 EXEMPT_FILES = {
     "main.yaml": (
-        "The org-wide entry workflow: every ycpss91255-docker repo has a "
+        "The org-wide entry workflow: every ycpss91255-lab repo has a "
         "main.yaml and base's init.sh creates it. It carries both CI and "
         "release, so it has no single category."
     ),

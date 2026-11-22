@@ -94,7 +94,7 @@ dirs=(
 )
 
 # Migration: pre-2026-05-21 layout used flat cache/, logs/, data/ paths
-# alongside namespaced kit/cache. Refactor (issue ycpss91255-docker/isaac#21
+# alongside namespaced kit/cache. Refactor (issue ycpss91255-lab/isaac#21
 # fix-A) renamed everything under kit/ / ov/ / pip/ / nvidia/ namespaces.
 # Move any pre-existing host data to the new locations on first run so
 # users do not lose accumulated shader / pip / compute caches.

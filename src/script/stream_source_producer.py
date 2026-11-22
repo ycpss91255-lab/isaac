@@ -1,7 +1,7 @@
 """Deterministic WebRTC stream-source producer for the owv visual e2e.
 
 isaac#223  -- publish this as a pullable, pinned GHCR image
-              (`ghcr.io/ycpss91255-docker/isaac-stream-source:<tag>`) so the
+              (`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`) so the
               downstream visual e2e always has a real, reproducible WebRTC
               source without a live desktop Isaac session.
 owv#48      -- the omniverse_web_viewer visual e2e that connects a browser to

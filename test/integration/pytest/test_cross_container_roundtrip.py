@@ -126,7 +126,7 @@ MAX_RETRIES = 1
 # `yunchien-isaac`, from compose.yaml `name:`) -- a CI cross-container run (or
 # its cleanup) would remove EVERY container in that project, killing a
 # long-lived, manually-run `stream` container it never intended to touch
-# (ycpss91255-docker/omniverse_web_viewer#55). Deriving the default from
+# (ycpss91255-lab/omniverse_web_viewer#55). Deriving the default from
 # `.env.generated` (`${DOCKER_HUB_USER}-${IMAGE_NAME}`) would STILL resolve to
 # `yunchien-isaac` and re-introduce the collision -- only a distinct name
 # restores the isolation invariant. `XC_COMPOSE_PROJECT` stays an override seam

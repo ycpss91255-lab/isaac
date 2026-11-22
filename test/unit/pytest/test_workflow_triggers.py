@@ -53,7 +53,7 @@ def test_stream_smoke_still_runs_the_stream_smoke_script_on_the_gpu_runner():
     doc = _load("ci-stream-smoke.yaml")
     job = doc["jobs"]["stream-smoke"]
     assert job["uses"].startswith(
-        "ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml@"
+        "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@"
     )
     assert job["with"]["run-script"] == "./script/ci/stream_smoke_job.sh"
     assert job["with"]["timeout-minutes"] == 30

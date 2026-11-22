@@ -597,7 +597,7 @@ CMD ["sleep", "infinity"]
 ############################## producer ##############################
 # [isaac #223 / owv#48 / #173] Deterministic WebRTC stream-source producer.
 # Published as a pullable, pinned GHCR image
-# (ghcr.io/ycpss91255-docker/isaac-stream-source:<tag>, via
+# (ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>, via
 # .github/workflows/publish-stream-source.yaml) so the omniverse_web_viewer
 # visual e2e (owv#48) and the Tier B browser-frames smoke (isaac#173) always
 # have a real, reproducible WebRTC source without a live desktop Isaac
@@ -635,7 +635,7 @@ ARG BASE_IMAGE
 ARG GIT_SHA="unknown"
 LABEL org.opencontainers.image.base.name="${BASE_IMAGE}"
 LABEL org.opencontainers.image.revision="${GIT_SHA}"
-LABEL org.opencontainers.image.source="https://github.com/ycpss91255-docker/isaac"
+LABEL org.opencontainers.image.source="https://github.com/ycpss91255-lab/isaac"
 LABEL org.opencontainers.image.description="Deterministic WebRTC stream-source producer for downstream viewer e2e (isaac#223)"
 
 COPY --chmod=0755 src/script/stream_source_producer.py \
@@ -649,7 +649,7 @@ CMD ["/isaac-sim/python.sh", "/opt/isaac-producer/stream_source_producer.py"]
 ############################## builder + runtime split (optional) ##############################
 # Three concrete stages for repos that need a separate runtime image
 # (compiled binaries / generated artifacts to ship without dev deps).
-# Lessons lifted from ycpss91255-docker/ros1_bridge#60 PR — empirically
+# Lessons lifted from ycpss91255-lab/ros1_bridge#60 PR — empirically
 # saved ~1.1 GB/arch on that repo's runtime image.
 #
 # Three rules, all of which the previous commented-out hint was silent on:

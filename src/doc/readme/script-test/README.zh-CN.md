@@ -64,4 +64,4 @@ Standalone scripts 会起 kit + livestream + rclpy subscriber。纯 Python unit 
 
 ## 为什么放这个目录,不放 isaac_ws/src/docker/test/
 
-`isaac_ws/src/docker/test/` 属于 docker repo(`ycpss91255-docker/isaac`),测的是 container image / wrapper,不是跑在 container 内的 script。Standalone scripts 住在 `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`);smoke 跟着它们放一起,搬家也跟着走。
+`isaac_ws/src/docker/test/` 属于 docker repo(`ycpss91255-lab/isaac`),测的是 container image / wrapper,不是跑在 container 内的 script。Standalone scripts 住在 `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`);smoke 跟着它们放一起,搬家也跟着走。

@@ -2,7 +2,7 @@
 # bats file_tags=stream
 #
 # Behavioral guard for script/ci/stream_smoke.sh compose-project isolation
-# (remaining axis of ycpss91255-docker/omniverse_web_viewer#55).
+# (remaining axis of ycpss91255-lab/omniverse_web_viewer#55).
 #
 # The Tier A GPU smoke brings up its own stream stack and tears it
 # down. Before this fix it (a) brought the stack up in the DEFAULT compose

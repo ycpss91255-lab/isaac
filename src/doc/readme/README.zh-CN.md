@@ -1,8 +1,8 @@
 # isaac — workspace
 
-NVIDIA Isaac Sim workspace 内容（scripts、文档、USD/URDF 模型），属于 `ycpss91255-docker/isaac`。
+NVIDIA Isaac Sim workspace 内容（scripts、文档、USD/URDF 模型），属于 `ycpss91255-lab/isaac`。
 
-本目录收的是运行在 repo 根目录定义的 Isaac Sim Docker 开发环境**内**的可编辑内容（driver scripts、文档、3D 模型）。它以前是独立的 repo `ycpss91255-research/isaac`，以 `docker/` submodule 包着 Docker 环境；两者已依 [#78](https://github.com/ycpss91255-docker/isaac/issues/78) 合并成这一个 repo，research repo 已归档。
+本目录收的是运行在 repo 根目录定义的 Isaac Sim Docker 开发环境**内**的可编辑内容（driver scripts、文档、3D 模型）。它以前是独立的 repo `ycpss91255-lab/isaac`，以 `docker/` submodule 包着 Docker 环境；两者已依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合并成这一个 repo，research repo 已归档。
 
 **[English](../../README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
 
@@ -27,7 +27,7 @@ src/
 ## 上手
 
 ```bash
-git clone https://github.com/ycpss91255-docker/isaac.git
+git clone https://github.com/ycpss91255-lab/isaac.git
 cd isaac
 ```
 
