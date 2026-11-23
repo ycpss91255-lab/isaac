@@ -110,7 +110,7 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 
 以前は同じ host 上のこの repo のすべての checkout が同じ image tag（`<hub>/isaac:<stage>`）と同じ compose project（`<hub>-isaac`）に解決されていた。そのため `just docker build` が別の checkout の build した image を prune し、`just docker stop` / `run` が別の checkout の container を削除していた（上流：[base#1550](https://github.com/ycpss91255-lab/base/issues/1550)、[base#1551](https://github.com/ycpss91255-lab/base/issues/1551)、[base#1552](https://github.com/ycpss91255-lab/base/issues/1552)）。base が修正するまでは：
 
-- `./script/checkout_identity.sh isolate` が `[image] rule_1 = string:isaac-<dir>-<hash>` を gitignore 済みの `.setup.conf.local` に書き込む。image tag・compose project・container 名はすべてこれに従う。`./script/checkout_identity.sh show` でこの checkout の解決結果を表示できる。
+- `./script/checkout_identity.sh isolate` が `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) を gitignore 済みの `setup.local.toml` に書き込む。image tag・compose project・container 名はすべてこれに従う。`./script/checkout_identity.sh show` でこの checkout の解決結果を表示できる。
 - pre build / run / stop hook は共有名のままでは実行を拒否する。`ISAAC_ALLOW_SHARED_IDENTITY=1` で上書きできる（CI の build ステップが使用）。
 - `just docker run` は既存の image を再 build しない（base#1552）。変更を pull したら `just docker run -t <stage>` の前に `just docker build -t <stage>` を実行する。
 - ディスク使用量：build する checkout または worktree ごとに独自の image セット（`<hub>/isaac-<dir>-<hash>:<stage>`）を持ち、stage tag 1 つあたり名目上約 31 GB。共有されず、checkout ディレクトリを削除しても Docker daemon からは消えない。

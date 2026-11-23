@@ -4,7 +4,7 @@
 # project, and refuse build/run/stop while it still uses the shared ones.
 #
 # Why this exists (stopgap until base#1550 / base#1551 land):
-#   The committed .setup.conf pins `[image] rule_1 = string:isaac`, so every
+#   The committed setup.toml pins `[[image.rules]] rule = "string:isaac"`, so every
 #   checkout of this repo on one host resolves the same image tag
 #   (<DOCKER_HUB_USER>/isaac:<stage>) and, because base derives the compose
 #   project as <DOCKER_HUB_USER>-<IMAGE_NAME>, the same project
@@ -12,16 +12,17 @@
 #   tag pointed at -- often another checkout's -- and `stop` / `run` tear
 #   down the whole project, including another checkout's containers.
 #
-#   base already supports a per-checkout, gitignored `.setup.conf.local`
-#   layer (base ADR-00000025). `isolate` writes a per-checkout `[image]`
-#   rule there; the image name then moves the tag, the derived project name
+#   base already supports a per-checkout, gitignored `setup.local.toml`
+#   layer (base ADR-00000025; base rc6 moved it from `.setup.conf.local`).
+#   `isolate` writes a per-checkout `[[image.rules]]` rule there; the image
+#   name then moves the tag, the derived project name
 #   and the container names together. The pre build/run/stop hooks call
 #   `guard` so a checkout that was never isolated fails loudly instead of
 #   touching another checkout's images or containers.
 #
 # Usage:
 #   checkout_identity.sh slug    [REPO_ROOT]   print this checkout's name
-#   checkout_identity.sh isolate [REPO_ROOT]   write it to .setup.conf.local
+#   checkout_identity.sh isolate [REPO_ROOT]   write it to setup.local.toml
 #   checkout_identity.sh guard <build|run|stop> [REPO_ROOT]
 #   checkout_identity.sh show    [REPO_ROOT]   print the resolved identity
 #
@@ -34,7 +35,7 @@
 set -euo pipefail
 
 # The image name every checkout resolved before isolation: the committed
-# `.setup.conf` `[image] rule_1 = string:isaac`.
+# `setup.toml` `[[image.rules]] rule = "string:isaac"`.
 _ISAAC_SHARED_IMAGE="isaac"
 
 # _identity_repo_root [path] -> prints the absolute repo root.
@@ -76,31 +77,48 @@ isaac_checkout_slug() {
 
 # isaac_isolate_checkout <repo_root>
 #
-# Appends `[image] rule_1 = string:<slug>` to <repo_root>/.setup.conf.local
-# unless that file already defines an [image] section (an operator's own
-# choice wins). Idempotent. The next base wrapper call (or
-# `./script/setup.sh apply`) regenerates .env.generated and compose.yaml.
+# Appends `[[image.rules]] rule = "string:<slug>"` to
+# <repo_root>/setup.local.toml unless that file already defines an image
+# section (an operator's own choice wins). Idempotent. The local layer
+# replaces the committed `[[image.rules]]` array whole (base README, "Three
+# layers"), so the slug rule is the one that names the image. The next base
+# wrapper call (or `./script/setup.sh apply`) regenerates .env.generated
+# and compose.yaml.
 isaac_isolate_checkout() {
   local _root
   _root="$(_identity_repo_root "${1:-}")"
-  local _local="${_root}/.setup.conf.local"
+  local _local="${_root}/setup.local.toml"
   local _slug
   _slug="$(isaac_checkout_slug "${_root}")"
 
-  if [[ -f "${_local}" ]] && grep -q '^[[:space:]]*\[image\][[:space:]]*$' "${_local}"; then
-    printf '[checkout_identity] %s already defines [image]; leaving it as is.\n' \
+  if [[ -f "${_local}" ]] \
+    && grep -Eq '^[[:space:]]*\[\[?image(\.[A-Za-z0-9_.-]+)?\]\]?[[:space:]]*(#.*)?$' "${_local}"; then
+    printf '[checkout_identity] %s already defines image; leaving it as is.\n' \
       "${_local}"
     return 0
   fi
+  local _sep=0 _has_project=0
+  [[ -s "${_local}" ]] && _sep=1
+  if [[ -f "${_local}" ]] \
+    && grep -Eq '^[[:space:]]*\[project\][[:space:]]*(#.*)?$' "${_local}"; then
+    _has_project=1
+  fi
   {
-    if [[ -s "${_local}" ]]; then
+    if (( _sep )); then
       printf '\n'
     fi
     printf '# Per-checkout image name (isaac script/checkout_identity.sh):\n'
     printf '# keeps this checkout'"'"'s image tag, compose project and containers\n'
     printf '# apart from every other checkout on this host (base#1550, base#1551).\n'
-    printf '[image]\n'
-    printf 'rule_1 = string:%s\n' "${_slug}"
+    printf '[[image.rules]]\n'
+    printf 'rule = "string:%s"\n' "${_slug}"
+    # base keeps a project name the checkout already recorded and only
+    # carries the newly derived one as PROJECT_NAME_PENDING; a configured
+    # [project] name is taken at once, which the run/stop guard needs.
+    if (( ! _has_project )); then
+      printf '\n[project]\n'
+      printf 'name = "%s"\n' "${_slug}"
+    fi
   } >> "${_local}"
   printf '[checkout_identity] this checkout now builds and runs as "%s"\n' "${_slug}"
   printf '[checkout_identity] (written to %s)\n' "${_local}"
