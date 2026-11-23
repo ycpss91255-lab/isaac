@@ -110,7 +110,7 @@ Kit 每次启动都会打印几种不影响运行的警告：
 
 以前同一台 host 上这个 repo 的每个 checkout 都会解析出同一个 image tag（`<hub>/isaac:<stage>`）与同一个 compose project（`<hub>-isaac`）。结果 `just docker build` 会 prune 掉别的 checkout build 的 image，`just docker stop` / `run` 会移除别的 checkout 的 container（上游：[base#1550](https://github.com/ycpss91255-lab/base/issues/1550)、[base#1551](https://github.com/ycpss91255-lab/base/issues/1551)、[base#1552](https://github.com/ycpss91255-lab/base/issues/1552)）。在 base 修好之前：
 
-- `./script/checkout_identity.sh isolate` 会把 `[image] rule_1 = string:isaac-<dir>-<hash>` 写进 gitignored 的 `.setup.conf.local`。image tag、compose project 与 container 名称都跟着它走。`./script/checkout_identity.sh show` 会打印这个 checkout 解析出的名称。
+- `./script/checkout_identity.sh isolate` 会把 `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) 写进 gitignored 的 `setup.local.toml`。image tag、compose project 与 container 名称都跟着它走。`./script/checkout_identity.sh show` 会打印这个 checkout 解析出的名称。
 - pre build / run / stop hook 会拒绝对共用名称操作。`ISAAC_ALLOW_SHARED_IDENTITY=1` 可以跳过；CI 的 build 步骤就是这样用。
 - `just docker run` 不会重新 build 已存在的 image（base#1552）。pull 新变更后，先 `just docker build -t <stage>` 再 `just docker run -t <stage>`。
 - 磁盘占用：每个会 build 的 checkout 或 worktree 都拥有自己的一组 image（`<hub>/isaac-<dir>-<hash>:<stage>`），每个 stage tag 名义上约 31 GB。它们不共用，删掉 checkout 目录也不会从 Docker daemon 移除。

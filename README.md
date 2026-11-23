@@ -110,7 +110,7 @@ Do not use a bare `pkill -f <script>`. The containers run with `pid: host`, so t
 
 Every checkout of this repo on a host used to resolve the same image tag (`<hub>/isaac:<stage>`) and the same compose project (`<hub>-isaac`). `just docker build` then pruned the image another checkout had built, and `just docker stop` / `run` removed another checkout's containers (upstream: [base#1550](https://github.com/ycpss91255-lab/base/issues/1550), [base#1551](https://github.com/ycpss91255-lab/base/issues/1551), [base#1552](https://github.com/ycpss91255-lab/base/issues/1552)). Until base fixes that:
 
-- `./script/checkout_identity.sh isolate` writes `[image] rule_1 = string:isaac-<dir>-<hash>` into the gitignored `.setup.conf.local`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
+- `./script/checkout_identity.sh isolate` writes `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) into the gitignored `setup.local.toml`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
 - The pre build / run / stop hooks refuse to act on the shared names. `ISAAC_ALLOW_SHARED_IDENTITY=1` overrides that; CI's build steps use it.
 - `just docker run` does not rebuild an image that already exists (base#1552). After pulling changes, run `just docker build -t <stage>` before `just docker run -t <stage>`.
 - Disk cost: every checkout or worktree that builds owns its own image set (`<hub>/isaac-<dir>-<hash>:<stage>`), about 31 GB nominal per stage tag. They are not shared, and deleting the checkout directory does not remove them from the Docker daemon.
