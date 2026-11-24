@@ -1,6 +1,6 @@
 # TEST.md
 
-**186 tests** total.
+**190 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 106 | 641 | 40 | 787 |
+| core | 110 | 641 | 40 | 791 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 80 | 19 | 0 | 99 |
 | headless | 0 | 0 | 0 | 0 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**186 tests** total` above counts the bats specs only. `gui` and `headless` have no tests yet (their stage-specific tests arrive with #428 and the stage smokes); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**190 tests** total` above counts the bats specs only. `gui` and `headless` have no tests yet (their stage-specific tests arrive with #428 and the stage smokes); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -214,9 +214,9 @@ Behavioral guard for `test/assert_pytest_baseline.sh --gpu` (owv#55 second axis;
 | `assert_pytest_baseline --gpu isolates the GPU pytest run in its own compose project (PROJECT_NAME, owv#55)` | Runs the script against a stub `run.sh` (records argv) + a fake `.env.generated`, and asserts the `-t test` invocation NO LONGER carries `--instance` and that the distinct `BASELINE_PROJECT` was written into `.env.generated` before `run.sh` fired — placing the GPU pytest tier in a non-default, isolated compose project so `_app_cleanup`'s project-wide teardown can never reap a co-hosted manual `stream` container. |
 | `assert_pytest_baseline --gpu defaults the baseline project to <derived>-baseline when BASELINE_PROJECT is unset (owv#55)` | With the override unset, the pinned project defaults to a dedicated `<derived>-baseline` (`alice-isaac-baseline`, derived from the cache's own `PROJECT_NAME`), still distinct from the default project. |
 
-## test/bats/smoke/checkout_identity_spec.bats (14)
+## test/bats/smoke/checkout_identity_spec.bats (18)
 
-Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop hooks (stopgap for base#1550 / base#1551). Every plain checkout used to resolve the same image tag (`<hub>/isaac:<stage>`) and compose project (`<hub>-isaac`), so base's build auto-prune deleted another checkout's image and `stop` / `run` removed another checkout's containers. `isolate` writes a per-checkout `[image] rule_1` into base's gitignored `.setup.conf.local`; the hooks refuse build/run/stop while a checkout is still on the shared identity. The script and the three pre hooks are baked into `/smoke_test/` (`checkout_identity.sh`, `pre_{build,run,stop}_hook.sh`). Hermetic -- no docker, no GPU.
+Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop hooks (stopgap for base#1550 / base#1551). Every plain checkout used to resolve the same image tag (`<hub>/isaac:<stage>`) and compose project (`<hub>-isaac`), so base's build auto-prune deleted another checkout's image and `stop` / `run` removed another checkout's containers. `isolate` writes a per-checkout `[[image.rules]]` rule into base's gitignored `setup.local.toml`; the hooks refuse build/run/stop while a checkout is still on the shared identity. The script and the three pre hooks are baked into `/smoke_test/` (`checkout_identity.sh`, `pre_{build,run,stop}_hook.sh`). Hermetic -- no docker, no GPU.
 
 | Test | Description |
 |------|-------------|
@@ -224,9 +224,13 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `checkout_identity: slug is deterministic for one path` | The same checkout path always yields the same slug. |
 | `checkout_identity: two checkouts with the same basename get different slugs` | `/a/isaac` and `/b/isaac` get different slugs, and neither is the shared `isaac`. |
 | `checkout_identity: slug is a valid image name and compose project name` | Lowercase, alphanumeric edges, `isaac-` prefix, even for a path with spaces / capitals / underscores. |
-| `checkout_identity: isolate writes a per-checkout [image] rule to .setup.conf.local` | `isolate` writes `[image]` / `rule_1 = string:<slug>`. |
-| `checkout_identity: isolate is idempotent and keeps other local sections` | Two runs leave one `[image]` section and keep an existing `[network]` section. |
-| `checkout_identity: isolate leaves an operator-written [image] section alone` | An existing local `[image]` section is not overwritten. |
+| `checkout_identity: isolate writes a per-checkout image rule to setup.local.toml` | `isolate` writes `[[image.rules]]` / `rule = "string:<slug>"` and no `.setup.conf.local`. |
+| `checkout_identity: isolate puts the slug rule first, so the resolved name is not the shared one` | The slug rule precedes the committed `string:isaac` rule. |
+| `checkout_identity: isolate pins [project] name so run/stop leave the shared project at once` | `isolate` writes a per-checkout `[project] name`. |
+| `checkout_identity: isolate keeps an operator-written [project] name` | An existing local `[project]` name is not overwritten. |
+| `checkout_identity: isolate is idempotent and keeps other local sections` | Two runs leave one image rule and keep an existing `[network]` section. |
+| `checkout_identity: isolate leaves an operator-written image rule alone` | An existing local `[[image.rules]]` rule is not overwritten. |
+| `checkout_identity: isolate leaves an operator-written [image] table alone` | An existing local `[image]` table is not overwritten. |
 | `guard: build refuses the shared isaac image tag` | `IMAGE_NAME=isaac` fails and names the tag and the `isolate` remedy. |
 | `guard: build passes for a per-checkout image name` | A slugged `IMAGE_NAME` passes. |
 | `guard: run and stop refuse the shared default project` | `PROJECT_NAME=<hub>-isaac` fails for both verbs. |
