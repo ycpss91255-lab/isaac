@@ -1,1 +1,1 @@
-../.base/dist/script/docker/wrapper/exec.sh
+../dist/script/docker/wrapper/exec.sh

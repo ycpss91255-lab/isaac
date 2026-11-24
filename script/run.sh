@@ -1,1 +1,1 @@
-../.base/dist/script/docker/wrapper/run.sh
+../dist/script/docker/wrapper/run.sh

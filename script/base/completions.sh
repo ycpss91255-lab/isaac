@@ -1,1 +1,0 @@
-../../.base/dist/script/base/completions.sh
