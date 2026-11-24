@@ -6,13 +6,14 @@
   creates ``isaac-sim/documents/Kit/shared/screenshots`` with mode 000, which
   made ``just docker build`` fail with ``open .../screenshots: permission
   denied`` after the first Isaac launch.
-- ``.setup.conf`` ``[deploy]`` must use ``gpu_runtime``: base v0.42.0 renamed
+- ``setup.toml`` ``[deploy]`` must use ``gpu_runtime``: base v0.42.0 renamed
   ``runtime`` and warns ``runtime is renamed to gpu_runtime`` on every setup.
 
 Pure file reads.
 """
 
 import re
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -20,14 +21,6 @@ import pytest
 pytestmark = pytest.mark.core
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-
-
-def _section(text, name):
-    match = re.search(
-        rf"^\[{re.escape(name)}\]\s*$(.*?)(?=^\[|\Z)", text, re.M | re.S
-    )
-    assert match, f"[{name}] section missing"
-    return match.group(1)
 
 
 def test_dockerignore_excludes_isaac_sim_cache_tree():
@@ -38,15 +31,11 @@ def test_dockerignore_excludes_isaac_sim_cache_tree():
     assert {"isaac-sim/", "isaac-sim", "/isaac-sim/"} & lines
 
 
-def test_setup_conf_deploy_uses_gpu_runtime_key():
-    deploy = _section((_REPO_ROOT / ".setup.conf").read_text(), "deploy")
-    keys = [
-        line.split("=", 1)[0].strip()
-        for line in deploy.splitlines()
-        if "=" in line and not line.lstrip().startswith("#")
-    ]
-    assert "runtime" not in keys
-    assert "gpu_runtime" in keys
+def test_setup_toml_deploy_uses_gpu_runtime_key():
+    conf = tomllib.loads((_REPO_ROOT / "setup.toml").read_text(encoding="utf-8"))
+    deploy = conf["deploy"]
+    assert "runtime" not in deploy
+    assert "gpu_runtime" in deploy
 
 
 def test_dockerfile_precreates_kit_extension_folders():

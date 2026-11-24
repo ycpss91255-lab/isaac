@@ -4,7 +4,7 @@ name: Main CI/CD
 # core, gui, stream, headless, docs -- and a PR runs only the groups its
 # changed paths belong to (job `changes`, script/ci/changed_groups.py):
 #
-#   - a change to a shared layer (Dockerfile, compose, .setup.conf, config,
+#   - a change to a shared layer (Dockerfile, compose, setup.toml, config,
 #     the base subtree, this file) runs every group;
 #   - push to main, a release tag and a manual dispatch run every group;
 #   - docs always runs (cheap lint), so a docs-only PR never reaches the

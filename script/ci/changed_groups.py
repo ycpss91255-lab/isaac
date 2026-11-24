@@ -43,7 +43,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SHARED = (
     "Dockerfile",
     "compose.yaml",
-    ".setup.conf",
+    "setup.toml",
     ".dockerignore",
     "config/*",
     ".base/*",
