@@ -78,8 +78,10 @@ _validate_stage_name() {
 
 # _is_deployable_stage <stage>
 #
-# ADR-00000023 sec.4's stage-eligibility predicate, `deployable = not
-# devel and not *-test`, as one shared function. Returns 0 when <stage>
+# ADR-00000023 sec.4's stage-eligibility predicate as one shared
+# function. Its `deployable = not devel and not *-test` formula was the
+# reasoning; the exclusions below are the rule (PRD invariant 8), and
+# they reach past that formula. Returns 0 when <stage>
 # is a field-oriented stage, 1 otherwise (including an empty name).
 # Two callers share it, and must keep sharing it so the rule has exactly
 # one definition: the compose emitter (which `restart:` services get a
@@ -96,7 +98,11 @@ _validate_stage_name() {
 #     reacts to exit turns a green test run into a restart loop;
 #   - `sys` / `devel-base` are build intermediates with no runnable
 #     service at all -- there is nothing to deploy and nothing to keep
-#     alive, so a bundle built from one is simply broken.
+#     alive, so a bundle built from one is simply broken;
+#   - `test-tools-stage` (the template's `FROM ${TEST_TOOLS_IMAGE}`)
+#     only supplies the tooling the *-test stages COPY in -- no field
+#     service, so it gets no restart policy and no bundle (base#1325).
+#     Consumer-defined helper stages are not covered here (base#1157).
 # The legacy aliases the v0.21.x transition still accepts (`test` for
 # `devel-test`, the bare service name it is emitted under, and `base`
 # for `devel-base`) are excluded alongside the names that replaced them.
@@ -108,6 +114,7 @@ _is_deployable_stage() {
   case "${_stage}" in
     devel|test|*-test) return 1 ;;
     sys|devel-base|base) return 1 ;;
+    test-tools-stage) return 1 ;;
   esac
   return 0
 }
@@ -329,7 +336,7 @@ _generate_runtime_dockerfile() {
 # ════════════════════════════════════════════════════════════════════
 # Per-stage overrides
 #
-# `[stage:<name>]` sections in <repo>/.setup.conf override top-level
+# `[stage:<name>]` sections in <repo>/setup.toml override top-level
 # settings on a per-stage basis. Only the v1 allowlist (gui.mode, the
 # whole [deploy] / [network] blocks, security.privileged, [volumes]
 # mounts, [environment] env_*) is honored — anything else is WARN'd
@@ -343,8 +350,9 @@ _generate_runtime_dockerfile() {
 
 # _parse_stage_sections <file> <out_array_var>
 #
-# Scans <file> for `^\[stage:NAME\]$` headers, returns NAME list in
-# file order. Stage names matching `[a-z][a-z0-9_-]*` are collected;
+# Scans <file> for `[stage:NAME]` or `["stage:NAME"]` headers (INI and
+# TOML forms), returns NAME list in file order. Stage names matching
+# `[a-z][a-z0-9_-]*` are collected;
 # malformed names are silently skipped here (caller surfaces them
 # via _validate_stage_name). Empty / missing file → empty output.
 _parse_stage_sections() {
@@ -354,7 +362,7 @@ _parse_stage_sections() {
   [[ -f "${_file}" ]] || return 0
   local _line
   while IFS= read -r _line || [[ -n "${_line}" ]]; do
-    if [[ "${_line}" =~ ^\[stage:([a-z][a-z0-9_-]*)\][[:space:]]*$ ]]; then
+    if [[ "${_line}" =~ ^\[\"?stage:([a-z][a-z0-9_-]*)\"?\][[:space:]]*$ ]]; then
       _pss_out+=("${BASH_REMATCH[1]}")
     fi
   done < "${_file}"
@@ -367,7 +375,7 @@ _parse_stage_sections() {
 # layer that defines `[stage:<stage>]` supplies all of it. In practice the
 # template carries no stage overrides (it does not know which Dockerfile
 # stages exist downstream), so the contest is between the repo's committed
-# override and the per-worktree `.setup.conf.local`. The local layer may
+# override and the per-worktree `setup.local.toml`. The local layer may
 # override ANY section -- a per-stage section is not a special case.
 _load_stage_overrides() {
   local _base="${1:?"${FUNCNAME[0]}: missing base_path"}"
@@ -441,8 +449,8 @@ _resolve_stage_scalar() {
   _rss_out="${_fallback}"
 }
 
-# _resolve_stage_list <keys_var> <values_var> <prefix> <inherit_key> \
-#                     <top_level_str> <out_var>
+# _resolve_stage_list <keys_var> <values_var> <prefix> <top_level_str> \
+#                     <out_var>
 #
 # Computes the effective list for a list field (volumes.mount_*,
 # network.port_*, environment.env_*) on a per-stage basis.
@@ -451,15 +459,18 @@ _resolve_stage_scalar() {
 #   keys_var / values_var  Stage's parallel override arrays
 #   prefix                 Full dotted prefix e.g. "volumes.mount_"
 #                          — keys matching `<prefix>[0-9]+` are list items
-#   inherit_key            Meta-key e.g. "volumes.mount_inherit"
-#                          — value "false" switches to replace mode
+#   (the inherit meta-key is `<prefix>inherit`, e.g.
+#    "volumes.mount_inherit" — value "false" switches to replace mode.
+#    It was a sixth parameter until base#994; every one of the six call
+#    sites spelled out exactly that concatenation, so the slot carried no
+#    information and could only ever be wrong)
 #   top_level_str          Newline-separated top-level list (the same
 #                          aggregate format setup.sh uses elsewhere)
 #   out_var                Newline-separated effective list (no
 #                          trailing newline)
 #
 # Default (inherit unspecified or anything ≠ "false"): top-level entries
-# come first, stage entries appended afterward in setup.conf order.
+# come first, stage entries appended afterward in setup.toml order.
 # Replace mode (inherit=false): only stage entries appear; top-level
 # is dropped. The opt-out lets a stage opt out of inherited mounts
 # entirely (e.g. headless that wants no host-side ssh keys, regardless
@@ -468,9 +479,9 @@ _resolve_stage_list() {
   local -n _rsl_keys="${1:?"${FUNCNAME[0]}: missing keys array"}"
   local -n _rsl_values="${2:?"${FUNCNAME[0]}: missing values array"}"
   local _prefix="${3:?"${FUNCNAME[0]}: missing prefix"}"
-  local _inherit_key="${4:?"${FUNCNAME[0]}: missing inherit_key"}"
-  local _top="${5-}"
-  local -n _rsl_out="${6:?"${FUNCNAME[0]}: missing out var"}"
+  local _top="${4-}"
+  local -n _rsl_out="${5:?"${FUNCNAME[0]}: missing out var"}"
+  local _inherit_key="${_prefix}inherit"
 
   # Default to inheriting top-level. Only the literal "false" toggles
   # replace mode — anything else (including "true", empty, malformed)
@@ -483,7 +494,7 @@ _resolve_stage_list() {
     fi
   done
 
-  # Collect stage's own list entries in setup.conf order. Match only
+  # Collect stage's own list entries in setup.toml order. Match only
   # `<prefix><digits>` so meta-keys like `mount_inherit` (which share
   # the prefix) are not pulled in.
   local -a _stage_entries=()
@@ -607,11 +618,11 @@ _resolve_docker_flags() {
   _resolve_stage_scalar _rdf_keys _rdf_values "security.privileged" "" _tmp
   _rdf_out["privileged"]="${_tmp}"
 
-  _resolve_stage_list _rdf_keys _rdf_values "volumes.mount_" "volumes.mount_inherit" "${_rdf_parent["volumes_top"]}" _tmp
+  _resolve_stage_list _rdf_keys _rdf_values "volumes.mount_" "${_rdf_parent["volumes_top"]}" _tmp
   _rdf_out["volumes"]="${_tmp}"
-  _resolve_stage_list _rdf_keys _rdf_values "environment.env_" "environment.env_inherit" "${_rdf_parent["env_top"]}" _tmp
+  _resolve_stage_list _rdf_keys _rdf_values "environment.env_" "${_rdf_parent["env_top"]}" _tmp
   _rdf_out["environment"]="${_tmp}"
-  _resolve_stage_list _rdf_keys _rdf_values "network.port_" "network.port_inherit" "${_rdf_parent["ports_top"]}" _tmp
+  _resolve_stage_list _rdf_keys _rdf_values "network.port_" "${_rdf_parent["ports_top"]}" _tmp
   _rdf_out["ports"]="${_tmp}"
 
   # per-stage [security] cap_add / cap_drop / security_opt as list
@@ -619,10 +630,10 @@ _resolve_docker_flags() {
   # volumes / env / ports above. A stage sets `cap_add_inherit = false`
   # (and lists no entries) to drop all inherited caps — e.g. a read-only
   # probe stage that should not inherit the flash stage's SYS_ADMIN.
-  _resolve_stage_list _rdf_keys _rdf_values "security.cap_add_" "security.cap_add_inherit" "${_rdf_parent["cap_add_top"]}" _tmp
+  _resolve_stage_list _rdf_keys _rdf_values "security.cap_add_" "${_rdf_parent["cap_add_top"]}" _tmp
   _rdf_out["cap_add"]="${_tmp}"
-  _resolve_stage_list _rdf_keys _rdf_values "security.cap_drop_" "security.cap_drop_inherit" "${_rdf_parent["cap_drop_top"]}" _tmp
+  _resolve_stage_list _rdf_keys _rdf_values "security.cap_drop_" "${_rdf_parent["cap_drop_top"]}" _tmp
   _rdf_out["cap_drop"]="${_tmp}"
-  _resolve_stage_list _rdf_keys _rdf_values "security.security_opt_" "security.security_opt_inherit" "${_rdf_parent["sec_opt_top"]}" _tmp
+  _resolve_stage_list _rdf_keys _rdf_values "security.security_opt_" "${_rdf_parent["sec_opt_top"]}" _tmp
   _rdf_out["security_opt"]="${_tmp}"
 }

@@ -15,6 +15,73 @@
 # pre-loads the queue with the user's intended click path, calls the
 # target function, and asserts on the resulting in-memory override
 # state — no real dialog / whiptail process ever launches.
+#
+# why: Interactive-flow tests for `setup_tui.sh` (#189). Sources
+# `setup_tui.sh` directly and overrides `_tui_menu` / `_tui_select` /
+# `_tui_inputbox` / `_tui_yesno` / `_tui_msgbox` /
+# `_tui_checklist` with file-backed stubs (queue lines popped via `head -n
+# 1` + `sed -i 1d` so state survives the `$(...)` subshell calls). Each case
+# scripts the user's click path, calls one section editor, and asserts on
+# the resulting `_TUI_OVR_*` / `_TUI_REMOVED` / `_TUI_CURRENT` arrays — no
+# real `dialog` / `whiptail` ever launches. Lifts `setup_tui.sh` per-file
+# coverage from 18% to 83% by exercising the 5 high-value target areas the
+# issue body called out.
+#
+# Grouped by concern:
+#
+# - `_load_current` (the repo layer wins on the keys it names and the
+# template's other keys come with it; a repo with no committed layer opens
+# on the template; both missing -> silent return 0)
+#
+# - `_render_main_menu` / `_render_advanced_menu` (#178 Save & Exit
+# unification, Cancel/Esc returns 1, navigation into section editor)
+#
+# - `_edit_image_rule` (#177 site: add
+# string/prefix/suffix/basename/default, Cancel from radiolist or inputbox,
+# `__remove`/`__move_up`/`__move_down`, dedupe drops duplicate slot)
+#
+# - `_compact_image_rules_after_remove` (mid-list shift down, last drop,
+# empty no-op, sparse-slot collapse)
+#
+# - `_swap_image_rule` (both occupied / target empty / source empty / both
+# empty / m<1)
+#
+# - `_edit_list_section` via `_edit_section_environment` (env_
+# add/edit/remove, invalid → msgbox+retry, max+1 indexing, Cancel/Esc)
+#
+# - `_edit_section_image` top-level dispatch (add max+1, click rule_N, Back)
+#
+# - `_edit_section_network` (host+host+pid no shm prompt, bridge prompts
+# name+ports, ipc=private prompts shm, empty network_name allowed)
+#
+# - `_edit_section_deploy` (off short-circuits — only writes gpu_mode)
+#
+# - Multi-section dispatch from main menu (network → host → save)
+#
+# - Per-stage UI #220 (`_list_dockerfile_stages_available` from-Dockerfile +
+# baseline filter, `_count_stage_overrides` OVR+CURRENT dedup + empty skip,
+# `_edit_stage_gui` mode + __inherit, `_edit_stage_scalar` write +
+# empty-clears, `_edit_stage_list` inherit toggle + add)
+#
+# - Menu restructure #221 (i18n keys for main.runtime/mounts/features × 4
+# langs; `_render_runtime_menu` / `_render_mounts_menu` /
+# `_render_features_menu` function existence; main-menu dispatch for
+# image/build/runtime/mounts/features + bare
+# network/deploy/gui/volumes/environment no longer dispatch from main;
+# Runtime sub-menu dispatch for network/deploy/gui/environment +
+# __back/Cancel; Mounts sub-menu dispatch for volumes/devices/tmpfs +
+# __back/Cancel; Features sub-menu __back, per_stage enabled enters editor,
+# per_stage hidden shows msgbox without entering editor; Advanced sub-menu
+# image/build/devices/tmpfs entries removed, security still dispatches)
+#
+# - #328 logging menu dispatch (Runtime menu's `logging` entry calls
+# `_edit_section_logging`; `_edit_section_logging`'s top-level menu routes
+# `global` to `_edit_logging_keys logging` and `devel` / `test` / `runtime`
+# to `_edit_logging_keys logging.<svc>`)
+#
+# - #561 `_tui_known_subcommand` derives CLI direct-jump subcommands from
+# `SCHEMA_SECTIONS` (accepts every section + `ports` pseudo-section, rejects
+# unknown args, tracks `SCHEMA_SECTIONS` additions)
 
 bats_require_minimum_version 1.5.0
 
@@ -38,7 +105,7 @@ setup() {
   # mutate state visibly to the parent. Each line: "<exit>|<response>".
   _QFILE="${BATS_TEST_TMPDIR}/tui_queue"
   : > "${_QFILE}"
-  # path: setup.conf lives at .setup.conf
+  # path: setup.conf lives at setup.toml
   mkdir -p "${BATS_TEST_TMPDIR}"
 
   # Override the dialog primitives from _tui_backend.sh AFTER sourcing
@@ -56,7 +123,6 @@ setup() {
   _tui_menu()      { _tui_pop; }
   _tui_select()    { _tui_pop; }
   _tui_inputbox()  { _tui_pop; }
-  _tui_radiolist() { _tui_pop; }
   _tui_checklist() { _tui_pop; }
   _tui_yesno()     {
     local _line
@@ -67,7 +133,7 @@ setup() {
   }
   _tui_msgbox()    { return 0; }
   export -f _tui_pop _tui_menu _tui_select _tui_inputbox \
-            _tui_radiolist _tui_checklist _tui_yesno _tui_msgbox
+            _tui_checklist _tui_yesno _tui_msgbox
   export _QFILE
 }
 
@@ -111,24 +177,51 @@ is_removed() {
 # _load_current
 # ════════════════════════════════════════════════════════════════════
 
-@test "_load_current: pulls keys from repo conf when present" {
-  local _repo="${BATS_TEST_TMPDIR}/.setup.conf"
-  cat > "${_repo}" <<'EOF'
+# why: these two tests used to pin the OPPOSITE rule -- "read the repo
+# file, else fall back to the template" -- and that one-file read is the
+# defect base#1232 records: the config is an overlay chain, so an editor
+# whose baseline is whichever file exists first shows one layer's contents
+# instead of the values in force. The repo layer must still WIN on the
+# keys it names (that half was always right), and the template's other
+# keys must now come with it rather than disappearing. `bridge` is not the
+# schema default (`host`), so the first assertion can only hold if the
+# repo layer was read; `auto` for gui.mode could not tell "the template
+# was read" from "nothing was read and a default stood in", so the
+# template key carries a non-default value too.
+@test "_load_current: the repo layer wins and the template's other keys come with it" {
+  local _base="${BATS_TEST_TMPDIR}/repo" _dist="${BATS_TEST_TMPDIR}/dist"
+  mkdir -p "${_base}" "${_dist}"
+  cat > "${_dist}/setup.toml" <<'EOF'
 [network]
-mode = bridge
+mode = "host"
+
+[deploy]
+gpu_mode = "force"
 EOF
-  _load_current "${_repo}" "/dev/null"
+  cat > "${_base}/setup.toml" <<'EOF'
+[network]
+mode = "bridge"
+EOF
+  _load_current "${_base}" "${_dist}"
   [[ "${_TUI_CURRENT[network.mode]}" == "bridge" ]]
+  [[ "${_TUI_CURRENT[deploy.gpu_mode]}" == "force" ]]
 }
 
-@test "_load_current: falls back to template conf when repo conf missing" {
-  local _tpl="${BATS_TEST_TMPDIR}/.setup.conf"
-  cat > "${_tpl}" <<'EOF'
+# why: a repo that has never been set up has no committed layer, and the
+# template's values are what `setup.sh apply` is about to seed it with --
+# so they are what the menus have to open on. `force` rather than `auto`:
+# `auto` IS the schema default for deploy.gpu_mode, so an assertion on it
+# could not tell "the template was read" from "nothing was read and the
+# default stood in", which is the whole claim here.
+@test "_load_current: a repo with no committed layer opens on the template" {
+  local _base="${BATS_TEST_TMPDIR}/repo" _dist="${BATS_TEST_TMPDIR}/dist"
+  mkdir -p "${_base}" "${_dist}"
+  cat > "${_dist}/setup.toml" <<'EOF'
 [deploy]
-gpu_mode = auto
+gpu_mode = "force"
 EOF
-  _load_current "${BATS_TEST_TMPDIR}/missing" "${_tpl}"
-  [[ "${_TUI_CURRENT[deploy.gpu_mode]}" == "auto" ]]
+  _load_current "${_base}" "${_dist}"
+  [[ "${_TUI_CURRENT[deploy.gpu_mode]}" == "force" ]]
 }
 
 @test "_load_current: returns 0 silently when both files missing" {
@@ -180,11 +273,20 @@ EOF
   assert_success
 }
 
-@test "_tui_known_subcommand accepts every SCHEMA_SECTIONS member (#561)" {
+@test "_tui_known_subcommand accepts a SCHEMA_SECTIONS member iff it has an editor (#561)" {
   local _s
   for _s in "${SCHEMA_SECTIONS[@]}"; do
     run _tui_known_subcommand "${_s}"
-    [ "${status}" -eq 0 ]
+    if declare -F "_edit_section_${_s}" >/dev/null; then
+      [ "${status}" -eq 0 ]
+    else
+      # Being on the registry is not enough to be dispatchable: main
+      # jumps straight to `"_edit_section_${_subcmd}"`, so accepting a
+      # section with no editor (today `project`, a deliberate opt-out)
+      # sent it into a command-not-found. This used to assert acceptance
+      # for every member, which is the assumption that hid it.
+      [ "${status}" -ne 0 ]
+    fi
   done
 }
 
@@ -200,6 +302,12 @@ EOF
 
 @test "_tui_known_subcommand derives from SCHEMA_SECTIONS (single source) (#561)" {
   SCHEMA_SECTIONS+=(brandnew)
+  # A section reaches the CLI by being registered AND having an editor;
+  # neither half is a list kept here. Registered with no editor is the
+  # `project` shape, and it must be refused rather than dispatched.
+  run _tui_known_subcommand brandnew
+  [ "${status}" -ne 0 ]
+  _edit_section_brandnew() { return 0; }
   run _tui_known_subcommand brandnew
   [ "${status}" -eq 0 ]
 }
@@ -707,8 +815,10 @@ EOF
   _TUI_OVR_VALUES=("force")
   queue "0|__inherit"
   _edit_stage_gui headless
-  ! ovr_get stage:headless.gui.mode
+  # is_removed first: a `!` statement is exempt from errexit anywhere but
+  # the body's last line, so the order is what makes both assert.
   is_removed stage:headless.gui.mode
+  ! ovr_get stage:headless.gui.mode
 }
 
 @test "_edit_stage_scalar: writes the dotted key under stage namespace" {

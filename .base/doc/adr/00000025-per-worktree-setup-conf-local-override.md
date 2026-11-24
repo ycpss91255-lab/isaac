@@ -102,6 +102,30 @@ the GPU keys -- so a partial override produces incoherent combinations.
 
 The layer below already worked this way. One rule for the whole chain.
 
+**Amendment (ADR-37 D4 #1130, 2026-09-07): type-aware merge for TOML
+layers.** The ordered-list argument above remains correct and is the
+basis for the array-replace half of the TOML merge rule. When the
+chain is `.setup.toml` (TOML format), the merge becomes type-aware:
+scalar keys within a `[table]` get key-level merge (upper layer
+overrides only the keys it defines; unmentioned keys inherit from the
+lower layer), while `[[array of tables]]` get array replace (the
+entire array comes from the highest layer that defines it). This
+resolves the "eight ordered-list sections" concern by replacing only
+whole arrays, while allowing scalar sections (e.g. `[gui]`, `[deploy]`)
+to benefit from key-level override. The INI `.setup.conf` chain retains
+blanket section-replace unchanged.
+
+**Amendment (#1137, 2026-10-10):** "the highest layer that defines it"
+includes a layer that defines it with ZERO entries -- see ADR-00000037's
+zero-entry amendment for why the absent key and the empty array are not
+the same state.
+
+**Amendment (#1235, 2026-10-11):** key-level override for scalar sections
+is also what can change a scalar's resolved value on the migration,
+wherever this ADR's blanket section-replace had masked a lower layer's
+value -- see ADR-00000037's masked-scalar amendment for the accepted cost
+and the check an upgrader runs.
+
 ### 4. `[project] name`, and one resolved project name
 
 `[project]` is a real section of the shipped template with one key,
@@ -151,6 +175,15 @@ produce. multi_run overriding `PROJECT_NAME` in its runtime overlay
 continues to work unchanged; that is ADR-00000022's table row.
 
 ### 6. Why this is not a reversal of #600
+
+> **Amended 2026-09-06 by ADR-00000036 (#1087).** The per-worktree / per-instance
+> line this section draws was a consequence of `.setup.conf.local` having exactly
+> one location: "another parameter set" could only mean "another checkout". The
+> file's path now becomes caller-supplied, and the same layer serves both axes --
+> a developer still gets the per-worktree file at the default path, an
+> orchestrator passes its own. The layer's semantics are unchanged:
+> section-replace, overrides any section, gitignored at the default path. What
+> changes is only that the address is an argument rather than a constant.
 
 #600 removed `--instance` / `INSTANCE_SUFFIX` / `config/instances/<name>`
 from base on layering grounds: base is `docker` (single instance),

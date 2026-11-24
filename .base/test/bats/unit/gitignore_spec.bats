@@ -3,7 +3,7 @@
 # Unit tests for .base/dist/script/docker/lib/gitignore.sh.
 #
 # init.sh / upgrade.sh need to sync a canonical .gitignore set
-# (.env, .env.bak, compose.yaml, .setup.conf.bak, coverage/,
+# (.env, .env.bak, compose.yaml, setup.toml.bak, coverage/,
 # .Dockerfile.generated). The lib has three responsibilities:
 #   1. Emit the canonical list (single source of truth).
 #   2. Append-missing into a target .gitignore, idempotent, preserving
@@ -11,6 +11,10 @@
 #   3. `git rm --cached` any canonical entry that's still tracked in the
 #      repo (so 15 downstream repos that mis-track compose.yaml get
 #      healed by the next batch-upgrade).
+#
+# why: Unit tests for `template/script/docker/lib/gitignore.sh` — the
+# canonical `.gitignore` set + sync/untrack helpers introduced for issue
+# #172.
 
 bats_require_minimum_version 1.5.0
 
@@ -42,16 +46,44 @@ teardown() {
 # _canonical_gitignore_entries
 # ════════════════════════════════════════════════════════════════════
 
-@test "_canonical_gitignore_entries: emits exactly the 11 canonical lines (#502, #507, #606, #832, #879, #893)" {
+@test "_canonical_gitignore_entries: emits exactly the canonical lines, and not one substitution (#502, #507, #606, #832, #879, #893, #868, #1133, #1137)" {
+  # The asserted heredoc below is the count, and the only place it is
+  # written: a figure in this name or in this comment is a second copy of
+  # it that nothing re-derives, and it drifted once already (base#1278 --
+  # the name said seventeen from the day base#1273 added env.local.toml,
+  # while the heredoc it asserts said eighteen and stayed green). Not one
+  # substitution, either: the TOML names were ADDED
+  # alongside the legacy INI ones, never swapped in for them. `.setup.conf.local` is the old
+  # per-worktree override layer, which a repo part-way through the format
+  # migration still has on disk, and the whole reason the line is canonical
+  # is that such a layer must never be committed -- dropping the line is how
+  # one machine's override silently becomes everyone's config. The
+  # retraction mechanism for a line that really is dead is
+  # _retired_gitignore_entries, and nothing is in it.
+  #
+  # The two newest lines are the BACKUPS the INI-to-TOML migration leaves
+  # of the two machine-local layers. Every other backup this tree writes is
+  # here (`.env.bak`, `.setup.conf.bak`, `setup.toml.bak`), and these two
+  # carry exactly what their ignored originals carried -- a per-machine
+  # override, `environment.env_N` credentials included. Ignoring the
+  # original and not its backup leaves the same secret reachable by
+  # `git add .` and shipped in the Docker build context.
   run _canonical_gitignore_entries
   assert_success
   assert_output - <<'EXPECTED'
 .env
+.env.local
+.env.local.toml
 .env.generated
 .env.bak
+.env.local.bak
+env.local.toml
 compose.yaml
 .setup.conf.bak
+setup.toml.bak
 .setup.conf.local
+.setup.conf.local.bak
+setup.local.toml
 coverage/
 .Dockerfile.generated
 .docker.xauth
@@ -60,20 +92,20 @@ log/
 EXPECTED
 }
 
-@test "_canonical_gitignore_entries: advertises .setup.conf.local again (#893)" {
+@test "_canonical_gitignore_entries: advertises setup.local.toml again (#893)" {
   # The line was retired while nothing read the file it named. The
   # per-worktree override layer restores the mechanism, so the line names a
   # real file again -- and it MUST be canonical, because the whole point of
   # the layer is that it never gets committed.
   run _canonical_gitignore_entries
   assert_success
-  assert_line ".setup.conf.local"
+  assert_line "setup.local.toml"
 }
 
 @test "no entry is both canonical and retired (#893)" {
   # The coherence guard. A line in both lists is a repo that deletes, on
   # every sync, the line it just added -- forever. This is what un-retiring
-  # .setup.conf.local had to get exactly right, and the guard is what keeps
+  # setup.local.toml had to get exactly right, and the guard is what keeps
   # the next retirement from getting it wrong.
   local -a _canon=() _retired=()
   mapfile -t _canon < <(_canonical_gitignore_entries)
@@ -89,7 +121,7 @@ EXPECTED
 }
 
 @test "_retired_gitignore_entries: retires nothing today (#893)" {
-  # .setup.conf.local was its only member and is canonical again. The
+  # setup.local.toml was its only member and is canonical again. The
   # retraction MECHANISM stays (the next retirement needs it); the LIST is
   # empty, which is what the coherence guard above is asserting against.
   run _retired_gitignore_entries
@@ -97,7 +129,7 @@ EXPECTED
   assert_output ""
 }
 
-@test "_sync_gitignore: a full sync leaves .setup.conf.local in the file, twice running (#893)" {
+@test "_sync_gitignore: a full sync leaves setup.local.toml in the file, twice running (#893)" {
   # The failure mode being guarded: prune-then-append, forever. Two syncs
   # must converge with the line present, not oscillate around it.
   local _f="${TMP_DIR}/.gitignore"
@@ -108,7 +140,7 @@ EXPECTED
   local _second; _second="$(cat "${_f}")"
   assert_equal "${_second}" "${_first}"
   run cat "${_f}"
-  assert_line ".setup.conf.local"
+  assert_line "setup.local.toml"
 }
 
 # The retraction mechanism is exercised against a STUBBED retired list: the
@@ -124,7 +156,7 @@ _stub_retired() {
 node_modules/
 # managed by template (do not remove)
 .env
-.setup.conf.bak
+setup.toml.bak
 legacy.retired
 EOF
   run _sync_gitignore "${_f}"
@@ -134,7 +166,7 @@ EOF
   # Everything else survives, user lines included.
   assert_line "node_modules/"
   assert_line ".env"
-  assert_line ".setup.conf.bak"
+  assert_line "setup.toml.bak"
 }
 
 @test "_sync_gitignore: leaves a retired entry the user put ABOVE the marker alone (#879)" {
@@ -193,6 +225,73 @@ EOF
   assert_line ".env"
 }
 
+# why: The prune lands its rewrite with `mv` from a `mktemp` sibling,
+# which mktemp creates at 0600. .gitignore / .dockerignore are the user's
+# own committed files: a 0664 or 0644 one must come back at exactly that
+# mode. A restrictive umask (077) so a hardcoded mode or a umask-derived
+# one cannot pass -- only the file's own mode can (the base#1323
+# precedent).
+@test "_prune_retired_entries: the rewritten file keeps its exact mode under umask 077 (base#1356)" {
+  _stub_retired
+  local _f _mode
+  for _f in "${TMP_DIR}/.gitignore" "${TMP_DIR}/.dockerignore"; do
+    for _mode in 664 644; do
+      cat > "${_f}" <<'EOF'
+node_modules/
+# managed by template (do not remove)
+.env
+legacy.retired
+EOF
+      chmod "${_mode}" "${_f}"
+      ( umask 077; _prune_retired_entries "${_f}" )
+      run cat "${_f}"
+      refute_line "legacy.retired"
+      run stat -c '%a' "${_f}"
+      assert_output "${_mode}"
+    done
+  done
+}
+
+# bats test_tags=kcov-fragile
+# why: When the rewrite cannot take the file's mode, landing it anyway
+# would leave .gitignore / .dockerignore at mktemp's 0600 -- the defect
+# the chmod is there to stop (base#1356). The prune is abandoned instead:
+# the file keeps its bytes and its mode, the temp is removed, and the
+# failure is reported rather than swallowed.
+@test "_prune_retired_entries refuses the replacement, cleans the temp + errors when the mode cannot be restored (base#1356)" {
+  # Skipped under kcov: overrides `chmod` with a failing shell function,
+  # the same stub shape as the mv-failure specs in conf_accessor_spec.
+  [ "${COVERAGE:-0}" = 1 ] && skip "chmod-failure stub is kcov-fragile (#613)"
+
+  local _f="${TMP_DIR}/.gitignore"
+  cat > "${_f}" <<'EOF'
+node_modules/
+# managed by template (do not remove)
+.env
+legacy.retired
+EOF
+  chmod 664 "${_f}"
+  local _orig
+  _orig="$(cat "${_f}")"
+
+  run bash -c "
+    source /source/dist/script/docker/lib/conf.sh
+    source /source/dist/script/docker/lib/gitignore.sh
+    _log_err() { printf 'ERR: %s\n' \"\${*:3}\" >&2; }
+    _retired_gitignore_entries() { printf '%s\n' legacy.retired; }
+    chmod() { return 1; }
+    _prune_retired_entries '${_f}'
+  "
+  assert_failure
+  assert_output --partial "could not give the rewrite"
+  run cat "${_f}"
+  assert_output "${_orig}"
+  run stat -c '%a' "${_f}"
+  assert_output "664"
+  run bash -c "ls '${_f}'.* 2>/dev/null | wc -l"
+  assert_output "0"
+}
+
 @test "_sync_gitignore: pruning a retired entry is idempotent (#879)" {
   _stub_retired
   local _f="${TMP_DIR}/.gitignore"
@@ -208,6 +307,7 @@ EOF
   assert_equal "${_second}" "${_first}"
 }
 
+# why: Deterministic output
 @test "_canonical_gitignore_entries: list is stable order" {
   # Two calls must produce byte-identical output (consumers may diff).
   local _a _b
@@ -220,6 +320,7 @@ EOF
 # _sync_gitignore
 # ════════════════════════════════════════════════════════════════════
 
+# why: Greenfield
 @test "_sync_gitignore: creates the file when missing, with marker block + all entries" {
   local _f="${TMP_DIR}/.gitignore"
   run _sync_gitignore "${_f}"
@@ -228,13 +329,15 @@ EOF
   run cat "${_f}"
   assert_line --partial "managed by template"
   assert_line ".env"
+  assert_line ".env.local"
   assert_line ".env.bak"
   assert_line "compose.yaml"
-  assert_line ".setup.conf.bak"
+  assert_line "setup.toml.bak"
   assert_line "coverage/"
   assert_line ".Dockerfile.generated"
 }
 
+# why: Empty file
 @test "_sync_gitignore: empty file gets marker block + all entries appended" {
   local _f="${TMP_DIR}/.gitignore"
   : > "${_f}"
@@ -246,15 +349,23 @@ EOF
   assert_line "compose.yaml"
 }
 
+# why: Already-synced
 @test "_sync_gitignore: file with all entries already present is a no-op" {
   local _f="${TMP_DIR}/.gitignore"
   cat > "${_f}" <<'EOF'
 .env
+.env.local
+.env.local.toml
 .env.generated
 .env.bak
+.env.local.bak
+env.local.toml
 compose.yaml
 .setup.conf.bak
+setup.toml.bak
 .setup.conf.local
+.setup.conf.local.bak
+setup.local.toml
 coverage/
 .Dockerfile.generated
 .docker.xauth
@@ -270,6 +381,7 @@ EOF
   assert_equal "${_after}" "${_before}"
 }
 
+# why: Drift fill-in
 @test "_sync_gitignore: appends only missing entries when subset already present" {
   local _f="${TMP_DIR}/.gitignore"
   # Pre-existing partial set (the 15-repo state at the time was filed)
@@ -294,6 +406,7 @@ EOF
   assert_output "1"
 }
 
+# why: User-line preservation
 @test "_sync_gitignore: preserves user-defined lines (bridge.yaml, .env.gpg, .claude/)" {
   local _f="${TMP_DIR}/.gitignore"
   cat > "${_f}" <<'EOF'
@@ -312,6 +425,7 @@ EOF
   assert_line ".claude/"
 }
 
+# why: Idempotency
 @test "_sync_gitignore: idempotent — second invocation produces no further changes" {
   local _f="${TMP_DIR}/.gitignore"
   cat > "${_f}" <<'EOF'
@@ -326,6 +440,7 @@ EOF
   assert_equal "${_after_second}" "${_after_first}"
 }
 
+# why: No-dup invariant
 @test "_sync_gitignore: no duplicate canonical lines after re-run" {
   local _f="${TMP_DIR}/.gitignore"
   cat > "${_f}" <<'EOF'
@@ -337,6 +452,7 @@ EOF
   assert_output "1"
 }
 
+# why: #692 LF-only presence-match constraint
 @test "_sync_gitignore: documented constraint -- CRLF entries are not matched (LF-only) (#692)" {
   # _sync_managed_entries decides presence with `grep -qxF` (exact whole-LF-line
   # match). A .gitignore saved with CRLF stores `.env\r`, which is NOT equal to
@@ -353,6 +469,7 @@ EOF
   assert [ "$(grep -c $'\.env\r$' "${_f}")" -eq 1 ]
 }
 
+# why: Trailing-newline guarantee
 @test "_sync_gitignore: ends with newline so future appends start on their own line" {
   local _f="${TMP_DIR}/.gitignore"
   printf 'something' > "${_f}"   # NO trailing newline
@@ -383,6 +500,38 @@ _init_repo_with_tracked() {
   git -C "${_repo}" commit -q -m "init" || true
 }
 
+# Track one placeholder for EVERY canonical entry, plus a nested copy of
+# every unanchored directory entry. The population is derived from
+# _canonical_gitignore_entries rather than hand-named, so a new entry
+# joins it the moment it joins the set: the four names this replaced
+# were all entries the sweep happens to get right, which is why three
+# entries it gets wrong sat behind a green "all canonical entries" test.
+_track_every_canonical_entry() {
+  local _repo="$1"
+  git -C "${_repo}" init -q -b main
+  git -C "${_repo}" config user.email t@t
+  git -C "${_repo}" config user.name t
+  local _entry _rel
+  while IFS= read -r _entry; do
+    [[ -n "${_entry}" ]] || continue
+    _rel="${_entry#/}"
+    case "${_rel}" in
+      */) mkdir -p "${_repo}/${_rel}"; : > "${_repo}/${_rel}placeholder" ;;
+      *)  : > "${_repo}/${_rel}" ;;
+    esac
+    # No leading slash means an UNANCHORED gitignore pattern, which also
+    # ignores a nested copy. Seed one so the spec can state what the sweep
+    # does with it instead of never meeting the case.
+    if [[ "${_entry}" != /* && "${_rel}" == */ ]]; then
+      mkdir -p "${_repo}/sub/${_rel}"
+      : > "${_repo}/sub/${_rel}placeholder"
+    fi
+  done < <(_canonical_gitignore_entries)
+  git -C "${_repo}" add -A
+  git -C "${_repo}" commit -q -m "init"
+}
+
+# why: 15-repo drift fix
 @test "_untrack_canonical_in_repo: git rm --cached for tracked compose.yaml" {
   _init_repo_with_tracked "${TMP_DIR}" compose.yaml
   run _untrack_canonical_in_repo "${TMP_DIR}"
@@ -394,6 +543,7 @@ _init_repo_with_tracked() {
   assert_output ""
 }
 
+# why: Scope guard
 @test "_untrack_canonical_in_repo: leaves untracked files alone" {
   git -C "${TMP_DIR}" init -q -b main
   git -C "${TMP_DIR}" config user.email t@t
@@ -407,6 +557,7 @@ _init_repo_with_tracked() {
   [[ -f "${TMP_DIR}/compose.yaml" ]]
 }
 
+# why: Healthy-repo no-op
 @test "_untrack_canonical_in_repo: no-op when no canonical files tracked" {
   _init_repo_with_tracked "${TMP_DIR}" README.md
   run _untrack_canonical_in_repo "${TMP_DIR}"
@@ -416,6 +567,7 @@ _init_repo_with_tracked() {
   assert_output "README.md"
 }
 
+# why: Directory entry
 @test "_untrack_canonical_in_repo: handles tracked coverage/ directory" {
   _init_repo_with_tracked "${TMP_DIR}" coverage/
   run _untrack_canonical_in_repo "${TMP_DIR}"
@@ -425,6 +577,7 @@ _init_repo_with_tracked() {
   assert_output ""
 }
 
+# why: Re-run safety
 @test "_untrack_canonical_in_repo: idempotent — second run succeeds without error" {
   _init_repo_with_tracked "${TMP_DIR}" compose.yaml .env
   _untrack_canonical_in_repo "${TMP_DIR}"
@@ -432,12 +585,145 @@ _init_repo_with_tracked() {
   assert_success
 }
 
+# why: Multi-entry sweep over the WHOLE canonical set (#1119). The title
+# used to name four entries by hand, all of them ones the sweep handles, so
+# it stayed green while three of twelve were handled wrong. The population
+# is now derived from _canonical_gitignore_entries, and the one class the
+# sweep deliberately passes over -- an anchored entry, whose pathspec is the
+# blocked decision -- is asserted as passed over rather than left unvisited.
 @test "_untrack_canonical_in_repo: untracks all canonical entries that match" {
-  _init_repo_with_tracked "${TMP_DIR}" compose.yaml .env .env.bak .setup.conf.bak
+  _track_every_canonical_entry "${TMP_DIR}"
   run _untrack_canonical_in_repo "${TMP_DIR}"
   assert_success
-  run git -C "${TMP_DIR}" ls-files compose.yaml .env .env.bak .setup.conf.bak
+
+  local _entry _rel _left
+  while IFS= read -r _entry; do
+    [[ -n "${_entry}" ]] || continue
+    _rel="${_entry#/}"
+    _left="$(git -C "${TMP_DIR}" ls-files -- "${_rel}")"
+    if [[ "${_entry}" == /* ]]; then
+      # An anchored entry has no pathspec yet, so its tracked copy stays.
+      # Whether base may untrack a consumer's hand-written one during an
+      # unattended resync commit is an open decision; until it is taken,
+      # leaving the file in the index is the recoverable direction.
+      assert [ -n "${_left}" ]
+    else
+      assert [ -z "${_left}" ]
+    fi
+  done < <(_canonical_gitignore_entries)
+}
+
+# why: `log/` and `coverage/` are UNANCHORED gitignore patterns, so they
+# ignore `sub/log/` too, but the pathspec derived from them matches from the
+# repo root only and leaves the nested copy in the index (#1119). Pinned, not
+# fixed: widening the pathspec is the same blocked decision as the anchored
+# entry, and a divergence nothing states is the one that gets re-discovered.
+@test "_untrack_canonical_in_repo: leaves a nested copy of an unanchored entry tracked (#1119)" {
+  _track_every_canonical_entry "${TMP_DIR}"
+  run _untrack_canonical_in_repo "${TMP_DIR}"
+  assert_success
+  run git -C "${TMP_DIR}" ls-files -- sub
+  assert_line "sub/coverage/placeholder"
+  assert_line "sub/log/placeholder"
+}
+
+# why: The translation seam (#1119). A trailing slash marks a directory in
+# a gitignore pattern and means nothing in a pathspec, so it is dropped.
+@test "_canonical_entry_pathspec: a directory entry loses its trailing slash (#1119)" {
+  run _canonical_entry_pathspec "coverage/"
+  assert_success
+  assert_output "coverage"
+}
+
+# why: A leading slash anchors a gitignore pattern at the repo root; handed
+# to git verbatim it is an absolute filesystem path and git refuses it
+# outright (#1119). The translation reports "no pathspec" so the sweeps skip
+# the entry by a stated rule, which is what the swallowed fatal used to do
+# by accident.
+@test "_canonical_entry_pathspec: an anchored entry has no pathspec yet (#1119)" {
+  run _canonical_entry_pathspec "/deploy/"
+  assert_failure
   assert_output ""
+}
+
+# why: The property the whole fix is about (#1119): a gitignore pattern is
+# not a pathspec, so every pathspec this translation DOES hand out has to be
+# one git accepts. Asserted against the real canonical set in a real repo,
+# so a future entry whose shape git refuses fails here and not in a
+# consumer's unattended upgrade.
+@test "_canonical_entry_pathspec: every pathspec it returns is one git accepts (#1119)" {
+  _track_every_canonical_entry "${TMP_DIR}"
+  local _entry _pathspec _checked=0
+  while IFS= read -r _entry; do
+    [[ -n "${_entry}" ]] || continue
+    _pathspec="$(_canonical_entry_pathspec "${_entry}")" || continue
+    run git -C "${TMP_DIR}" ls-files -- "${_pathspec}"
+    assert_success
+    _checked=$(( _checked + 1 ))
+  done < <(_canonical_gitignore_entries)
+  # A translation that returns nothing for everything would satisfy the loop
+  # above over an empty population, so the count is asserted -- against the
+  # population itself, not a figure typed here that an entry added to the
+  # canonical set would leave stale. Every entry but an ANCHORED one has a
+  # pathspec today, and the anchored class is pinned by the case above.
+  local _expected=0
+  while IFS= read -r _entry; do
+    [[ -n "${_entry}" ]] || continue
+    [[ "${_entry}" == /* ]] && continue
+    _expected=$(( _expected + 1 ))
+  done < <(_canonical_gitignore_entries)
+  assert_equal "${_checked}" "${_expected}"
+}
+
+# why: The swallowed fatal (#1119). `git ls-files` prints the tracked paths
+# a pathspec matches and exits 0 even when it matches nothing, so a
+# NON-ZERO status is never "nothing to untrack" -- it is git refusing the
+# pathspec. Routing its stderr to /dev/null and reading only
+# `[[ -n "$(...)" ]]` turned that refusal into an entry skipped with no
+# trace, and a sweep that reported success over it.
+@test "_untrack_canonical_in_repo: reports a git ls-files failure instead of skipping the entry (#1119)" {
+  _init_repo_with_tracked "${TMP_DIR}" compose.yaml
+  # A corrupt index is the cheapest REAL `git ls-files` fatal, and it needs
+  # no privileges: `rev-parse --git-dir` still answers, so the function gets
+  # past its not-a-git-repo guard and then every pathspec exits 128.
+  printf 'not an index' > "${TMP_DIR}/.git/index"
+  run _untrack_canonical_in_repo "${TMP_DIR}"
+  assert_failure
+  # git's own diagnosis has to reach the caller: a surfaced failure the
+  # operator cannot read is the same dead end as a swallowed one.
+  assert_output --partial "fatal:"
+  assert_output --partial "git ls-files"
+}
+
+# why: The second swallow in the same loop (#1119). `git rm --cached` ran
+# under `|| true` with both streams discarded, so an entry ls-files had just
+# reported as tracked could fail to leave the index and the sweep would
+# still return success -- and the resync would then stage a .gitignore
+# claiming the file is ignored while the index still carries it.
+@test "_untrack_canonical_in_repo: reports a git rm failure instead of ignoring it (#1119)" {
+  _init_repo_with_tracked "${TMP_DIR}" compose.yaml
+  local _git
+  _git="$(command -v git)"
+  create_mock_dir
+  # ls-files has to keep working -- the point is a failure that happens
+  # AFTER the entry was found tracked, which no permission or corruption
+  # trick reaches without also breaking the lookup before it.
+  cat > "${MOCK_DIR}/git" <<EOS
+#!/bin/bash
+for _a in "\$@"; do
+  if [[ "\${_a}" == rm ]]; then
+    echo 'fatal: mocked git rm refusal' >&2
+    exit 128
+  fi
+done
+exec ${_git} "\$@"
+EOS
+  chmod +x "${MOCK_DIR}/git"
+  run _untrack_canonical_in_repo "${TMP_DIR}"
+  cleanup_mock_dir
+  assert_failure
+  assert_output --partial "fatal: mocked git rm refusal"
+  assert_output --partial "git rm"
 }
 
 # ════════════════════════════════════════════════════════════════════
@@ -451,9 +737,9 @@ _init_repo_with_tracked() {
 
 @test "_sync_logging_gitignore: tracer — relative local_path emitted in .gitignore (#402)" {
   mkdir -p "${TMP_DIR}"
-  cat > "${TMP_DIR}/.setup.conf" <<'CONF'
+  cat > "${TMP_DIR}/setup.toml" <<'CONF'
 [logging]
-local_path = ./logs/
+local_path = "./logs/"
 CONF
   run _sync_logging_gitignore "${TMP_DIR}"
   assert_success
@@ -472,13 +758,13 @@ CONF
 
 _stage_logging_conf() {
   mkdir -p "${TMP_DIR}"
-  cat > "${TMP_DIR}/.setup.conf"
+  cat > "${TMP_DIR}/setup.toml"
 }
 
 @test "_sync_logging_gitignore appends relative local_path to .gitignore (#402, ex-#328)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./logs/
+local_path = "./logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -491,7 +777,7 @@ CONF
 @test "_sync_logging_gitignore skips absolute paths (#402, ex-#328)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = /srv/logs/
+local_path = "/srv/logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -502,7 +788,7 @@ CONF
 @test "_sync_logging_gitignore skips ~ paths (#402, ex-#328)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ~/logs/
+local_path = "~/logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -513,7 +799,7 @@ CONF
 @test "_sync_logging_gitignore is idempotent (#402, ex-#328)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./logs/
+local_path = "./logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -523,6 +809,7 @@ CONF
   [[ "$(cat "${TMP_DIR}/.gitignore")" == "${_first}" ]]
 }
 
+# why: #692 `..` path wrapped as-is
 @test "_sync_logging_gitignore: documented constraint -- a '..' traversal is wrapped verbatim (#692)" {
   # The filter strips only absolute (/*) and ~ paths; any other relative
   # value is wrapped as /<value>/. A `..`-escaping value therefore produces
@@ -530,7 +817,7 @@ CONF
   # behaviour; a future input-validation pass would skip/reject it instead.
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ../escape/
+local_path = "../escape/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -538,12 +825,13 @@ CONF
   assert_success
 }
 
+# why: #692 space path wrapped as-is
 @test "_sync_logging_gitignore: documented constraint -- a space-bearing path is wrapped verbatim (#692)" {
   # A value with a space is wrapped as /my logs/ (a literal-space pattern).
   # Pins the current behaviour; a future sanitiser would reject or quote it.
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = my logs/
+local_path = "my logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -554,13 +842,13 @@ CONF
 @test "_sync_logging_gitignore collects from both global + per-svc (#402, ex-#328)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./global-logs/
+local_path = "./global-logs/"
 
 [logging.devel]
-local_path = ./devel-logs/
+local_path = "./devel-logs/"
 
 [logging.test]
-local_path = ./test-logs/
+local_path = "./test-logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -575,7 +863,7 @@ CONF
 @test "_sync_logging_gitignore is no-op when no local_path keys (#402, ex-#328)" {
   _stage_logging_conf <<'CONF'
 [logging]
-driver = json-file
+driver = "json-file"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -589,7 +877,7 @@ CONF
 @test "_sync_logging_gitignore prunes stale managed entries on value change (#402, ex-#390)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./logs/
+local_path = "./logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -598,7 +886,7 @@ CONF
   # Rename: /logs/ pruned, /log/ added.
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   _sync_logging_gitignore "${TMP_DIR}"
   run grep -xF "/logs/" "${TMP_DIR}/.gitignore"
@@ -610,7 +898,7 @@ CONF
 @test "_sync_logging_gitignore drops marker + entries when candidates become empty (#402, ex-#390)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./logs/
+local_path = "./logs/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -619,7 +907,7 @@ CONF
   # Feature turned off: marker + entries removed.
   _stage_logging_conf <<'CONF'
 [logging]
-local_path =
+local_path = ""
 CONF
   _sync_logging_gitignore "${TMP_DIR}"
   run grep -xF "/logs/" "${TMP_DIR}/.gitignore"
@@ -634,7 +922,7 @@ CONF
   printf '%s\n' "# user ignores" "/logs/" "" > "${TMP_DIR}/.gitignore"
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   _sync_logging_gitignore "${TMP_DIR}"
   run grep -xF "/logs/" "${TMP_DIR}/.gitignore"
@@ -644,7 +932,7 @@ CONF
   # Turning the feature off prunes managed /log/ but leaves user /logs/.
   _stage_logging_conf <<'CONF'
 [logging]
-local_path =
+local_path = ""
 CONF
   _sync_logging_gitignore "${TMP_DIR}"
   run grep -xF "/logs/" "${TMP_DIR}/.gitignore"
@@ -679,7 +967,7 @@ _LOGGING_LEGACY='# managed by template: [logging] local_path (do not remove)'
 @test "_sync_logging_gitignore: emits an explicit end marker bounding the block (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -692,7 +980,7 @@ CONF
 @test "_sync_logging_gitignore: preserves a user entry BELOW the managed block (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
@@ -710,14 +998,14 @@ CONF
 @test "_sync_logging_gitignore: user entry below the block survives a value change (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   : > "${TMP_DIR}/.gitignore"
   _sync_logging_gitignore "${TMP_DIR}"
   printf '/build/\n' >> "${TMP_DIR}/.gitignore"
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./logs/
+local_path = "./logs/"
 CONF
   run _sync_logging_gitignore "${TMP_DIR}"
   assert_success
@@ -733,7 +1021,7 @@ CONF
 @test "_sync_logging_gitignore: an unterminated managed block is an error (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   # A begin marker whose end marker was deleted: the block has no
   # bound, so the sync must refuse rather than guess where it stops.
@@ -750,7 +1038,7 @@ CONF
 @test "_sync_logging_gitignore: an end marker with no begin marker is an error (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   printf '%s\n' "/build/" "${_LOGGING_END}" > "${TMP_DIR}/.gitignore"
   run _sync_logging_gitignore "${TMP_DIR}"
@@ -761,7 +1049,7 @@ CONF
 @test "_sync_logging_gitignore: migrates a legacy begin-marker-only block (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   # What an older template left on disk: begin marker, no end marker.
   printf '%s\n' "# user ignores" "${_LOGGING_LEGACY}" "/log/" \
@@ -783,7 +1071,7 @@ CONF
 @test "_sync_logging_gitignore: legacy migration keeps a following canonical entry (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   # The canonical /deploy/ entry appended right below a legacy block,
   # with no blank line between them: the migration must not consume it.
@@ -799,7 +1087,7 @@ CONF
 @test "_sync_logging_gitignore: legacy migration reports orphaned entries (#876)" {
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   printf '%s\n' "${_LOGGING_LEGACY}" "/log/" "/stale/" \
     > "${TMP_DIR}/.gitignore"
@@ -826,7 +1114,7 @@ CONF
   # both be present and stable, with no duplicates.
   _stage_logging_conf <<'CONF'
 [logging]
-local_path = ./log/
+local_path = "./log/"
 CONF
   printf '%s\n' ".env" "compose.yaml" "${_LOGGING_LEGACY}" "/log/" \
     > "${TMP_DIR}/.gitignore"

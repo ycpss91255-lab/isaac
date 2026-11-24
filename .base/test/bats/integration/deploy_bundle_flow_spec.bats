@@ -3,7 +3,7 @@
 # Integration test: the field-deploy generator end-to-end across components
 # (ADR-00000023; ISTQB Integration level, ADR-00000018). Drives the REAL
 # _setup_deploy -> _generate_deploy_bundle flow over the filesystem against a
-# fixture repo (a repo-root .setup.conf, a Dockerfile with a runtime stage,
+# fixture repo (a repo-root setup.toml, a Dockerfile with a runtime stage,
 # a config/<component>/deploy.manifest declaring one operator-tunable path)
 # and asserts the produced OUTPUT FOLDER is correct:
 # deploy/<repo>-<stage>-<version>/ with deploy.sh, a self-contained
@@ -16,6 +16,15 @@
 # generator's file-writing + install path runs for real. The heavier
 # build->load->compose-up->override lifecycle is the System-level sibling
 # (test/bats/system/deploy_bundle_e2e_spec.bats), which needs host docker.
+#
+# why: The field-deploy generator end-to-end across components
+# (ADR-00000023): a fixture repo (repo-root `setup.toml`, a Dockerfile with
+# a `runtime` stage, a `config/<component>/deploy.manifest` declaring one
+# tunable path) drives the real `_setup_deploy` -> `_generate_deploy_bundle`
+# flow with a docker + xz PATH-shim (no real daemon), and asserts the
+# produced output folder `deploy/<repo>-<stage>-<version>/` is correct.
+# Distinct from the isolated-function unit specs: this exercises the
+# manifest -> resolve -> resolved-compose -> bundle-files wiring as a flow.
 
 setup() {
   export LOG_FORMAT=text
@@ -32,11 +41,11 @@ setup() {
   git -C "${REPO}" config user.email t@t
   git -C "${REPO}" config user.name t
 
-  # Repo-root .setup.conf (post-relocation location).
+  # Repo-root setup.toml (post-relocation location).
   printf '%s\n' \
-    "[deploy]" "gpu_mode = off" "dri_groups = off" \
-    "[gui]" "mode = off" \
-    > "${REPO}/.setup.conf"
+    "[deploy]" 'gpu_mode = "off"' 'dri_groups = "off"' \
+    "[gui]" 'mode = "off"' \
+    > "${REPO}/setup.toml"
 
   cat > "${REPO}/Dockerfile" <<'DOCK'
 FROM scratch AS sys
@@ -104,6 +113,7 @@ teardown() {
   [[ -n "${SHIM:-}" ]] && rm -rf "${SHIM}"
 }
 
+# why: folder + files
 @test "deploy flow: produces the version-named output folder with all bundle files (field-deploy)" {
   [ "${DEPLOY_RUN_STATUS}" -eq 0 ]
   [ -d "${BUNDLE}" ]
@@ -114,6 +124,7 @@ teardown() {
   [ -d "${BUNDLE}/config" ]
 }
 
+# why: self-contained compose
 @test "deploy flow: the resolved compose is self-contained and pins the versioned image (field-deploy)" {
   run cat "${BUNDLE}/compose.yaml"
   assert_success
@@ -124,6 +135,7 @@ teardown() {
   assert_output --partial "restart: unless-stopped"
 }
 
+# why: tunable delivery
 @test "deploy flow: the manifest path is delivered as an editable copy + a mount-wins bind (field-deploy)" {
   # The compose binds the tunable file over its baked default.
   run cat "${BUNDLE}/compose.yaml"
@@ -134,6 +146,7 @@ teardown() {
   assert_output --partial "baked-default"
 }
 
+# why: launcher shape
 @test "deploy flow: the thin launcher drives docker load + compose up/down (field-deploy)" {
   run cat "${BUNDLE}/deploy.sh"
   assert_success
@@ -144,26 +157,35 @@ teardown() {
   refute_output --partial "docker run"
 }
 
-@test "deploy flow: the bundle compose carries the watchdog env + the configured restart end to end (#840)" {
+@test "deploy flow: the bundle ships .env + .env.local and the restart policy end to end (#868)" {
   # Re-run the real flow over a conf that sets the [lifecycle] knobs, so the
   # resolve -> resolved-compose -> bundle wiring is exercised, not just the
   # isolated emitter.
   printf '%s\n' \
-    "[deploy]" "gpu_mode = off" "dri_groups = off" \
-    "[gui]" "mode = off" \
-    "[lifecycle]" "restart = on-failure:5" "watchdog_check = pgrep -f my_node" \
+    "[deploy]" 'gpu_mode = "off"' 'dri_groups = "off"' \
+    "[gui]" 'mode = "off"' \
+    "[environment]" 'env_1 = "APP_MODE=default"' \
+    "[lifecycle]" 'restart = "on-failure:5"' \
+    'watchdog_check = "pgrep -f my_node"' \
     "watchdog_interval = 30" \
-    > "${REPO}/.setup.conf"
+    > "${REPO}/setup.toml"
   run _setup_deploy --base-path "${REPO}" --stage runtime -y
   assert_success
   # The tree is now dirty, so the version stamp gains the -dirty suffix.
   local _bundle="${REPO}/deploy/fielddemo-runtime-v0.0.1-dirty"
   run cat "${_bundle}/compose.yaml"
   assert_success
-  assert_output --partial "WATCHDOG_CHECK=pgrep -f my_node"
-  assert_output --partial "WATCHDOG_INTERVAL=30"
   assert_output --partial 'restart: "on-failure:5"'
   refute_output --partial "restart: unless-stopped"
+  # The container-bound defaults are a filled-in list the operator can read,
+  # not knowledge hidden inside the image.
+  run cat "${_bundle}/.env"
+  assert_success
+  assert_output --partial "WATCHDOG_CHECK='pgrep -f my_node'"
+  assert_output --partial "WATCHDOG_INTERVAL='30'"
+  assert_output --partial "APP_MODE='default'"
+  # ... and the override file the operator edits ships alongside it.
+  assert [ -f "${_bundle}/.env.local" ]
 }
 
 @test "deploy flow: [environment] is baked as ENV into a stage that is not named runtime (#840)" {
@@ -200,10 +222,10 @@ FROM sys AS field
 CMD ["/app"]
 DOCK
   printf '%s\n' \
-    "[deploy]" "gpu_mode = off" "dri_groups = off" \
-    "[gui]" "mode = off" \
-    "[environment]" "env_1 = ROS_DOMAIN_ID=42" \
-    > "${REPO}/.setup.conf"
+    "[deploy]" 'gpu_mode = "off"' 'dri_groups = "off"' \
+    "[gui]" 'mode = "off"' \
+    "[environment]" 'env_1 = "ROS_DOMAIN_ID=42"' \
+    > "${REPO}/setup.toml"
   # The manifest declares runtime paths only; scope it to the new stage so
   # the bundle's config extraction still has something to do.
   printf '%s\n' "[field]" "/etc/app/camera.yaml" \
@@ -213,13 +235,42 @@ DOCK
   run cat "${TMP_ROOT}/build.Dockerfile"
   assert_success
   assert_output --partial 'ENV ROS_DOMAIN_ID="42"'
-  run grep -A 2 '^FROM sys AS field$' "${TMP_ROOT}/build.Dockerfile"
+  # Both splices insert right after the stage's FROM line, so the window has
+  # to hold both: the config bake (config/camera is a component directory)
+  # and the ENV bake. Asserting them together is the point -- they must land
+  # in the SAME stage, which is the agreement the shared FROM-line matcher
+  # exists to guarantee.
+  run grep -A 4 '^FROM sys AS field$' "${TMP_ROOT}/build.Dockerfile"
   assert_output --partial 'ENV ROS_DOMAIN_ID="42"'
+  assert_output --partial 'COPY config/camera /opt/app/config/camera'
 }
 
+# why: README template
 @test "deploy flow: the README names the versioned image + the tunable config workflow (field-deploy)" {
   run cat "${BUNDLE}/README"
   assert_success
   assert_output --partial "fielddemo:runtime-v0.0.1"
   assert_output --partial "config/"
+}
+
+# why: work-dir rm guard (base#1661)
+@test "deploy flow: a work dir outside TMPDIR is refused, not removed (base#1661)" {
+  local _sentinel="${TMP_ROOT}/sentinel"
+  mkdir -p "${_sentinel}"
+  printf 'keep\n' > "${_sentinel}/marker"
+  mkdir -p "${TMP_ROOT}/tmproot"
+  cat > "${SHIM}/mktemp" <<SH
+#!/usr/bin/env bash
+# Only the work-dir call (mktemp -d) gets the sentinel; any other call is real.
+case " \$* " in
+  *" -d "*) printf '%s\n' "${_sentinel}" ;;
+  *) PATH="\${PATH#${SHIM}:}" exec mktemp "\$@" ;;
+esac
+SH
+  chmod +x "${SHIM}/mktemp"
+  rm -rf "${REPO}/deploy"
+  TMPDIR="${TMP_ROOT}/tmproot" run _setup_deploy --base-path "${REPO}" --stage runtime -y
+  [ "${status}" -eq 0 ]
+  [ -f "${_sentinel}/marker" ]
+  [[ "${output}" == *"refusing to remove unexpected work dir"* ]]
 }

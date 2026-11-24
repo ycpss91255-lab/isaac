@@ -7,20 +7,43 @@
 # passthrough -- no MAKEOVERRIDES guard / `--` separator / EXEC_ARGS shim.
 #
 # These RUN `just` for real (parity with the retired makefile_user_spec).
-# They skip when `just` is not in the test-tools image yet (pre-release
-# GHCR pull); see template_spec for the static `apk add ... just` guard
-# and the release-test-tools smoke check. Static content lives in
-# justfile_spec.bats.
+# They skip when the pinned TEST_TOOLS_IMAGE predates `just` being baked
+# into the tooling image -- a capability of the image, not of this repo.
+# The repo-side half is pinned fail-closed in template_spec (the
+# pinned fetch of `just`) plus the release-test-tools smoke check, which
+# now compares the image's version string rather than its exit status, so
+# a removal OR a stale version fails there instead of silently emptying
+# this file. Static
+# content lives in justfile_spec.bats.
 #
 # Strategy mirrors the old makefile_user_spec: sandbox a repo with the
 # justfile symlinked at root and the wrapper scripts stubbed under
 # script/, each recording `<name> <args...>` to ${TMP_REPO}/.invocation_log.
+#
+# why: Executable tests for the user-facing layered entry + namespaces (#546
+# / ADR-00000005; ADR-00000011: docker is a namespace, `just docker build`).
+# Parity with the removed `makefile_user_spec`: sandboxes a repo with the
+# entry + module symlink chain at root + stub `script/*.sh` recorders, and
+# RUNS `just <ns> <verb>` to assert 1:1 forwarding with `{{args}}`
+# passthrough. Skips when `just` is not yet in the test-tools image
+# (pre-release GHCR pull -- see template_spec for the pinned-fetch guard +
+# the release smoke check, which compares the version string rather than the
+# exit status).
 
 bats_require_minimum_version 1.5.0
 
 setup() {
   load "${BATS_TEST_DIRNAME}/test_helper"
-  command -v just >/dev/null 2>&1 || skip "just not installed in this test-tools image"
+  # Optional on purpose: `just` is a capability of the TOOLING IMAGE,
+  # not an artifact of this repo, and TEST_TOOLS_IMAGE can be pinned to
+  # a published test-tools tag older than the one that first shipped it.
+  # Dropping it from the image is NOT what this skip covers -- the
+  # pinned fetch of `just` is asserted unconditionally by template_spec,
+  # so a removal fails there rather than going quiet here. Staleness is a
+  # different question and is NOT skipped: just_runner_version_spec
+  # compares the image's version against the declaration, fail-closed.
+  command -v just >/dev/null 2>&1 \
+    || skip "this test-tools image has no just (older pinned TEST_TOOLS_IMAGE); the pinned fetch itself is asserted in template_spec"
 
   # shellcheck disable=SC2154
   TMP_REPO="$(mktemp -d)"
@@ -109,24 +132,28 @@ teardown() {
   fi
 }
 
+# why: `just docker build test` -> build.sh test
 @test "just docker build forwards positional args to ./script/build.sh" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" docker build test
   assert_success
   assert_output --partial "build test"
 }
 
+# why: no `--` separator needed
 @test "just docker build passes flags through verbatim (no -- separator needed)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" docker build --no-cache test
   assert_success
   assert_output --partial "build --no-cache test"
 }
 
+# why: no EXEC_ARGS shim (#469)
 @test "just docker exec passes = -bearing Kit-style args through (no EXEC_ARGS shim, #469)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" docker exec -t cli --/app/k=v
   assert_success
   assert_output --partial "exec -t cli --/app/k=v"
 }
 
+# why: wrapper dispatch
 @test "just docker run / stop / prune / setup forward to their wrappers" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" docker run -d
   assert_success
@@ -169,6 +196,7 @@ teardown() {
   assert_output --partial "upgrade v0.30.0"
 }
 
+# why: #652 -- apt-aligned check
 @test "just base update runs upgrade.sh --check (apt-aligned, #652)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" base update
   assert_success
@@ -181,12 +209,14 @@ teardown() {
   assert_output --partial "init --force"
 }
 
+# why: #653 -- opt-in completions installer dispatch
 @test "just base completions forwards to script/base/completions.sh (#653, ADR-00000011)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" base completions install --shell bash
   assert_success
   assert_output --partial "completions install --shell bash"
 }
 
+# why: replaces `make help`; lists `docker`/`base`/...
 @test "bare just lists namespaces (replaces make help)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}"
   assert_success
@@ -197,18 +227,21 @@ teardown() {
 
 # ──namespace bare help + recipe --help/--lang forwarding ───────────────
 
+# why: #655 -- namespace help via module default (source_file() --list)
 @test "bare just docker lists the docker verbs (namespace help, #655)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" docker
   assert_success
   assert_output --partial "build"
 }
 
+# why: #655 -- namespace help via module default
 @test "bare just base lists the base verbs (namespace help, #655)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" base
   assert_success
   assert_output --partial "upgrade"
 }
 
+# why: #655 -- recipe `--help` reaches the script as an arg
 @test "just docker build --help forwards --help to the backing script (#655)" {
   # The docker recipe is `build *args:` -> ./script/build.sh {{args}}, so
   # --help reaches the script as an arg (just 1.52 forwards recipe flags).
@@ -217,12 +250,14 @@ teardown() {
   assert_output --partial "build --help"
 }
 
+# why: #655 -- recipe `--lang` forwarded
 @test "just docker build --lang ja forwards --lang to the backing script (#655)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" docker build --lang ja
   assert_success
   assert_output --partial "build --lang ja"
 }
 
+# why: #655 -- base ns recipe `--lang` forwarded
 @test "just base completions --lang forwards --lang to completions.sh (#655)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" base completions install --lang zh-TW
   assert_success
@@ -322,6 +357,84 @@ teardown() {
   assert_output --partial "命令群組"
 }
 
+# ── `just --list` descriptions (base#1326) ─────────────────────────────
+# _just_list <ns>: the namespace listing the user sees from the repo root.
+_just_list() {
+  just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" --list "$1"
+}
+
+# just takes a recipe's --list description from the LAST comment line above
+# it, so a multi-line rationale comment ending mid-sentence surfaces as a
+# fragment ("(honours $LANG ...", "which satisfies the validator ...").
+# Every description must open a sentence: a capital letter, or a `just ...`
+# usage line. Prints each offending `<ns>: <line>` so the failure names it.
+_list_description_offenders() {
+  local _ns _line _desc
+  for _ns in docker base template; do
+    while IFS= read -r _line; do
+      [[ "${_line}" == *"# "* ]] || continue
+      _desc="${_line#*# }"
+      if [[ ! "${_desc}" =~ ^[A-Z] ]] && [[ "${_desc}" != "just "* ]]; then
+        printf '%s: %s\n' "${_ns}" "${_line}"
+      fi
+    done < <(_just_list "${_ns}")
+  done
+}
+
+@test "just --list descriptions are whole sentences, never a mid-comment fragment (base#1326)" {
+  run _list_description_offenders
+  assert_success
+  assert_output ""
+}
+
+# _list_description <ns> <recipe>: the --list description of one recipe,
+# empty when the listing shows the recipe without one.
+# Reads the listing to EOF rather than returning at the match: just writes
+# --list one line per write, and closing the pipe early made it panic on
+# a broken pipe into the captured output (base#1344).
+_list_description() {
+  local _line _name _found=0
+  while IFS= read -r _line; do
+    (( _found )) && continue
+    read -r _name _ <<<"${_line}"
+    [[ "${_name}" == "$2" ]] || continue
+    _found=1
+    [[ "${_line}" == *"# "* ]] && printf '%s\n' "${_line#*# }"
+  done < <(_just_list "$1")
+  return 0
+}
+
+@test "just --list shows the summary each base#1326 recipe was given (base#1326)" {
+  # The prefix rule above passes a capitalised fragment and skips a recipe
+  # with no description at all; pin the exact summary of every recipe whose
+  # listing base#1326 repaired, so neither weaker fix passes.
+  local _ns _recipe _want
+  while IFS='|' read -r _ns _recipe _want; do
+    run _list_description "${_ns}" "${_recipe}"
+    assert_success
+    assert_output "${_want}"
+  done <<'ROWS'
+docker|start|Build + run in one step (e.g. just docker start  |  just docker start --no-cache)
+docker|help|List the docker recipes in your language (--lang / $LANG) [alias: h]
+docker|setup|Print the setup subcommands (just docker setup apply regenerates .env / .env.generated / compose.yaml from setup.toml)
+docker|setup-tui|Interactive TUI to edit setup.toml
+base|help|List the base recipes in your language (--lang / $LANG) [alias: h]
+base|completions|just base completions install|uninstall [--shell bash|zsh|fish|all]
+template|default|Print the template help (same as `just template help`)
+template|help|List the template recipes in your language (--lang / $LANG) [alias: h]
+template|new|Scaffold a new repo-local command group in script/local/<name>/
+ROWS
+}
+
+@test "no just --list description names the retired setup.conf (base#1326)" {
+  local _ns
+  for _ns in docker base template; do
+    run _just_list "${_ns}"
+    assert_success
+    refute_output --partial "setup.conf"
+  done
+}
+
 @test "dashed just <ns> --help errors but hints 'help' (documented just limit, #789)" {
   # A dashed name cannot be a just recipe/alias, so `just <ns> --help` cannot be
   # intercepted; with a `help` recipe present just emits a 'Did you mean help?'
@@ -339,6 +452,7 @@ teardown() {
   assert_output --partial "Usage: just template new"
 }
 
+# why: #632 `import?` registry + `mod?` group
 @test "repo-local group via script/local/justfile.local resolves as a top-level namespace (#632)" {
   # The entry imports script/local/justfile.local (`import?`); a group
   # registered there with a `mod?` line (path relative to script/local)
@@ -351,6 +465,7 @@ teardown() {
   assert_output --partial "greet-hi"
 }
 
+# why: #633 / closes #594 -- scaffold + immediately usable
 @test "just template new <name> scaffolds a working repo-local group (#633, closes #594)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" template new deploy
   assert_success
@@ -361,6 +476,7 @@ teardown() {
   assert_output --partial "hello from the deploy group"
 }
 
+# why: #633 -- module default recipe
 @test "bare just template prints help (#633)" {
   run just --justfile "${TMP_REPO}/justfile" --working-directory "${TMP_REPO}" template
   assert_success

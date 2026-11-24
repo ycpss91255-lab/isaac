@@ -1,4 +1,4 @@
-# Acceptance Tests (CI-only)
+# Acceptance Tests (host-driven)
 
 Acceptance specs under `test/bats/acceptance/`: **0 tests**.
 
@@ -22,8 +22,18 @@ consumers invoke. That cannot be reproduced inside the mounted-`/source`
 bats sandbox the unit / integration levels run in, so the level is
 realized in CI where those preconditions exist. `test/bats/acceptance/`
 therefore stays an intentional empty placeholder (`.gitkeep`, count 0)
-and is **not** part of the `just test` self-test grand total (see
+and is **not** part of the `just test` self-test suite (see
 [TEST.md](TEST.md)); it keeps the level x type grid visible in the tree.
+
+The job's steps live in one script,
+[`script/ci/acceptance.sh`](../../script/ci/acceptance.sh), and
+`just test acceptance` runs that same script on the host's own arch
+(base#1409). The job supplies what only a runner has -- the buildx driver,
+the run-scoped tooling image and the pinned `just` -- and the recipe supplies
+the local equivalents, so the pre-PR mirror
+([`script/ci/pre_pr_mirror.sh`](../../script/ci/pre_pr_mirror.sh)) runs
+the amd64 leg of this job instead of skipping it. The arm64 leg has no local
+counterpart unless the host is arm64.
 
 ## What the `acceptance` job verifies (consumer's chair)
 
@@ -35,8 +45,10 @@ each time:
 - **Container lifecycle** -- `just docker build [test]` -> `just docker
   run -d` -> `just docker exec` -> `just docker stop`, asserting the
   runnability contract (configured user, container still running, wired
-  `/entrypoint.sh`, writable `~/work`, full teardown of container +
-  project network). Issues #579 / #603.
+  entry point -- base's orchestrator at
+  `/usr/local/lib/base/entrypoint.sh`, which sources the repo-owned
+  bringup at `/entrypoint.sh` (ADR-00000032) -- writable `~/work`, full
+  teardown of container + project network). Issues #579 / #603 / #945.
 - **Remaining container-ops verbs** -- the foreground `run` variant with
   #386 auto-cleanup, `just docker start` (build + run), a real `just
   docker prune --networks`, `just docker setup apply` (regenerates
@@ -68,3 +80,9 @@ each time:
   is a recorded decision (this note + #769 / #785), not a silent gap. The
   non-interactive `just docker setup apply` path -- which shares the same
   emitters -- IS driven for real in the acceptance job above.
+
+## Test Files
+
+<!-- generated: catalogue sections -->
+
+<!-- /generated -->

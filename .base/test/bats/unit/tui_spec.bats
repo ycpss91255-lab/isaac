@@ -4,6 +4,52 @@
 # Focuses on validators, INI round-trip, and mount-string parsing. No
 # interactive dialog/whiptail calls are exercised here (see
 # tui_backend_spec.bats and tui_flow_spec.bats for those).
+#
+# why: Pure-logic unit tests for the TUI support libraries (`_tui_conf.sh`).
+# No dialog/whiptail invocations here — strictly validators, mount-string
+# parsers, and setup.conf round-trip.
+#
+# Grouped by concern:
+#
+# - `_validate_mount` (valid forms, env-var expansion, reject missing/extra
+# colons, invalid mode)
+#
+# - `_validate_gpu_count` ('all', positive int, reject
+# 0/negative/non-numeric/empty)
+#
+# - `_mount_host_path` (plain, with mode, with env-var host)
+#
+# - `_load_setup_conf_full` + `_write_setup_conf` (section order, kv,
+# comment preservation, untouched keys, round-trip, dst==tpl regression
+# #187)
+#
+# - `_upsert_conf_value` (updates existing, leaves other sections untouched)
+#
+# - `_edit_image_rule __remove` index compaction (#177) — first / middle /
+# last / sole rule
+#
+# - `_validate_additional_context` (#199: relative paths, BuildKit schemes,
+# name punctuation, reject empty / missing pieces, reject invalid name
+# shapes)
+#
+# - Per-stage `[stage:NAME]` round-trip (#220: namespaced load, append new
+# section, multi-section append, round-trip, in-place update of existing
+# section)
+#
+# - `_validate_log_*` (#328: driver name shape, max_size num+unit, max_file
+# positive int, compress boolean; covers happy paths + rejection of empty /
+# whitespace / wrong unit / decimals / case mismatches)
+#
+# - `_edit_section_lifecycle` (#514: restart radiolist writes simple policy
+# + default no; on-failure:N assembly; empty-N -> bare on-failure; invalid-N
+# re-prompt then accept)
+#
+# - `_edit_section_deploy` legacy runtime->gpu_runtime migration (#517:
+# suggest msgbox when legacy [deploy] runtime present; silent when
+# gpu_runtime already used; writes canonical gpu_runtime key)
+#
+# - `_show_runtime_env_info` (#497: info-only msgbox points at the .env
+# overlay; writes no override)
 
 bats_require_minimum_version 1.5.0
 
@@ -15,7 +61,7 @@ setup() {
 
   create_mock_dir
   TEMP_DIR="$(mktemp -d)"
-  # path: setup.conf lives at .setup.conf
+  # path: setup.conf lives at setup.toml
   mkdir -p "${TEMP_DIR}"
 }
 
@@ -61,6 +107,20 @@ teardown() {
 
 @test "_validate_mount rejects too many colons" {
   run _validate_mount "/a:/b:/c:/d"
+  [ "${status}" -ne 0 ]
+}
+
+# why: a space-bearing path word-splits in `docker run -v /my data:/work`
+# and corrupts the compose volumes list, so the refusal has to happen at
+# the validator, before the value can reach an emitter. Both sides of the
+# colon are guarded. Kept from tui_mount_assembler_spec.bats, which went
+# away with `_assemble_mount_value` (base#1073): the assembler is gone but
+# the value it used to build is still what a user can type into the mount
+# editor by hand.
+@test "_validate_mount rejects a space-bearing path on either side (#687)" {
+  run _validate_mount "/my data:/work"
+  [ "${status}" -ne 0 ]
+  run _validate_mount "/host:/my data"
   [ "${status}" -ne 0 ]
 }
 
@@ -113,6 +173,98 @@ teardown() {
   run _validate_mount $'/host:/cont\nfoo: bar'
   [ "${status}" -ne 0 ]
   run _validate_mount $'/host:/cont\n      privileged: true'
+  [ "${status}" -ne 0 ]
+}
+
+# ════════════════════════════════════════════════════════════════════
+# _validate_dri_groups -- the three forms (base#1094)
+# ════════════════════════════════════════════════════════════════════
+
+# why: base#1094 item 4 -- the validator took only `auto` and `off`, so
+# the key looked like a setting and behaved as a switch, and the GIDs
+# themselves were reachable only through the SETUP_DETECT_DRI_GROUPS
+# environment variable -- the mechanism ADR-00000025 section 9 removed
+# everywhere else. The list form is what makes the key able to carry the
+# value it names.
+@test "_validate_dri_groups accepts auto, off and an explicit GID list (base#1094)" {
+  _validate_dri_groups "auto"
+  _validate_dri_groups "off"
+  _validate_dri_groups "44"
+  _validate_dri_groups "44 104"
+  # Empty clears the key; SCHEMA_EMPTY's default policy accepts it above
+  # the validator, and the validator agrees rather than disagreeing.
+  _validate_dri_groups ""
+}
+
+# why: base#1094 item 4 -- the value is interpolated into compose's
+# `group_add:` list, so a word that is not a bare decimal GID is YAML
+# the emitter would write and docker would then refuse, and a newline is
+# a group_add entry of its own. Rejecting at `setup.sh set` is the only
+# point where the operator is still holding the typo.
+@test "_validate_dri_groups rejects anything that is not a bare GID list (base#1094)" {
+  run _validate_dri_groups "44,104"
+  [ "${status}" -ne 0 ]
+  run _validate_dri_groups "44 render"
+  [ "${status}" -ne 0 ]
+  run _validate_dri_groups "-1"
+  [ "${status}" -ne 0 ]
+  run _validate_dri_groups $'44\n104'
+  [ "${status}" -ne 0 ]
+  run _validate_dri_groups "AUTO"
+  [ "${status}" -ne 0 ]
+}
+
+# ════════════════════════════════════════════════════════════════════
+# _validate_tmpfs -- the [tmpfs] entry shape (base#1095)
+#
+# `[tmpfs]` was the last SCHEMA_SECTIONS entry with no validator of any
+# kind, so every value fell through _schema_validate's free-form branch
+# and reached _emit_tmpfs_block verbatim. The shape is the one the
+# template documents and the bridge renders: a container path, with the
+# mount options after a single colon.
+# ════════════════════════════════════════════════════════════════════
+
+# why: base#1095 -- the two spellings the shipped template teaches
+# (`path = "/tmp"` alone, and `path` + `size` which the bridge joins into
+# `/tmp:size=64m`) are the values a conforming repo actually carries, so
+# a validator that refused either would refuse the template's own
+# example.
+@test "_validate_tmpfs accepts a bare container path and a path with options (base#1095)" {
+  _validate_tmpfs "/tmp"
+  _validate_tmpfs "/run"
+  _validate_tmpfs "/tmp:size=64m"
+  _validate_tmpfs "/run:size=1g,mode=1777"
+}
+
+# why: base#1095 -- a newline is the injection this guard exists for:
+# _emit_tmpfs_block reads the value with `while IFS= read -r`, so every
+# line after the first became a tmpfs list item of its own and the
+# operator silently got mounts they never wrote. A leading space is the
+# same defect one character quieter.
+@test "_validate_tmpfs rejects whitespace, which reaches compose as extra entries (base#1095)" {
+  run _validate_tmpfs $'/tmp\n      - /evil'
+  [ "${status}" -ne 0 ]
+  run _validate_tmpfs " /tmp"
+  [ "${status}" -ne 0 ]
+  run _validate_tmpfs "/tmp:size=64 m"
+  [ "${status}" -ne 0 ]
+}
+
+# why: base#1095 -- the structural halves. An empty value is the clear
+# that SCHEMA_EMPTY handles above the validator, a relative path is not a
+# mount point docker accepts, and a trailing or doubled colon is an
+# options list with nothing in it -- each one a file compose takes and
+# then fails on, rather than a refusal at `setup.sh set`.
+@test "_validate_tmpfs rejects an empty value, a relative path and an empty options list (base#1095)" {
+  run _validate_tmpfs ""
+  [ "${status}" -ne 0 ]
+  run _validate_tmpfs "tmp"
+  [ "${status}" -ne 0 ]
+  run _validate_tmpfs "/tmp:"
+  [ "${status}" -ne 0 ]
+  run _validate_tmpfs "/tmp:size=64m:mode=1777"
+  [ "${status}" -ne 0 ]
+  run _validate_tmpfs "/tmp:size=64m,"
   [ "${status}" -ne 0 ]
 }
 
@@ -642,24 +794,6 @@ teardown() {
 }
 
 # ════════════════════════════════════════════════════════════════════
-# _validate_enum
-# ════════════════════════════════════════════════════════════════════
-
-@test "_validate_enum accepts matching option" {
-  _validate_enum "host" "host" "bridge" "none"
-}
-
-@test "_validate_enum rejects non-matching value" {
-  run _validate_enum "overlay" "host" "bridge" "none"
-  [ "${status}" -ne 0 ]
-}
-
-@test "_validate_enum rejects empty value" {
-  run _validate_enum "" "a" "b"
-  [ "${status}" -ne 0 ]
-}
-
-# ════════════════════════════════════════════════════════════════════
 # _mount_host_path
 # ════════════════════════════════════════════════════════════════════
 
@@ -682,52 +816,28 @@ teardown() {
 }
 
 # ════════════════════════════════════════════════════════════════════
-# _mount_container_path
-# ════════════════════════════════════════════════════════════════════
-
-@test "_mount_container_path extracts plain container path" {
-  local _cont=""
-  _mount_container_path "/data:/data" _cont
-  assert_equal "${_cont}" "/data"
-}
-
-@test "_mount_container_path extracts container path with mode" {
-  local _cont=""
-  _mount_container_path "/data:/data:ro" _cont
-  assert_equal "${_cont}" "/data"
-}
-
-@test "_mount_container_path extracts container path with env var" {
-  local _cont=""
-  _mount_container_path '${WS_PATH}:/home/${USER_NAME}/work' _cont
-  assert_equal "${_cont}" '/home/${USER_NAME}/work'
-}
-
-@test "_mount_container_path empty when input has no colon" {
-  local _cont="sentinel"
-  _mount_container_path "/standalone" _cont
-  assert_equal "${_cont}" ""
-}
-
-# ════════════════════════════════════════════════════════════════════
 # _load_setup_conf_full + _write_setup_conf (INI round-trip)
 # ════════════════════════════════════════════════════════════════════
 
 @test "_load_setup_conf_full reads all sections preserving order" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [image]
-rules = @default:foo
+rules = "@default:foo"
 
 [build]
-apt_mirror_ubuntu = tw.example.com
-apt_mirror_debian = debian.example.com
+apt_mirror_ubuntu = "tw.example.com"
+apt_mirror_debian = "debian.example.com"
 
-[volumes]
-mount_1 = /a:/a
-mount_2 = /b:/b
+[[volumes]]
+source = "/a"
+target = "/a"
+
+[[volumes]]
+source = "/b"
+target = "/b"
 EOF
   local -a _sections=() _keys=() _values=()
-  _load_setup_conf_full "${TEMP_DIR}/.setup.conf" _sections _keys _values
+  _load_setup_conf_full "${TEMP_DIR}/setup.toml" _sections _keys _values
 
   assert_equal "${_sections[0]}" "image"
   assert_equal "${_sections[1]}" "build"
@@ -735,13 +845,13 @@ EOF
 }
 
 @test "_load_setup_conf_full reads key/value pairs" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [deploy]
-gpu_mode = auto
+gpu_mode = "auto"
 gpu_count = 2
 EOF
   local -a _sections=() _keys=() _values=()
-  _load_setup_conf_full "${TEMP_DIR}/.setup.conf" _sections _keys _values
+  _load_setup_conf_full "${TEMP_DIR}/setup.toml" _sections _keys _values
 
   # Entries are section-scoped key=value; format is
   #   _keys[i]="<section>.<key>", _values[i]="<value>"
@@ -767,10 +877,10 @@ rules = @default:orig
 [build]
 apt_mirror_ubuntu =
 EOF
-  local -a _sections=(image build) _keys=(image.rules build.apt_mirror_ubuntu) \
+  local -a _keys=(image.rules build.apt_mirror_ubuntu) \
     _values=("@default:newval" "tw.archive.example.com")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   [ "${status}" -eq 0 ]
@@ -790,9 +900,9 @@ mode = host
 ipc = host
 privileged = true
 EOF
-  local -a _sections=(network) _keys=(network.mode) _values=(bridge)
+  local -a _keys=(network.mode) _values=(bridge)
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   [[ "${output}" == *"mode = bridge"* ]]
@@ -817,13 +927,19 @@ gpu_capabilities = gpu
 EOF
   local _before
   _before="$(wc -c < "${TEMP_DIR}/conf")"
-  [[ "${_before}" -gt 0 ]] || skip "fixture seed unexpectedly empty"
+  # Fails rather than skipping: the heredoc above is this test's own
+  # fixture, so an empty seed is a broken test, not an absent
+  # precondition -- and skipping here would retire the regression
+  # guard (the 0-byte truncation) exactly when the fixture stopped
+  # being able to detect it.
+  [[ "${_before}" -gt 0 ]] \
+    || fail "fixture seed is empty -- the heredoc above wrote nothing, so the 0-byte-truncation assertion below would pass vacuously"
 
-  local -a _sections=(image) _keys=(image.rules) \
+  local -a _keys=(image.rules) \
     _values=("string:my_unique_image")
   # dst and tpl point at the same path — the bug's exact trigger.
   _write_setup_conf "${TEMP_DIR}/conf" "${TEMP_DIR}/conf" \
-    _sections _keys _values
+    _keys _values
 
   # The override must land + the rest of the template content must be
   # preserved. Pre-fix this test produces a 0-byte file.
@@ -849,11 +965,10 @@ gpu_mode = auto
 gpu_count = all
 gpu_capabilities = gpu
 EOF
-  local -a _sections=(image deploy) \
-    _keys=(image.rules deploy.gpu_mode deploy.gpu_count) \
+  local -a _keys=(image.rules deploy.gpu_mode deploy.gpu_count) \
     _values=("prefix:docker_, @default:foo" "force" "2")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   local -a _sect2=() _keys2=() _vals2=()
   _load_setup_conf_full "${TEMP_DIR}/out.conf" _sect2 _keys2 _vals2
@@ -868,6 +983,11 @@ EOF
 
 # ════════════════════════════════════════════════════════════════════
 # _upsert_conf_value — in-place edit of a single key (for setup.sh writeback)
+#
+# These pin the INI-mode behaviour of the writer, which is the mode the
+# frozen TUI's own file still gets: the writer picks its format from the
+# destination's name, so the fixtures here are INI files under an INI
+# name. The TOML mode is specified in conf_toml_writer_spec.bats.
 # ════════════════════════════════════════════════════════════════════
 
 @test "_upsert_conf_value updates existing key value" {
@@ -890,9 +1010,9 @@ mount_1 = /a:/a
 mount_2 = /b:/b
 mount_3 = /c:/c
 EOF
-  local -a _sections=(volumes) _keys=() _values=()
+  local -a _keys=() _values=()
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values "volumes.mount_2"
+    _keys _values "volumes.mount_2"
 
   run cat "${TEMP_DIR}/out.conf"
   [[ "${output}" == *"mount_1 = /a:/a"* ]]
@@ -908,11 +1028,10 @@ rule_1 = prefix:docker_
 [network]
 mode = host
 EOF
-  local -a _sections=(image) \
-    _keys=(image.rule_1 image.rule_2) \
+  local -a _keys=(image.rule_1 image.rule_2) \
     _values=("prefix:docker_" "@default:fallback")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   # Added rule_2 should appear under [image]
@@ -922,17 +1041,18 @@ EOF
 }
 
 @test "_upsert_conf_value leaves other sections untouched" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [image]
-rules = @default:foo
+rules = "@default:foo"
 
-[volumes]
-mount_1 =
+[[volumes]]
+source = ""
+target = ""
 EOF
-  _upsert_conf_value "${TEMP_DIR}/.setup.conf" "volumes" "mount_1" "/a:/b"
+  _upsert_conf_value "${TEMP_DIR}/setup.toml" "volumes" "mount_1" "/a:/b"
 
-  run grep '^rules' "${TEMP_DIR}/.setup.conf"
-  [[ "${output}" == "rules = @default:foo" ]]
+  run grep '^rules' "${TEMP_DIR}/setup.toml"
+  [[ "${output}" == 'rules = "@default:foo"' ]]
 }
 
 @test "_upsert_conf_value creates section + key when section absent" {
@@ -981,11 +1101,10 @@ rule_1 = prefix:docker_
 mount_1 = /a:/a
 EOF
   # volumes is the last section; mount_9 is a new key not in template.
-  local -a _sections=(volumes) \
-    _keys=(volumes.mount_9) \
+  local -a _keys=(volumes.mount_9) \
     _values=("/extra:/extra")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   assert_output --partial "mount_1 = /a:/a"
@@ -1002,15 +1121,95 @@ rule_1 = prefix:docker_
 [volumes]
 mount_1 = /a:/a
 EOF
-  local -a _sections=(volumes) \
-    _keys=(volumes.mount_9) \
+  local -a _keys=(volumes.mount_9) \
     _values=("/extra:/extra")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values "volumes.mount_9"
+    _keys _values "volumes.mount_9"
 
   run cat "${TEMP_DIR}/out.conf"
   refute_output --partial "mount_9"
   assert_output --partial "mount_1 = /a:/a"
+}
+
+@test "_upsert_conf_value replaces a value carrying an inline ' #' instead of appending a duplicate key (#955)" {
+  # `_ini_tokenize` -- the canonical reader -- treats `#` as a comment
+  # marker only when it is the first non-blank character of the line, so
+  # a space-then-hash INSIDE a value is part of the value.
+  # lifecycle.watchdog_check accepts any non-empty single-line string, so
+  # a shell command carrying a comment is a legitimate value. The writer
+  # must agree with the reader: match the existing line and replace it,
+  # never append a second one.
+  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+[lifecycle]
+watchdog_check = curl http://h/x #ping
+restart = no
+EOF
+  _upsert_conf_value "${TEMP_DIR}/.setup.conf" "lifecycle" "watchdog_check" \
+    'curl http://h/y #pong'
+
+  run grep -c '^watchdog_check' "${TEMP_DIR}/.setup.conf"
+  assert_output "1"
+  run grep '^watchdog_check' "${TEMP_DIR}/.setup.conf"
+  assert_output 'watchdog_check = curl http://h/y #pong'
+  # The rest of the section survives the rewrite.
+  run grep '^restart' "${TEMP_DIR}/.setup.conf"
+  assert_output 'restart = no'
+}
+
+@test "_write_setup_conf keeps a logging.<svc> override out of the parent [logging] section (#955)" {
+  # The TUI Save path hands _write_setup_conf EVERY current key as an
+  # override, so a repo carrying a per-service `[logging.<svc>]` section
+  # feeds it a `logging.<svc>.<key>` namespace key. Matching override
+  # keys by dot-split prefix cannot tell that apart from section
+  # `logging` + key `<svc>.<key>`, so the flush injected a bogus
+  # `<svc>.<key> = ...` line into `[logging]`.
+  cat > "${TEMP_DIR}/template.conf" <<'EOF'
+[logging]
+driver = json-file
+max_size = 10m
+
+[logging.web]
+driver = local
+EOF
+  local -a _sections=() _keys=() _values=()
+  _load_setup_conf_full "${TEMP_DIR}/template.conf" _sections _keys _values
+  _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
+    _keys _values
+
+  run cat "${TEMP_DIR}/out.conf"
+  refute_output --partial "web.driver"
+  # The per-service section keeps its own key, exactly once.
+  run grep -c '^driver = local' "${TEMP_DIR}/out.conf"
+  assert_output "1"
+  run grep -c '^driver = json-file' "${TEMP_DIR}/out.conf"
+  assert_output "1"
+}
+
+@test "_write_setup_conf appends a brand-new [logging.<svc>] section rather than folding it into [logging] (#955)" {
+  # The TUI's per-service logging editor can name a service the template
+  # never mentions, so the routing fix must ALSO give that override a
+  # section of its own -- excluding it from the `[logging]` flush without
+  # emitting it anywhere would turn a misroute into silent data loss.
+  cat > "${TEMP_DIR}/template.conf" <<'EOF'
+[logging]
+driver = json-file
+EOF
+  local -a _keys=(logging.devel.driver) \
+    _values=("local")
+  _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
+    _keys _values
+
+  run cat "${TEMP_DIR}/out.conf"
+  assert_output --partial "[logging.devel]"
+  refute_output --partial "devel.driver"
+  # And it round-trips back to the section it was written for.
+  local -a _rs=() _rk=() _rv=()
+  _load_setup_conf_full "${TEMP_DIR}/out.conf" _rs _rk _rv
+  local _i _got=""
+  for (( _i = 0; _i < ${#_rk[@]}; _i++ )); do
+    [[ "${_rk[_i]}" == "logging.devel.driver" ]] && _got="${_rv[_i]}"
+  done
+  assert_equal "${_got}" "local"
 }
 
 # ════════════════════════════════════════════════════════════════════
@@ -1042,6 +1241,51 @@ _b5_setup_tui() {
   : > "${_B5_MENU_ARGS_FILE}"
 }
 
+# why: The labels stopped being call-site arguments and became a table,
+# and the failure mode moved with them: a missing row can no longer be a
+# wrong argument, it is a screen with no words on it. This is the case
+# that keeps that from rendering -- an unknown (section, prefix) pair
+# fails loudly instead of drawing a menu whose title, Add and Back rows
+# are empty strings, which is the silent-failure shape invariant 2 exists
+# to refuse.
+@test "_edit_list_section: an unknown list has no label row, and fails rather than drawing a blank screen (base#994)" {
+  _b5_setup_tui
+  _tui_menu() { printf 'back'; return 0; }
+
+  run _edit_list_section volumes not_a_list_
+  assert_failure
+  assert_output --partial "volumes.not_a_list_"
+}
+
+# why: The complement, and the reason the guard is not vacuous: every
+# list the TUI actually ships has a complete row, so the failure above
+# can only ever be a typo or an editor somebody added without a screen.
+# The population is DERIVED from setup_tui.sh's own `_edit_list_section`
+# call sites, because the editor this case exists to catch is the
+# twelfth one -- added with no `_TUI_LIST_LABELS` row, which a
+# hand-written list of eleven pairs would not know to ask about. The
+# floor below is the only remembered number, and it is there so a
+# derivation that silently matched nothing cannot pass over an empty
+# set.
+@test "_edit_list_section: every list editor the TUI ships has a complete label row (base#994)" {
+  _b5_setup_tui
+  local -a _pairs=()
+  mapfile -t _pairs < <(
+    grep -E '^[[:space:]]*_edit_list_section [a-z_]+ [a-z_]+_$' \
+      /source/dist/script/docker/wrapper/setup_tui.sh \
+      | awk '{ print $2, $3 }' | sort -u
+  )
+  (( ${#_pairs[@]} >= 11 )) \
+    || fail "derived ${#_pairs[@]} list editors from setup_tui.sh; the TUI ships at least 11"
+  local -A _labels=()
+  local _pair
+  for _pair in "${_pairs[@]}"; do
+    # shellcheck disable=SC2086
+    _tui_list_labels ${_pair} _labels \
+      || fail "no complete label row for '${_pair}'"
+  done
+}
+
 @test "_edit_list_section shows mount_1 when value is non-empty" {
   _b5_setup_tui
   _TUI_CURRENT[volumes.mount_1]="/foo:/bar"
@@ -1053,9 +1297,7 @@ _b5_setup_tui() {
     return 0
   }
 
-  _edit_list_section volumes mount_ \
-    volumes.title volumes.menu volumes.add volumes.back volumes.edit.prompt \
-    _validate_mount err.invalid_mount
+  _edit_list_section volumes mount_
 
   run cat "${_B5_MENU_ARGS_FILE}"
   # The menu tag/label stream must include mount_1 with its value.
@@ -1092,9 +1334,7 @@ _b5_setup_tui() {
     return 0
   }
 
-  _edit_list_section volumes mount_ \
-    volumes.title volumes.menu volumes.add volumes.back volumes.edit.prompt \
-    _validate_mount err.invalid_mount
+  _edit_list_section volumes mount_
 
   # Expect the new mount to land in mount_1 (the empty slot), not mount_3.
   run _override_get "volumes.mount_1" ""
@@ -1126,9 +1366,7 @@ _b5_setup_tui() {
     return 0
   }
 
-  _edit_list_section volumes mount_ \
-    volumes.title volumes.menu volumes.add volumes.back volumes.edit.prompt \
-    _validate_mount err.invalid_mount
+  _edit_list_section volumes mount_
 
   run _override_get "volumes.mount_3" ""
   assert_output "/c:/c"
@@ -1145,9 +1383,7 @@ _b5_setup_tui() {
     return 0
   }
 
-  _edit_list_section volumes mount_ \
-    volumes.title volumes.menu volumes.add volumes.back volumes.edit.prompt \
-    _validate_mount err.invalid_mount
+  _edit_list_section volumes mount_
 
   run cat "${_B5_MENU_ARGS_FILE}"
   # Empty mount_1 must not appear as an entry row.
@@ -1591,20 +1827,20 @@ _b_remove_setup() {
 # ════════════════════════════════════════════════════════════════════
 
 @test "_load_setup_conf_full reads [stage:NAME] sections with namespaced keys" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gui]
-mode = auto
+mode = "auto"
 
-[stage:headless]
-gui.mode = off
-network.mode = bridge
-network.port_1 = 8080:80
+["stage:headless"]
+"gui.mode" = "off"
+"network.mode" = "bridge"
+"network.port_1" = "8080:80"
 
-[stage:gui]
-gui.mode = auto
+["stage:gui"]
+"gui.mode" = "auto"
 EOF
   local -a _sections=() _keys=() _values=()
-  _load_setup_conf_full "${TEMP_DIR}/.setup.conf" _sections _keys _values
+  _load_setup_conf_full "${TEMP_DIR}/setup.toml" _sections _keys _values
 
   # Sections: gui, stage:headless, stage:gui in file order
   [[ "${_sections[0]}" == "gui" ]] || { echo "expected gui, got ${_sections[0]}"; return 1; }
@@ -1642,11 +1878,10 @@ mode = auto
 [network]
 mode = host
 EOF
-  local -a _sections=("stage:headless") \
-    _keys=("stage:headless.gui.mode" "stage:headless.network.mode") \
+  local -a _keys=("stage:headless.gui.mode" "stage:headless.network.mode") \
     _values=("off" "bridge")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   assert_success
@@ -1666,11 +1901,10 @@ EOF
 [gui]
 mode = auto
 EOF
-  local -a _sections=("stage:headless" "stage:gui") \
-    _keys=("stage:headless.gui.mode" "stage:gui.gui.mode") \
+  local -a _keys=("stage:headless.gui.mode" "stage:gui.gui.mode") \
     _values=("off" "force")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   assert_success
@@ -1683,11 +1917,10 @@ EOF
 [gui]
 mode = auto
 EOF
-  local -a _sections=("gui" "stage:headless") \
-    _keys=("gui.mode" "stage:headless.gui.mode" "stage:headless.network.port_1") \
+  local -a _keys=("gui.mode" "stage:headless.gui.mode" "stage:headless.network.port_1") \
     _values=("auto" "off" "8080:80")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   local -a _sect2=() _keys2=() _values2=()
   _load_setup_conf_full "${TEMP_DIR}/out.conf" _sect2 _keys2 _values2
@@ -1725,11 +1958,10 @@ mode = auto
 [stage:headless]
 gui.mode = off
 EOF
-  local -a _sections=("stage:headless") \
-    _keys=("stage:headless.gui.mode") \
+  local -a _keys=("stage:headless.gui.mode") \
     _values=("force")
   _write_setup_conf "${TEMP_DIR}/out.conf" "${TEMP_DIR}/template.conf" \
-    _sections _keys _values
+    _keys _values
 
   run cat "${TEMP_DIR}/out.conf"
   assert_success

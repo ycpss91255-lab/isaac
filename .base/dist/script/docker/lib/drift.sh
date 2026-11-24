@@ -2,7 +2,7 @@
 #
 # drift.sh - setup drift detection (system+conf vs generated .env metadata).
 #
-# Compares current host state + setup.conf hash against the SETUP_* metadata
+# Compares current host state + setup.toml hash against the SETUP_* metadata
 # baked into .env.generated, so build.sh / run.sh can auto-regenerate the
 # derived artifacts when they drift: _check_setup_drift (the comparator),
 # _setup_check_drift (the subcommand wrapper), and
@@ -21,7 +21,7 @@ _DOCKER_LIB_DRIFT_SOURCED=1
 # ════════════════════════════════════════════════════════════════════
 # _check_setup_drift <base_path>
 #
-# Compares current system state + setup.conf hash against .env's SETUP_*
+# Compares current system state + setup.toml hash against .env's SETUP_*
 # metadata. Prints drift descriptions to stderr when drift detected and
 # returns 1 so the caller (build.sh / run.sh) can auto-regenerate the
 # derived artifacts. Returns 0 (silent) when in sync.
@@ -32,6 +32,17 @@ _check_setup_drift() {
   local _base="${1:?}"
   local _env_file="${_base}/.env.generated"
   [[ -f "${_env_file}" ]] || return 0
+
+  # The reads below use `grep -P`, which only GNU grep built with PCRE has.
+  # Each read ends in `|| true`, so a grep without it would leave every
+  # stored value empty and the comparisons would all be skipped: no drift,
+  # no output. Say so, and report drift so the caller regenerates instead of
+  # trusting a comparison that never ran (base#1644).
+  if [[ "$(printf 'K=v\n' | grep -oP '^K=\Kv' 2>/dev/null || true)" != "v" ]]; then
+    _log_warn setup drift_grep_p_unsupported \
+      "display=drift check skipped: this host's grep does not support grep -P (PCRE); the host tooling needs GNU grep, so the generated files are treated as drifted"
+    return 1
+  fi
 
   # Read stored values from .env.generated without polluting caller's env
   local _stored_hash="" _stored_df_hash="" _stored_gui="" _stored_gpu="" _stored_uid=""
@@ -51,7 +62,7 @@ _check_setup_drift() {
 
   local -a _drift=()
   [[ -n "${_stored_hash}"    && "${_now_hash}"    != "${_stored_hash}"    ]] \
-    && _drift+=("setup.conf modified since last setup")
+    && _drift+=("setup.toml modified since last setup")
   [[ -n "${_stored_df_hash}" && "${_now_df_hash}" != "${_stored_df_hash}" ]] \
     && _drift+=("Dockerfile stage list changed since last setup (added/removed FROM ... AS <stage>)")
   [[ -n "${_stored_gpu}"     && "${_now_gpu}"     != "${_stored_gpu}"     ]] \
@@ -78,7 +89,7 @@ _check_setup_drift() {
 # Subcommand handler for `setup.sh check-drift`. Parses --base-path /
 # --lang flags then delegates to _check_setup_drift, which prints drift
 # descriptions to stderr and returns 1 when the .env metadata no longer
-# matches current system / setup.conf state.
+# matches current system / setup.toml state.
 #
 # Build.sh / run.sh invoke this as a subprocess (instead of sourcing
 # setup.sh) so internal helpers like _setup_msg can never shadow
@@ -121,7 +132,7 @@ _setup_check_drift() {
 # ════════════════════════════════════════════════════════════════════
 # _announce_template_default_fallback <base_path>
 #
-# Surface a one-shot WARN when the per-repo setup.conf provides no
+# Surface a one-shot WARN when the per-repo setup.toml provides no
 # overrides — either missing entirely or present but containing no
 # [section] headers. Called from both `_setup_apply` and
 # `_setup_check_drift` so build.sh / run.sh's drift-check rebuild path
@@ -132,9 +143,9 @@ _setup_check_drift() {
 # ════════════════════════════════════════════════════════════════════
 _announce_template_default_fallback() {
   local _base="${1:?"${FUNCNAME[0]}: missing base_path"}"
-  # Existence check tracks the per-repo override file (setup.conf), the
+  # Existence check tracks the per-repo override file (setup.toml), the
   # source of truth
-  local _repo_conf="${_base}/.setup.conf"
+  local _repo_conf="${_base}/setup.toml"
   if [[ ! -f "${_repo_conf}" ]]; then
     _log_warn setup conf_no_repo_conf "display=$(_setup_msg warnings no_repo_conf)"
   elif ! grep -qE '^[[:space:]]*\[[^]]+\]' "${_repo_conf}"; then

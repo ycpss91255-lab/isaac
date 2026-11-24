@@ -34,8 +34,27 @@ setup() {
     printf '%s\n%s\n' \"\${BASE_UPSTREAM_SLUG}\" \"\${BASE_UPSTREAM_REMOTE}\"
   "
   assert_success
-  assert_line --index 0 "ycpss91255-docker/base"
-  assert_line --index 1 "https://github.com/ycpss91255-docker/base.git"
+  assert_line --index 0 "ycpss91255-lab/base"
+  assert_line --index 1 "https://github.com/ycpss91255-lab/base.git"
+}
+
+# why: The retired upstream is defined once, beside the current one, as an
+# extended regex: it matches the retired slug and never the current one, and
+# carries no capture group, so a caller can splice it into a sed pattern
+# without renumbering its own groups (base#2106)
+@test "upstream.sh: the retired upstream slug is one capture-free ERE that never matches the current slug (base#2106)" {
+  run bash -c "
+    source '${UPSTREAM_SH}'
+    printf '%s\n' \"\${BASE_UPSTREAM_RETIRED_RE}\"
+  "
+  assert_success
+  refute_output ''
+  refute_output --partial '('
+  local _re="${output}"
+  run bash -c "printf '%s\n' 'ycpss91255-''docker/base' | grep -cxE '${_re}'"
+  assert_output "1"
+  run bash -c "printf '%s\n' 'ycpss91255-lab/base' | grep -cxE '${_re}'"
+  assert_output "0"
 }
 
 @test "upstream.sh: sourcing it twice is inert (#895)" {
@@ -61,7 +80,7 @@ printf '%s\n' "\${BASE_UPSTREAM_REMOTE}"
 EOF
   run bash "${_runner}"
   assert_success
-  assert_output "https://github.com/ycpss91255-docker/base.git"
+  assert_output "https://github.com/ycpss91255-lab/base.git"
 }
 
 @test "upstream.sh: reads nothing from the environment (#895)" {
@@ -73,7 +92,7 @@ EOF
       bash -c 'source \"${UPSTREAM_SH}\"; printf \"%s|%s\n\" \"\${BASE_UPSTREAM_SLUG}\" \"\${BASE_UPSTREAM_REMOTE}\"'
   "
   assert_success
-  assert_output "ycpss91255-docker/base|https://github.com/ycpss91255-docker/base.git"
+  assert_output "ycpss91255-lab/base|https://github.com/ycpss91255-lab/base.git"
 }
 
 # ════════════════════════════════════════════════════════════════════
@@ -88,7 +107,7 @@ EOF
   # value that can go stale on its own -- which is what "one definition"
   # has to mean to be worth anything.
   run bash -c "
-    grep -rnF 'ycpss91255-docker/base' /source/dist --include='*.sh' \
+    grep -rnF 'ycpss91255-lab/base' /source/dist --include='*.sh' \
       | grep -vE ':[0-9]+:[[:space:]]*#' \
       | cut -d: -f1 | sort -u
   "
@@ -120,7 +139,7 @@ EOF
     printf '%s\n' \"\${BASE_REPO}\"
   "
   assert_success
-  assert_output "ycpss91255-docker/base"
+  assert_output "ycpss91255-lab/base"
 }
 
 @test "a caller's TEMPLATE_REMOTE still wins over the shared default (#895)" {

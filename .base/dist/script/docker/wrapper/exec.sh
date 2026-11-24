@@ -33,20 +33,23 @@ _bootstrap "$@"
 # translated —).
 _msg_errors() {
   case "${_LANG}:${1:?}" in
-    # %s expanded by printf -v at the callsite (container name).
-    zh-TW:not_running)  echo "容器 '%s' 未在執行中。" ;;
-    zh-CN:not_running)  echo "容器 '%s' 未在运行中。" ;;
-    ja:not_running)     echo "コンテナ '%s' は実行されていません。" ;;
-    *:not_running)      echo "Container '%s' is not running." ;;
+    # Two %s expanded by printf -v at the callsite, in this order: the
+    # compose SERVICE, then the compose PROJECT. Every locale keeps that
+    # order (the parenthetical form in the CJK strings exists for exactly
+    # that) so one argument list serves all four.
+    zh-TW:not_running)  echo "服務 '%s'（專案 '%s'）未在執行中。" ;;
+    zh-CN:not_running)  echo "服务 '%s'（项目 '%s'）未在运行中。" ;;
+    ja:not_running)     echo "サービス '%s'（プロジェクト '%s'）は実行されていません。" ;;
+    *:not_running)      echo "Service '%s' in project '%s' is not running." ;;
   esac
 }
 
 _msg_hints() {
   case "${_LANG}:${1:?}" in
-    zh-TW:start)  echo "請先以 './run.sh' 啟動。" ;;
-    zh-CN:start)  echo "请先以 './run.sh' 启动。" ;;
-    ja:start)     echo "まず './run.sh' で起動してください。" ;;
-    *:start)      echo "Start it first with './run.sh'." ;;
+    zh-TW:start)  echo "請先以 'just docker run' 啟動。" ;;
+    zh-CN:start)  echo "请先以 'just docker run' 启动。" ;;
+    ja:start)     echo "まず 'just docker run' で起動してください。" ;;
+    *:start)      echo "Start it first with 'just docker run'." ;;
   esac
 }
 
@@ -323,30 +326,29 @@ main() {
     esac
   fi
 
-  # Load .env.generated, derive PROJECT_NAME.
-  _load_env "${FILE_PATH}/.env.generated"
+  # Load .env.generated, derive PROJECT_NAME. Optional, as in stop.sh.
+  _load_env_optional "${FILE_PATH}/.env.generated"
   _compute_project_name
 
-  # Precheck: refuse with a friendly hint if the target container is not
+  # Precheck: refuse with a friendly hint if the target service is not
   # running. Skipped under --dry-run since the user is asking what *would* run.
-  # Container name mirrors compose.yaml's `container_name:`:
-  #   - devel:           ${USER_NAME}-${IMAGE_NAME}
-  #   - non-devel stage: ${USER_NAME}-${IMAGE_NAME}-${TARGET}
-  # The ${USER_NAME} prefix landed in (multi-user host
-  # disambiguation); the per-stage ${TARGET} suffix is the convention
-  # auto-emitted for headless / gui / test stages. --
-  # before this fix, the precheck always grepped for the devel-flavoured
-  # name and aborted any ./exec.sh -t <non-devel> invocation.
-  local _container_name="${USER_NAME}-${IMAGE_NAME}"
-  if [[ "${TARGET}" != "devel" ]]; then
-    _container_name="${_container_name}-${TARGET}"
-  fi
+  #
+  # The question is asked of the PROJECT: `is TARGET up under -p
+  # ${PROJECT_NAME}`. It used to be asked of the daemon, against a container
+  # name this function rebuilt from ${USER_NAME} + ${IMAGE_NAME} + ${TARGET}
+  # to mirror the emitted `container_name:`. There is no such directive any
+  # more -- compose derives `<project>-<service>-<n>` -- so a rebuilt name
+  # would match nothing, and a HOST-scoped answer could not tell two
+  # co-hosted stacks of this repo apart in the first place. The exec below
+  # has always addressed the service by name through compose; the precheck
+  # now asks the same layer the same way.
   if [[ "${DRY_RUN}" != true ]] \
-      && ! _wrapper_container_running "${_container_name}"; then
+      && ! _wrapper_service_running "${TARGET}"; then
     # Compose the error + start hint into a single multi-line _log_err block.
     local _not_running _hint
     # shellcheck disable=SC2059
-    printf -v _not_running "$(_msg errors not_running)" "${_container_name}"
+    printf -v _not_running "$(_msg errors not_running)" \
+      "${TARGET}" "${PROJECT_NAME}"
     _hint="$(_msg hints start)"
     _log_err exec exec_not_running "display=${_not_running}
 ${_hint}"
@@ -360,11 +362,18 @@ ${_hint}"
   # orchestration (incl. the not-running precheck error + pre-hook)
   # is captured; detach before handing the terminal to the exec session.
   _transcript_detach
-  _compose_project exec "${_exec_extra_args[@]}" "${TARGET}" "$@"
-  local _exec_rc=$?
+  # `|| _exec_rc=$?` and not a bare call plus `$?`: under `set -euo
+  # pipefail` an unguarded failure aborts main here, and the post-hook
+  # below is never reached -- so a hook whose documented job is final
+  # reporting would miss precisely the runs worth reporting on. The
+  # capture is the same shape run.sh and lib/deploy.sh already use.
+  local _exec_rc=0
+  _compose_project exec "${_exec_extra_args[@]}" "${TARGET}" "$@" || _exec_rc=$?
 
-  # post-exec hook fires after exec returns; container is still
-  # running so the hook can `docker exec` for final reporting.
+  # post-exec hook fires after exec returns, on the success and the
+  # failure path alike; the container is still running so the hook can
+  # `docker exec` for final reporting. A failing hook still wins over the
+  # container's own rc.
   _run_post_hook exec "$@" || exit $?
   return "${_exec_rc}"
 }

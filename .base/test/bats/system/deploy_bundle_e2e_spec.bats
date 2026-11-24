@@ -27,6 +27,33 @@
 # Plain-bash assertions only (status / output), matching the sibling
 # runtime_test_smoke_spec.bats: the system bats environment ships no
 # bats-assert / bats-support and loads no test_helper.
+#
+# why: A REAL field deploy end-to-end (ADR-00000023; System level, E2E
+# type). Generates the bundle for real (`docker build` + `docker save |
+# xz`), docker-loads the image, runs the generated `deploy.sh up` (real
+# `docker compose up -d`), asserts the container is Up, then asserts the
+# tunable-config override applies at the mounted container path (edit the
+# bundle `config/`, re-up, read it back inside the container), and tears
+# down with `deploy.sh down`. A tiny alpine `runtime` stage keeps it fast;
+# the point is the orchestration (build -> save -> load -> compose up ->
+# mount-wins override -> down), not a heavy image. Needs the `ci-system`
+# service's docker.sock plus the `docker compose` plugin + `xz` baked into
+# the test-tools image; auto-skips cleanly when any is absent.
+#
+# The fixture repo is a real git tree carrying a tag, with a run-unique
+# basename: the deploy stamp resolves to that tag rather than the `unknown`
+# fallback (so the version-scoped image identity `<repo>:<stage>-<version>`
+# is what actually gets built, loaded and asserted), and no container leaked
+# by a crashed earlier run can share this run's name namespace.
+#
+# It declares one default-access and one `rw` tunable so the read-only
+# default (#870) is proven by BEHAVIOUR, not by grepping `:ro` out of the
+# generated compose: a real `docker exec` write to the default-access mount
+# must fail with a read-only filesystem error and leave the operator's host
+# copy untouched, while the declared-`rw` write must succeed and land in the
+# bundle's `config/`. Every test here drives the one bundle and the one
+# container name, so the file pins `BATS_NO_PARALLELIZE_WITHIN_FILE` --
+# concurrent `deploy.sh up` calls would race for that name.
 
 setup_file() {
   # Every test in this file drives ONE bundle and ONE container name, so they
@@ -79,10 +106,23 @@ setup_file() {
   REPO="${TMP_ROOT}/deploydemo-${_uniq}"
   mkdir -p "${REPO}/config/app_cfg"
 
+  # The env_* values are the quoting torture cases this file exists to drive
+  # all the way into a running container, so each one is a TOML basic string
+  # that parses back to the exact bytes asserted further down:
+  #   env_2  a literal " #" -- inside quotes TOML does not start a comment
+  #   env_3  a literal ${...} -- TOML never interpolates
+  #   env_4  \" and \\ -- the only two escapes needed for a" and \
+  #   env_5  an apostrophe, which a basic string carries unescaped
   printf '%s\n' \
-    "[deploy]" "gpu_mode = off" "dri_groups = off" \
-    "[gui]" "mode = off" \
-    > "${REPO}/.setup.conf"
+    "[deploy]" 'gpu_mode = "off"' 'dri_groups = "off"' \
+    "[gui]" 'mode = "off"' \
+    "[environment]" 'env_1 = "APP_MODE=shipped-default"' \
+    'env_2 = "APP_NOTE=a #b"' \
+    'env_3 = "APP_LIT=${NOT_SET_ANYWHERE}"' \
+    'env_4 = "APP_QB=a\"b\\c"' \
+    "env_5 = \"APP_APOS=it's fine\"" \
+    "[lifecycle]" "watchdog_check = true" "watchdog_interval = 30" \
+    > "${REPO}/setup.toml"
 
   cat > "${REPO}/Dockerfile" <<'DOCK'
 FROM alpine:3.20 AS sys
@@ -145,6 +185,7 @@ teardown_file() {
   [[ -n "${TMP_ROOT:-}" ]] && rm -rf "${TMP_ROOT}"
 }
 
+# why: tagged fixture -> real version stamp
 @test "field-deploy e2e: the image identity is version-stamped, not the 'unknown' fallback" {
   # The stamp is the collision avoidance for loading multiple field versions
   # on one host, so the e2e must run against a real tagged tree.
@@ -154,6 +195,7 @@ teardown_file() {
   [[ "${BUNDLE}" == *"-runtime-${FIXTURE_TAG}" ]]
 }
 
+# why: real bundle output
 @test "field-deploy e2e: the generator produced a self-contained bundle folder" {
   [ -d "${BUNDLE}" ]
   [ -f "${BUNDLE}/image.tar.xz" ]
@@ -171,6 +213,7 @@ teardown_file() {
   [[ "${output}" == *"- ./config/calib.yaml:/var/lib/app/calib.yaml:rw"* ]]
 }
 
+# why: run + mount-wins override
 @test "field-deploy e2e: deploy.sh up loads the image, runs the container, and the tunable override applies" {
   # Real load + compose up. Echo output on failure so a genuine deploy bug
   # is debuggable in the CI log rather than a bare non-zero status.
@@ -206,6 +249,80 @@ teardown_file() {
   [[ "${output}" != *"${CNAME}"* ]]
 }
 
+@test "field-deploy e2e: an operator .env.local override reaches the RUNNING container" {
+  # The acceptance criterion this exists for: not "the compose looks right",
+  # but "the value inside the container changed". compose gives environment:
+  # precedence over env_file, so a WATCHDOG_* / [environment] default left in
+  # the service's environment: block would make this override silently inert.
+  [ -f "${BUNDLE}/.env" ]
+  [ -f "${BUNDLE}/.env.local" ]
+  run cat "${BUNDLE}/.env"
+  [[ "${output}" == *"APP_MODE="*"shipped-default"* ]] || { echo "bundle .env: ${output}"; false; }
+  [[ "${output}" == *"WATCHDOG_INTERVAL="*"30"* ]] || { echo "bundle .env: ${output}"; false; }
+
+  run "${BUNDLE}/deploy.sh" up
+  [ "${status}" -eq 0 ] || { echo "deploy.sh up failed (status=${status}):"; echo "${output}"; false; }
+
+  # Before any override: the shipped default is what the container sees.
+  run docker exec "${CNAME}" printenv APP_MODE
+  [ "${status}" -eq 0 ] || { echo "printenv APP_MODE failed: ${output}"; false; }
+  [[ "${output}" == "shipped-default" ]] || { echo "expected shipped-default, got: ${output}"; false; }
+
+  # A value carrying an inline " #" survives the env_file parser intact.
+  # Unquoted, that parser treats the rest of the line as a comment and the
+  # container receives a silently truncated value -- undiagnosable in the
+  # field, which is why the writer quotes every value.
+  run docker exec "${CNAME}" printenv APP_NOTE
+  [ "${status}" -eq 0 ] || { echo "printenv APP_NOTE failed: ${output}"; false; }
+  [[ "${output}" == "a #b" ]] || { echo "env_file value truncated; got: ${output}"; false; }
+
+  # ... and a `$` reaches the container as a `$`. The writer escapes it
+  # because a quoted env_file value is variable-expanded, and it must not
+  # be: an unresolved reference is left literal on purpose so a genuinely
+  # undefined name is visible rather than silently empty. Getting the
+  # escape wrong in the other direction leaks the backslash, which only a
+  # real parser can tell us.
+  # ... a `$` reaches the container as a `$`. The writer keeps it literal
+  # on purpose so a genuinely undefined name stays visible instead of
+  # silently resolving to empty -- and a double-quoted env_file value would
+  # have expanded it away.
+  run docker exec "${CNAME}" printenv APP_LIT
+  [ "${status}" -eq 0 ] || { echo "printenv APP_LIT failed: ${output}"; false; }
+  [[ "${output}" == '${NOT_SET_ANYWHERE}' ]] || { echo "reference expanded away; got: ${output}"; false; }
+
+  # ... a double quote and a backslash pass through unchanged (the parser
+  # does not unescape a doubled backslash, so the writer must not double
+  # one), and the quote character that delimits the value survives being
+  # inside it.
+  run docker exec "${CNAME}" printenv APP_QB
+  [ "${status}" -eq 0 ] || { echo "printenv APP_QB failed: ${output}"; false; }
+  [[ "${output}" == 'a"b\c' ]] || { echo "backslash mangled; got: ${output}"; false; }
+
+  run docker exec "${CNAME}" printenv APP_APOS
+  [ "${status}" -eq 0 ] || { echo "printenv APP_APOS failed: ${output}"; false; }
+  [[ "${output}" == "it's fine" ]] || { echo "delimiter escape mangled; got: ${output}"; false; }
+
+  # The operator edits .env.local in the field and re-ups. No rebuild, no
+  # regenerate, no edit to the machine-generated compose.yaml.
+  printf 'APP_MODE=field-override\nWATCHDOG_INTERVAL=5\n' > "${BUNDLE}/.env.local"
+  run "${BUNDLE}/deploy.sh" up
+  [ "${status}" -eq 0 ] || { echo "deploy.sh re-up failed (status=${status}):"; echo "${output}"; false; }
+
+  run docker exec "${CNAME}" printenv APP_MODE
+  [ "${status}" -eq 0 ] || { echo "printenv APP_MODE failed: ${output}"; false; }
+  [[ "${output}" == "field-override" ]] || { echo "operator override IGNORED; got: ${output}"; false; }
+
+  run docker exec "${CNAME}" printenv WATCHDOG_INTERVAL
+  [ "${status}" -eq 0 ] || { echo "printenv WATCHDOG_INTERVAL failed: ${output}"; false; }
+  [[ "${output}" == "5" ]] || { echo "watchdog override IGNORED; got: ${output}"; false; }
+
+  # Restore the pristine override file so the sibling tests are unaffected.
+  : > "${BUNDLE}/.env.local"
+  run "${BUNDLE}/deploy.sh" down
+  [ "${status}" -eq 0 ] || { echo "deploy.sh down failed: ${output}"; false; }
+}
+
+# why: read-only default proven by a real write
 @test "field-deploy e2e: a container write to an undeclared-rw tunable really FAILS, a declared rw one lands on the host" {
   # The whole point of the read-only default is that the failure is real and
   # immediate, so this asserts the container's write, not the `:ro` string.

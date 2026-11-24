@@ -4,6 +4,53 @@
 # See build_sh_spec.bats for the sandbox/mock strategy — this file mirrors it
 # and focuses on run.sh-specific branches: --detach, TARGET
 # routing (devel vs non-devel), already-running guard, and bootstrap/drift.
+#
+# why: Unit tests for `run.sh`. Mirrors the build_sh_spec.bats harness; the
+# `docker compose ... ps` probe reads from a controllable stub file (one
+# running service per line, either bare `<service>` or `<project>/<service>`
+# for the tests that are about project scoping -- the qualified form is
+# visible only to a probe carrying that same `-p`) so tests can simulate
+# "container already running" scenarios.
+#
+# Covers: `--help` (en/zh/zh-CN/ja), `--setup`/`-s`, bootstrap on missing
+# `.env` / `setup.conf` / `compose.yaml`, drift-check path, bootstrap
+# staying non-interactive (setup.sh, not TUI), defensive guard when setup
+# produces no `.env`, `--detach`, devel vs non-devel TARGET routing,
+# already-running guard, `--lang` argument validation,
+# fallback `_detect_lang` branches, **runtime log-line i18n** (bootstrap +
+# already-running error translate in all four languages via the local
+# `_msg()` table), **#216/#429 auto-build gate** (image present → silent +
+# no build, image absent → auto-delegates to `./build.sh TARGET`, non-devel
+# target forwarded, build failure aborts run, per-target image inspect,
+# `--build` invokes `./build.sh test` before compose up, `--build` after
+# check-drift), and **`-C` / `--chdir` flag** (docker_harness#53: redirect
+# FILE_PATH, short + long form, value-required and directory guards, usage
+# help mention), and **`-v` / `--verbose` / `-vv` / `--very-verbose` flag**
+# (#311: same export + trace pattern as build.sh, parity across wrappers),
+# and **#386 foreground exit auto compose-down** (default-on for devel +
+# one-shot non-devel targets, `--no-rm` opts out, `-d` suppresses the trap;
+# the trap fires `down --remove-orphans` to mirror stop.sh and close the
+# worktree-removed-before-stop network leak), and **#448 `--` CMD
+# separator** (`--` stops flag parsing so CMD flags like `--target` don't
+# collide; positional CMD also stops parsing; usage documents `--`), and
+# **#580 interactive exit-code normalization** (`_normalize_interactive_rc`
+# maps clean-exit codes 0 and 130 to 0 on the no-CMD foreground paths --
+# devel attached shell and one-shot stage `compose up` -- so a
+# Ctrl-C-cleared line carried out on exit isn't a recipe failure, while a
+# genuine non-clean code like 127 still propagates and command mode `just
+# run <cmd>` keeps the real exit code), and **#679 non-`devel` CMD-override
+# dispatch** (a non-`devel` one-shot target WITH a CMD dispatches `compose
+# run --rm <SERVICE> <CMD…>` so the ENTRYPOINT runs and the override
+# replaces the default CMD — NOT the pre-#679 `up -d` + `exec` pair that
+# bypassed the ENTRYPOINT and double-launched the default CMD; the #679
+# repro shape `-t runtime ros2 launch …` is asserted; `devel` + CMD still
+# uses `up -d` + `exec`; the no-CMD paths are unchanged; #580 exit-code
+# propagation rides the `run` path for non-`devel` command mode), and **#690
+# pre-run hook abort + foreground post-run hook exit override** (a failing
+# `script/hooks/pre/run.sh` aborts the wrapper with the hook's rc before the
+# build delegate / `compose up`; in the foreground path a failing
+# `script/hooks/post/run.sh` makes `_app_cleanup` override the wrapper exit
+# with the hook's rc while `compose down --remove-orphans` still runs).
 
 bats_require_minimum_version 1.5.0
 
@@ -67,25 +114,47 @@ EOS
   BIN_DIR="${TEMP_DIR}/bin"
   mkdir -p "${BIN_DIR}"
 
-  # docker stub: `docker ps` reads from DOCKER_PS_FILE so individual tests
-  # can simulate a running container; everything else is a no-op.
-  DOCKER_PS_FILE="${TEMP_DIR}/docker_ps.out"
-  export DOCKER_PS_FILE
-  : > "${DOCKER_PS_FILE}"
+  # docker stub: `docker compose ... ps <service>` reads from
+  # COMPOSE_PS_FILE so individual tests can simulate a running service;
+  # everything else is a no-op.
+  #
+  # A line is either `<service>` -- running, project not modelled, for the
+  # tests that are not about scoping -- or `<project>/<service>`, which
+  # only a probe carrying that same `-p` sees. The qualified form is what
+  # makes the project-scoping tests bite: the stub answers the question
+  # compose was actually asked, so a probe that dropped `-p` gets a
+  # different answer rather than the same one.
+  COMPOSE_PS_FILE="${TEMP_DIR}/compose_ps.out"
+  export COMPOSE_PS_FILE
+  : > "${COMPOSE_PS_FILE}"
 
   cat > "${BIN_DIR}/docker" <<'EOS'
 #!/usr/bin/env bash
-if [[ "$1" == "ps" ]]; then
-  cat "${DOCKER_PS_FILE}"
-  # Opt-in late write (${DOCKER_PS_LATE_FILE}): names that arrive only
-  # after a reader which stops reading has already left, so the write
-  # finds no reader. `exec` so the SIGPIPE is this stub's own exit
-  # status rather than being swallowed by the `exit 0` below.
-  if [[ -n "${DOCKER_PS_LATE_FILE:-}" ]]; then
-    sleep 0.2
-    exec cat "${DOCKER_PS_LATE_FILE}"
+if [[ "$1" == "compose" ]]; then
+  _is_ps=0
+  _project=""
+  _prev=""
+  for _a in "$@"; do
+    [[ "${_a}" == "ps" ]] && _is_ps=1
+    [[ "${_prev}" == "-p" ]] && _project="${_a}"
+    _prev="${_a}"
+  done
+  if (( _is_ps )); then
+    _svc="${!#}"
+    if grep -qxF -- "${_svc}" "${COMPOSE_PS_FILE}" 2>/dev/null \
+       || grep -qxF -- "${_project}/${_svc}" "${COMPOSE_PS_FILE}" 2>/dev/null; then
+      printf '%s\n' "cid-${_svc}"
+    fi
+    # Opt-in late write (${COMPOSE_PS_LATE_FILE}): ids that arrive only
+    # after a reader which stops reading has already left, so the write
+    # finds no reader. `exec` so the SIGPIPE is this stub's own exit
+    # status rather than being swallowed by the `exit 0` below.
+    if [[ -n "${COMPOSE_PS_LATE_FILE:-}" ]]; then
+      sleep 0.2
+      exec cat "${COMPOSE_PS_LATE_FILE}"
+    fi
+    exit 0
   fi
-  exit 0
 fi
 # image inspect: drives the soft guard. Env var
 # DOCKER_IMAGE_PRESENT=true makes the inspect succeed (image present
@@ -162,7 +231,7 @@ teardown() {
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   cat > "${SANDBOX}/.base/dist/script/docker/wrapper/setup.sh" <<'EOS'
 #!/usr/bin/env bash
@@ -209,7 +278,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/run.sh" --dry-run
   assert_success
@@ -223,7 +292,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  rm -f "${SANDBOX}/.setup.conf"
+  rm -f "${SANDBOX}/setup.toml"
   run bash "${SANDBOX}/run.sh" --dry-run
   assert_success
   assert_output --partial "First run"
@@ -239,7 +308,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   rm -f "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/run.sh" --dry-run
   assert_success
@@ -295,7 +364,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=true
   mkdir -p "${SANDBOX}/script/hooks/post"
   cat > "${SANDBOX}/script/hooks/post/run.sh" <<'HOOK'
@@ -308,6 +377,24 @@ HOOK
   assert_output --partial "POST_RUN_HOOK_FIRED"
 }
 
+# why: The detach branch is the one place the wrapper hands compose a target
+# and nothing read it back. The foreground paths are pinned at argv level
+# ("up test"), and the two existing detached cases assert a post-run hook
+# fired and what reached the build.sh stub -- all three stay green when the
+# compose target is replaced by a literal `devel`. The consequence under PRD
+# invariant 8 is not a loud one: `just docker run -d -t runtime` would start
+# devel, swapping baked config for a source bind mount on a running machine
+# with nothing saying so
+@test "run.sh -d hands compose the requested target, not devel (#1115)" {
+  run bash "${SANDBOX}/run.sh" --dry-run -t runtime -d
+  assert_success
+  # The positive form of the refutation two cases below already use
+  # (refute_output --partial "up -d runtime"): a refutation on its own is
+  # satisfied by a wrapper that dispatches nothing at all.
+  assert_compose_verb_target "up -d" runtime
+  refute_output --partial "up -d devel"
+}
+
 @test "run.sh devel target routes to 'compose up -d' + 'compose exec'" {
   run bash "${SANDBOX}/run.sh" --dry-run
   assert_success
@@ -315,9 +402,8 @@ HOOK
 }
 
 @test "run.sh non-devel target without CMD uses 'compose up' foreground (#458)" {
-  # non-devel stages used to use 'compose run --rm' which bypassed
-  # container_name. Now unified to 'compose up' so container_name from
-  # takes effect.
+  # non-devel stages used to use 'compose run --rm', which never ran the
+  # Dockerfile CMD. Now unified to 'compose up' so the CMD drives.
   run bash "${SANDBOX}/run.sh" --dry-run -t test
   assert_success
   refute_output --partial "run --rm test"
@@ -432,19 +518,19 @@ HOOK
   assert_failure
   [ "$status" -eq 2 ]
   assert_output --partial "does not accept a CMD"
-  assert_output --partial "./exec.sh"
+  assert_output --partial "just docker exec"
 }
 
-@test "run.sh refuses to start when container already running (devel + no -d)" {
+@test "run.sh refuses to start when the service is already running (devel + no -d)" {
   {
     echo "USER_NAME=tester"
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  # Simulate a running container matching CONTAINER_NAME=${USER_NAME}-mockimg
-  # (container_name now includes USER_NAME prefix to disambiguate
-  # per-OS-user on shared hosts).
-  echo "tester-mockimg" > "${DOCKER_PS_FILE}"
+  # The devel service is up inside THIS project. The guard asks compose,
+  # which is what scopes the question to the project rather than to the
+  # daemon's flat container-name namespace.
+  echo "devel" > "${COMPOSE_PS_FILE}"
 
   # Real mode (no --dry-run) triggers the guard; DRY_RUN=true bypasses it.
   run bash "${SANDBOX}/run.sh"
@@ -452,16 +538,81 @@ HOOK
   assert_output --partial "already running"
 }
 
-@test "run.sh: a docker ps still writing cannot make the guard miss a running container (#905)" {
-  # The already-running guard asks `docker ps ... | <reader>`. A reader
-  # that stops reading (`grep -q` leaves on its first match) strands a
-  # `docker ps` that is still writing: SIGPIPE, exit 141, and run.sh's
+@test "run.sh names the service and the project when it refuses (#920)" {
+  {
+    echo "USER_NAME=tester"
+    echo "IMAGE_NAME=mockimg"
+    echo "DOCKER_HUB_USER=mockuser"
+  } > "${SANDBOX}/.env.generated"
+  echo "devel" > "${COMPOSE_PS_FILE}"
+
+  run bash "${SANDBOX}/run.sh"
+  assert_failure
+  assert_output --partial "devel"
+  assert_output --partial "mockuser-mockimg"
+  # `tester-mockimg` is a name nothing owns now that compose derives it.
+  refute_output --partial "tester-mockimg"
+}
+
+@test "run.sh: a service running in ANOTHER project does not block this one (#920)" {
+  # The whole point of dropping container_name: two stacks of the same repo
+  # coexist under distinct project names. The guard must therefore ask
+  # about THIS project only -- which asking compose does by construction,
+  # since the probe carries -p.
+  #
+  # Real mode, deliberately: --dry-run skips the guard outright, so a
+  # dry-run version of this test would assert nothing about it.
+  {
+    echo "USER_NAME=tester"
+    echo "IMAGE_NAME=mockimg"
+    echo "DOCKER_HUB_USER=mockuser"
+    echo "PROJECT_NAME=mockimg-wt2"
+  } > "${SANDBOX}/.env.generated"
+  # Both present so the bootstrap does not regenerate .env.generated over
+  # the resolved project name this test is about.
+  echo "# mock" > "${SANDBOX}/compose.yaml"
+  echo "# stub" > "${SANDBOX}/setup.toml"
+  # devel IS up -- in the neighbouring project. Only a probe carrying
+  # `-p mockuser-mockimg` sees it, and this run carries -p mockimg-wt2.
+  echo "mockuser-mockimg/devel" > "${COMPOSE_PS_FILE}"
+
+  run bash "${SANDBOX}/run.sh"
+  assert_success
+  refute_output --partial "already running"
+  assert_output --partial "-p mockimg-wt2"
+}
+
+@test "run.sh: the SAME project's running service still blocks (#920)" {
+  # The other half of the pair above: same stub, same shape of seed, and
+  # the ONLY difference is which project owns the running devel. Without
+  # this, "another project does not block" would also pass against a probe
+  # that can never find anything at all.
+  {
+    echo "USER_NAME=tester"
+    echo "IMAGE_NAME=mockimg"
+    echo "DOCKER_HUB_USER=mockuser"
+    echo "PROJECT_NAME=mockimg-wt2"
+  } > "${SANDBOX}/.env.generated"
+  echo "# mock" > "${SANDBOX}/compose.yaml"
+  echo "# stub" > "${SANDBOX}/setup.toml"
+  echo "mockimg-wt2/devel" > "${COMPOSE_PS_FILE}"
+
+  run bash "${SANDBOX}/run.sh"
+  assert_failure
+  assert_output --partial "already running"
+  assert_output --partial "mockimg-wt2"
+}
+
+@test "run.sh: a probe still writing cannot make the guard miss a running service (#905)" {
+  # The already-running guard used to ask `docker ps ... | <reader>`. A
+  # reader that stops reading (`grep -q` leaves on its first match) strands
+  # a probe that is still writing: SIGPIPE, exit 141, and run.sh's
   # file-scope `pipefail` makes 141 the PIPELINE's status -- which the
   # `if` reads as "not running". The answer is inverted, not lost, and
   # run.sh then does not refuse at all: it starts a second container on
   # top of the live one instead of printing the guard's error.
   #
-  # The stub pins that interleaving. The matching name is written first,
+  # The stub pins that interleaving. The matching id is written first,
   # so a real early-closing reader really does match and really does
   # leave; the late write then finds nobody. Draining the whole stream
   # never leaves it, so the late write lands and the guard fires.
@@ -470,20 +621,28 @@ HOOK
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  echo "tester-mockimg" > "${DOCKER_PS_FILE}"
-  DOCKER_PS_LATE_FILE="${TEMP_DIR}/docker_ps.late"
-  export DOCKER_PS_LATE_FILE
-  echo "someone-elses-container" > "${DOCKER_PS_LATE_FILE}"
+  echo "devel" > "${COMPOSE_PS_FILE}"
+  COMPOSE_PS_LATE_FILE="${TEMP_DIR}/compose_ps.late"
+  export COMPOSE_PS_LATE_FILE
+  echo "cid-someone-else" > "${COMPOSE_PS_LATE_FILE}"
 
   run bash "${SANDBOX}/run.sh"
   assert_failure
   assert_output --partial "already running"
 }
 
-@test "run.sh --lang zh-TW prints Chinese usage text" {
+# why: Both Chinese usage heredocs open with the same two characters
+# meaning "Usage", so asserting that shared token could not tell
+# Traditional from Simplified: pointing the zh-CN arm at the Traditional
+# block left every locale test green. The token asserted here is the
+# help-flag description line in its Traditional spelling, which the
+# Simplified block cannot contain, and the refute names the Simplified
+# spelling that must not appear -- so the pair is red in both directions.
+@test "run.sh --lang zh-TW prints Traditional Chinese usage text" {
   run bash "${SANDBOX}/run.sh" --lang zh-TW --help
   assert_success
-  assert_output --partial "用法"
+  assert_output --partial "顯示此說明"
+  refute_output --partial "显示此说明"
 }
 
 @test "run.sh --lang requires a value" {
@@ -492,10 +651,16 @@ HOOK
 }
 
 
+# why: The Simplified half of the same decision. The shared "Usage" token
+# this used to assert is byte-identical in both Chinese heredocs, so a
+# zh-CN arm rendering the Traditional block read green. The token asserted
+# here is the help-flag description line in its Simplified spelling, which
+# the Traditional block cannot contain.
 @test "run.sh --lang zh-CN prints Simplified Chinese usage text" {
   run bash "${SANDBOX}/run.sh" --lang zh-CN --help
   assert_success
-  assert_output --partial "用法"
+  assert_output --partial "显示此说明"
+  refute_output --partial "顯示此說明"
 }
 
 @test "run.sh --lang ja prints Japanese usage text" {
@@ -515,13 +680,21 @@ HOOK
   done
 }
 
-@test "run.sh uses xhost +SI:localuser under Wayland session" {
-  run env XDG_SESSION_TYPE=wayland bash "${SANDBOX}/run.sh" --dry-run
-  assert_success
-}
+# ── /lint/-layout _resolve_lang (flat dir with _lib.sh + i18n.sh) ─────
 
-# ── /lint/-layout _detect_lang (flat dir with _lib.sh + i18n.sh,) ─────
-
+# why: The flat layout has no `template/` beside the wrapper, so the
+# wrapper's own bootstrap has to find `lib/i18n.sh` next to it and let
+# `_resolve_lang` pick the heredoc. That composition is the property only a
+# test in this file can pin, and one locale pins it. The zh_CN and ja twins
+# were folded away because the halves they added are pinned closer to the
+# source: the LANG-to-code mapping at the function seam in lib_spec.bats
+# (`_resolve_lang sets 'zh-CN' for zh_CN.UTF-8`, `... for zh_SG`, `... 'ja'
+# for ja_JP.UTF-8`) and each usage() arm by the `--lang` tests above.
+# Measured on the whole unit tier: pointing `_detect_lang`'s `zh_CN*|zh_SG*`
+# and `ja*` arms at "en" turned 14 of 4726 tests red with the twins present
+# and 6 with them gone -- the three `_resolve_lang` tests, the two
+# `_sanitize_lang` locale tests, and justfile_user_spec's Japanese recipe
+# summaries (base#1117).
 @test "run.sh in /lint/ layout maps zh_TW.UTF-8 to zh-TW" {
   local _tmp
   _tmp="$(mktemp -d)"
@@ -530,31 +703,8 @@ HOOK
   cp /source/dist/script/docker/lib/* "${_tmp}/lib/"
   LANG=zh_TW.UTF-8 run bash "${_tmp}/run.sh" -h
   assert_success
-  assert_output --partial "用法"
-  rm -rf "${_tmp}"
-}
-
-@test "run.sh in /lint/ layout maps zh_CN.UTF-8 to zh-CN" {
-  local _tmp
-  _tmp="$(mktemp -d)"
-  ln -s /source/dist/script/docker/wrapper/run.sh "${_tmp}/run.sh"
-  mkdir -p "${_tmp}/lib"
-  cp /source/dist/script/docker/lib/* "${_tmp}/lib/"
-  LANG=zh_CN.UTF-8 run bash "${_tmp}/run.sh" -h
-  assert_success
-  assert_output --partial "用法"
-  rm -rf "${_tmp}"
-}
-
-@test "run.sh in /lint/ layout maps ja_JP.UTF-8 to ja" {
-  local _tmp
-  _tmp="$(mktemp -d)"
-  ln -s /source/dist/script/docker/wrapper/run.sh "${_tmp}/run.sh"
-  mkdir -p "${_tmp}/lib"
-  cp /source/dist/script/docker/lib/* "${_tmp}/lib/"
-  LANG=ja_JP.UTF-8 run bash "${_tmp}/run.sh" -h
-  assert_success
-  assert_output --partial "使用法"
+  assert_output --partial "顯示此說明"
+  refute_output --partial "显示此说明"
   rm -rf "${_tmp}"
 }
 
@@ -592,8 +742,7 @@ HOOK
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  # container_name now includes USER_NAME prefix.
-  echo "tester-mockimg" > "${DOCKER_PS_FILE}"
+  echo "devel" > "${COMPOSE_PS_FILE}"
   run bash "${SANDBOX}/run.sh" --lang zh-TW
   assert_failure
   assert_output --partial "已在執行中"
@@ -605,8 +754,7 @@ HOOK
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  # container_name now includes USER_NAME prefix.
-  echo "tester-mockimg" > "${DOCKER_PS_FILE}"
+  echo "devel" > "${COMPOSE_PS_FILE}"
   run bash "${SANDBOX}/run.sh" --lang ja
   assert_failure
   assert_output --partial "すでに実行中"
@@ -623,7 +771,7 @@ HOOK
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=true
   run bash -c "exec 2>&1; bash '${SANDBOX}/run.sh' --detach"
   assert_success
@@ -639,12 +787,12 @@ HOOK
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=false
   run bash -c "exec 2>&1; bash '${SANDBOX}/run.sh' --detach"
   assert_success
   assert_output --partial "not found locally"
-  assert_output --partial "Delegating to ./build.sh"
+  assert_output --partial "Delegating to just docker build"
   run grep -F "build.sh invoked" "${BUILD_SH_LOG}"
   assert_output --partial "devel"
 }
@@ -656,7 +804,7 @@ HOOK
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=false
   run bash "${SANDBOX}/run.sh" --detach -t runtime
   assert_success
@@ -671,7 +819,7 @@ HOOK
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=false
   cat > "${SANDBOX}/build.sh" <<'EOS'
 #!/usr/bin/env bash
@@ -690,7 +838,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   cat > "${BIN_DIR}/docker" <<'EOS'
 #!/usr/bin/env bash
 {
@@ -698,9 +846,18 @@ EOS
   printf ' %q' "$@"
   printf '\n'
 } >> "${TEMP_DIR}/docker.log"
-if [[ "$1" == "ps" ]]; then
-  cat "${DOCKER_PS_FILE}"
-  exit 0
+if [[ "$1" == "compose" ]]; then
+  _is_ps=0
+  for _a in "$@"; do
+    [[ "${_a}" == "ps" ]] && _is_ps=1
+  done
+  if (( _is_ps )); then
+    _svc="${!#}"
+    if grep -qxF -- "${_svc}" "${COMPOSE_PS_FILE}" 2>/dev/null; then
+      printf '%s\n' "cid-${_svc}"
+    fi
+    exit 0
+  fi
 fi
 if [[ "$1" == "image" && "$2" == "inspect" ]]; then
   exit 1
@@ -720,7 +877,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=true
   run bash "${SANDBOX}/run.sh" --build --detach
   assert_success
@@ -735,7 +892,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=true
   run bash "${SANDBOX}/run.sh" --build --detach
   assert_success
@@ -754,7 +911,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
 
   # Replace mock setup.sh with one that logs to a shared timeline.
   EVENT_LOG="${TEMP_DIR}/timeline.log"
@@ -864,6 +1021,7 @@ EOS
   assert_success
 }
 
+# bats test_tags=kcov-fragile
 @test "run.sh -vv --dry-run enables bash trace (set -x output on stderr) (#311)" {
   run --separate-stderr bash "${SANDBOX}/run.sh" -vv --dry-run
   assert_success
@@ -897,13 +1055,23 @@ _exit_code_fixture() {
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=true
   cat > "${BIN_DIR}/docker" <<'EOS'
 #!/usr/bin/env bash
-case "$1" in
-  ps) cat "${DOCKER_PS_FILE}"; exit 0 ;;
-esac
+if [[ "$1" == "compose" ]]; then
+  _is_ps=0
+  for _a in "$@"; do
+    [[ "${_a}" == "ps" ]] && _is_ps=1
+  done
+  if (( _is_ps )); then
+    _svc="${!#}"
+    if grep -qxF -- "${_svc}" "${COMPOSE_PS_FILE}" 2>/dev/null; then
+      printf '%s\n' "cid-${_svc}"
+    fi
+    exit 0
+  fi
+fi
 if [[ "$1" == "image" && "$2" == "inspect" ]]; then exit 0; fi
 _has_up=0; _has_d=0; _has_exec=0; _has_run=0
 for _a in "$@"; do
@@ -974,7 +1142,7 @@ _hook_fixture() {
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
   echo "# mock" > "${SANDBOX}/compose.yaml"
-  echo "# stub" > "${SANDBOX}/.setup.conf"
+  echo "# stub" > "${SANDBOX}/setup.toml"
   export DOCKER_IMAGE_PRESENT=true
 }
 
@@ -1014,9 +1182,19 @@ HOOK
   : > "${DOCKER_DOWN_LOG}"
   cat > "${BIN_DIR}/docker" <<'EOS'
 #!/usr/bin/env bash
-case "$1" in
-  ps) cat "${DOCKER_PS_FILE}"; exit 0 ;;
-esac
+if [[ "$1" == "compose" ]]; then
+  _is_ps=0
+  for _a in "$@"; do
+    [[ "${_a}" == "ps" ]] && _is_ps=1
+  done
+  if (( _is_ps )); then
+    _svc="${!#}"
+    if grep -qxF -- "${_svc}" "${COMPOSE_PS_FILE}" 2>/dev/null; then
+      printf '%s\n' "cid-${_svc}"
+    fi
+    exit 0
+  fi
+fi
 if [[ "$1" == "image" && "$2" == "inspect" ]]; then exit 0; fi
 for _a in "$@"; do
   [[ "${_a}" == "down" ]] && printf 'down %s\n' "$*" >> "${DOCKER_DOWN_LOG}"

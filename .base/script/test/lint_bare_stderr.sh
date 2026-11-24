@@ -3,9 +3,13 @@
 # lint_bare_stderr.sh - Flag bare printf/echo >&2 outside _log_* helpers.
 #
 # Enforce that all stderr output goes through lib/log.sh
-# helpers. Scans dist/script/docker/**/*.sh and script/test/**/*.sh
-# for lines that write to fd 2 without using _log_err / _log_warn /
-# _log_fatal / _log_info / _log_debug / _die.
+# helpers. Scans dist/script/docker/**/*.sh, dist/dockerfile/**/*.sh,
+# dist/test/**/*.sh and script/test/**/*.sh for lines that write to fd 2
+# without using _log_err / _log_warn / _log_fatal / _log_info /
+# _log_debug / _die. The two dist/ roots beyond script/docker are the
+# shipped scripts that live next to what consumes them rather than under
+# script/ -- the seeded entrypoint template and the runtime-test
+# install-check helper.
 #
 # Exit: 0 = clean, 1 = violations found, 2 = usage error.
 
@@ -23,7 +27,15 @@ _is_excluded_file() {
     # lib/log.sh sourced, so its loud stderr events go straight to fd 2
     # (captured by `docker logs`) -- same rationale as logging.sh.
     dist/script/docker/runtime/watchdog.sh) return 0 ;;
-    dist/script/docker/runtime/smoke.sh) return 0 ;;
+    # Runtime-test install-check helper: runs inside the minimal runtime
+    # image with no lib/log.sh, so its MISSING-DEP report goes straight to
+    # fd 2 -- same rationale as logging.sh / watchdog.sh above.
+    dist/test/bats/smoke/smoke.sh) return 0 ;;
+    # apt retry helper (base#1602): a /bin/sh script copied into the image
+    # and run by Dockerfile RUN layers, where no lib/log.sh exists, so its
+    # per-attempt failure line goes straight to fd 2 (the build log) --
+    # same rationale as watchdog.sh / smoke.sh above.
+    dist/script/docker/build/apt-retry.sh) return 0 ;;
     dist/script/docker/lib/_tui_backend.sh) return 0 ;;
     dist/script/docker/lib/_tui_conf.sh) return 0 ;;
     dist/script/docker/wrapper/setup_tui.sh) return 0 ;;
@@ -82,6 +94,25 @@ _is_allowlisted_line() {
   # sed-piped output (structured list formatting).
   [[ "${line}" == *"| sed"* ]] && return 0
 
+  # config-gen's in-image event protocol (base#1465): the admit stage runs
+  # with no lib/log.sh, so a refusal is a `cg_event` line on stderr that the
+  # host runner reads back and re-emits through _log_err.
+  [[ "${line}" == *"printf 'cg_event "* ]] && return 0
+  # The same protocol's gate id line (base#1467): config_gen_coverage.sh
+  # runs in the test stage as /mutation/coverage.sh, with no lib/log.sh,
+  # and its refusal is `config_gen_gate_coverage_failed reason= pkg=` on
+  # stderr, which the runner reads back as the gate that went red.
+  [[ "${line}" == *"printf 'config_gen_gate_"* ]] && return 0
+
+  # config-gen's timing lines (base#1547): `config-gen stage=` from the
+  # gates runner and `config-gen redpath case=` from the redpath are one
+  # plain line per stage or case, read back by line shape (the redpath
+  # stub greps its parent's stderr for them, and the specs assert their
+  # fields), so a _log_* record's timestamp and level prefix would break
+  # those readers.
+  [[ "${line}" == *"printf 'config-gen stage="* ]] && return 0
+  [[ "${line}" == *"printf 'config-gen redpath case="* ]] && return 0
+
   return 1
 }
 
@@ -114,7 +145,8 @@ while IFS= read -r file; do
       violations=$((violations + 1))
     fi
   done < "${file}"
-done < <(find "${repo_root}/dist/script/docker" "${repo_root}/script/test" \
+done < <(find "${repo_root}/dist/script/docker" "${repo_root}/dist/dockerfile" \
+  "${repo_root}/dist/test" "${repo_root}/script/test" \
   -name '*.sh' -type f 2>/dev/null | sort)
 
 if [[ "${violations}" -gt 0 ]]; then

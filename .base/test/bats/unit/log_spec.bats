@@ -3,6 +3,55 @@
 # log_spec.bats - Tests for OTel-aligned log.sh.
 # Single-sink tty-detect dispatch: text on TTY, JSON on non-TTY.
 # LOG_FORMAT=auto|text|json override. Strict body enforcement.
+#
+# why: OTel-aligned logger (#423, #438). Single-sink tty-detect dispatch,
+# `LOG_FORMAT=auto|text|json` override, strict body enforcement
+# (unregistered body = fatal), `display=` attribute for i18n text in text
+# mode, UTC microsecond timestamps, `_log_plain` removed.
+#
+# Grouped by concern:
+#
+# - Text output format (`LOG_FORMAT=text`): timestamp + aligned level + tag,
+# multi-token join, attr=val skip, `display=` override
+#
+# - Timestamp: UTC with microsecond precision in both text and JSON
+#
+# - Stream routing: stdout for INFO/DEBUG, stderr for WARN/ERROR/FATAL
+#
+# - Single-sink tty-detect dispatch (#438): non-TTY auto JSON,
+# `LOG_FORMAT=text` force, `LOG_FORMAT=json` force, `LOG_FORMAT=auto` equiv
+#
+# - Startup TTY cache `_LOG_IS_TTY` (#605): helper defined +
+# cached-0/cached-nonzero/unset-fallback; auto-format honours cache +
+# unset-identity; explicit `LOG_FORMAT` bypasses cache; `_log_color_enabled`
+# cache read + NO_COLOR/FORCE_COLOR precedence over cache
+#
+# - JSON escaping (`_log_json_escape`, #691): quote / lone-backslash double
+# / newline+tab+CR / substitution order; live `_log_info` attr value with
+# quote+backslash+tab stays well-formed
+#
+# - JSON output: OTel fields, custom attributes, severity numbers, per-line
+# structure
+#
+# - TRACEPARENT in JSON: trace_id/span_id present/absent
+#
+# - Strict body enforcement (#438): unregistered fatal, registered OK, empty
+# OK, error names body + file
+#
+# - Missing service rejected, `_log_fatal` does not auto-exit
+#
+# - Scoped wrappers: `_log_with_trace` save/restore, `_log_with_span`
+# trace_id
+#
+# - `_log_plain` removed (#438)
+#
+# - `_log_color_enabled`: TTY detect, FORCE_COLOR, NO_COLOR precedence
+#
+# - FORCE_COLOR text: red bold ERROR, yellow WARN, NO_COLOR strips
+#
+# - Event registry: registered/unregistered/comment detection
+#
+# - lnav format file
 
 bats_require_minimum_version 1.5.0
 
@@ -281,6 +330,28 @@ setup() {
   [[ "${output}" == *'"code.filepath":'* ]]
   [[ "${output}" == *'"code.lineno":'* ]]
   [[ "${output}" == *'"thread.id":'* ]]
+}
+
+# why: code.filepath and code.lineno must name the code that logged the
+# event. They were read one frame too shallow, so every event was attributed
+# to the _log_<level> wrapper inside log.sh itself, and a check that a
+# refusal came from a given script could never pass or fail on it
+# (base#1464).
+@test "JSON code.filepath and code.lineno name the caller of _log_<level>, not log.sh (base#1464)" {
+  local _c="${BATS_TEST_TMPDIR}/caller.sh"
+  printf '%s\n' \
+    "source ${LOG_SH}" \
+    'f() {' \
+    '  _log_err setup env_regenerated ws_path=/in_f' \
+    '}' \
+    'f' \
+    '_log_info setup env_regenerated ws_path=/top' > "${_c}"
+  run --separate-stderr env LOG_FORMAT=json bash "${_c}"
+  assert_success
+  [[ "${stderr}" == *"\"code.filepath\":\"${_c}\",\"code.lineno\":3,"* ]] \
+    || fail "the function's event is not attributed to ${_c}:3: ${stderr}"
+  [[ "${output}" == *"\"code.filepath\":\"${_c}\",\"code.lineno\":6,"* ]] \
+    || fail "the top-level event is not attributed to ${_c}:6: ${output}"
 }
 
 @test "JSON output contains custom attributes" {

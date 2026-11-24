@@ -17,26 +17,56 @@ _gitignore_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
 source "${_gitignore_lib_dir}/log.sh"
 unset _gitignore_lib_dir
 
+# stale-path-lint: allow-begin -- _canonical_gitignore_entries must keep IGNORING the retired INI layers and their .bak siblings: the rename leaves them behind carrying the credentials the original did, and an unignored one ships in the build context
 # _canonical_gitignore_entries
 #   Print the canonical .gitignore set, one entry per line. Order is
 #   stable so consumers can diff outputs across versions.
 #
 #   Add new entries here when the template introduces another derived or
-#   machine-local artifact, then bump the next release. `.setup.conf.local`
-#   is the one member that is NOT derived: it is the operator's per-worktree
-#   config override, hand-authored and never regenerated, and it is here
-#   because it must never be committed -- an untracked layer that got
-#   committed would silently become everyone's config. Downstreams pick it up via
-#   `just base upgrade` -> ./.base/dist/script/base/upgrade.sh ->
-#   init.sh resync chain.
+#   machine-local artifact, then bump the next release. `setup.local.toml`
+#   and `env.local.toml` (plus their legacy INI counterparts
+#   `.setup.conf.local` / `.env.local`) are the members that are NOT
+#   derived: they are the operator's per-worktree config override and
+#   per-machine env override, hand-authored and never regenerated, and they
+#   are here because they must never be committed -- an untracked layer
+#   that got committed would silently become everyone's config. Their
+#   `.bak` siblings are here for the same reason and not a weaker one: the
+#   INI-to-TOML migration (ADR-00000037) renames each of those two layers
+#   aside, and the backup carries exactly what the ignored original did,
+#   `environment.env_N` credentials included. Ignoring an original and not
+#   its backup leaves the same secret reachable by `git add .` and ships it
+#   in the Docker build context. Downstreams
+#   pick it up via `just base upgrade` -> ./.base/dist/script/base/
+#   upgrade.sh -> init.sh resync chain.
+#
+#   `.env.local.toml` stands BESIDE `env.local.toml` rather than being
+#   replaced by it (base#1167 dropped the leading dot from the TOML config
+#   sources). It is not a dead line: v0.43.0-rc1 and -rc2 shipped a
+#   template whose own header documented `<repo>/.env.local.toml` as the
+#   gitignored per-instance override, so a consumer who followed the
+#   shipped instructions authored that file by hand and it carries exactly
+#   what the dotless one would. Retiring the entry would prune the line out
+#   of their .gitignore on the next resync -- the same "ignore the original
+#   but not its sibling" hole the paragraph above refuses, arriving through
+#   a rename instead of through a backup. The sibling rename
+#   (`.setup.conf.local` -> `setup.local.toml`, base#1148) kept both
+#   spellings for the same reason, and `_retired_gitignore_entries` is
+#   still empty.
 _canonical_gitignore_entries() {
   cat <<'EOF'
 .env
+.env.local
+.env.local.toml
 .env.generated
 .env.bak
+.env.local.bak
+env.local.toml
 compose.yaml
 .setup.conf.bak
+setup.toml.bak
 .setup.conf.local
+.setup.conf.local.bak
+setup.local.toml
 coverage/
 .Dockerfile.generated
 .docker.xauth
@@ -44,6 +74,7 @@ log/
 /deploy/
 EOF
 }
+# stale-path-lint: allow-end
 
 # _canonical_dockerignore_entries
 #   Print the canonical .dockerignore derived-artifact set, one entry per
@@ -59,6 +90,7 @@ _canonical_dockerignore_entries() {
   _canonical_gitignore_entries
 }
 
+# stale-path-lint: allow-begin -- _retired_gitignore_entries records which entry was retired and un-retired, which cannot be said without naming it
 # _retired_gitignore_entries
 #   Print the entries the template used to emit and no longer does, one per
 #   line. Kept as a list rather than deleted outright so the sync can RETRACT
@@ -85,6 +117,7 @@ _retired_gitignore_entries() {
   cat <<'EOF'
 EOF
 }
+# stale-path-lint: allow-end
 
 # _prune_retired_entries <path>
 #   Delete every _retired_gitignore_entries line from <path>'s MANAGED half
@@ -142,6 +175,17 @@ _prune_retired_entries() {
         print
       }
     ' "${_path}" > "${_tmp}"; then
+    # The rewrite comes from a bare mktemp (0600); give it the file's own
+    # mode first so .gitignore / .dockerignore keep theirs (base#1356).
+    # A chmod that fails abandons the prune rather than landing a 0600
+    # file over the user's own.
+    if ! chmod --reference="${_path}" -- "${_tmp}"; then
+      rm -f -- "${_tmp}"
+      _log_err init gitignore_prune_mode_failed \
+        "display=could not give the rewrite the mode of ${_path}; retired entries were not pruned and the file is unchanged" \
+        "file=${_path}"
+      return 1
+    fi
     mv -f -- "${_tmp}" "${_path}"
   else
     rm -f -- "${_tmp}"
@@ -175,7 +219,7 @@ _sync_managed_entries() {
 
   # Retract before adding: the prune must run even when nothing is missing,
   # which is the common case for an up-to-date repo.
-  _prune_retired_entries "${_path}"
+  _prune_retired_entries "${_path}" || return 1
 
   while IFS= read -r _entry; do
     [[ -z "${_entry}" ]] && continue
@@ -238,7 +282,7 @@ _sync_dockerignore() {
 # _sync_logging_gitignore <base_path>
 #
 # Ensure the per-repo .gitignore covers every relative `local_path`
-# declared in setup.conf [logging] / [logging.<svc>], so users don't
+# declared in setup.toml [logging] / [logging.<svc>], so users don't
 # accidentally commit container logs. Absolute paths and `~/...` are
 # skipped -- gitignore patterns apply only inside the repo.
 #
@@ -277,7 +321,7 @@ _sync_dockerignore() {
 # (PR-B). The runtime sync used to fire on every setup.sh apply call;
 # the new lifecycle ties .gitignore updates to init.sh / upgrade.sh
 # so the file stays consistent across template versions without
-# needing a wrapper invocation between setup.conf edit and the next
+# needing a wrapper invocation between setup.toml edit and the next
 # build.
 _sync_logging_gitignore() {
   local _base="${1:?}"
@@ -446,6 +490,41 @@ _sync_logging_gitignore() {
   fi
 }
 
+# _canonical_entry_pathspec <entry>
+#   Translate ONE canonical .gitignore entry into the git pathspec that
+#   selects it in the index and print it. Print nothing and return 1 for an
+#   entry that has no settled translation.
+#
+#   A .gitignore pattern and a git pathspec are different languages, and the
+#   two index sweeps below -- the untrack here and the rollback index
+#   snapshot in init.sh -- are the only places they meet. The translation
+#   lives in one function so those two agree by construction; they were two
+#   copies of `${_entry%/}` and therefore two copies of the same mistake.
+#
+#   Translated: a trailing slash marks a directory in a pattern and carries
+#   no meaning in a pathspec, so it is dropped.
+#
+#   NOT translated, deliberately: a LEADING slash anchors the pattern at the
+#   repo root. The pathspec meaning exactly that is `:(top)<rest>`, and
+#   adopting it would start moving a consumer's hand-written directory of
+#   that name out of the index during an unattended resync commit. Whether
+#   base may do that at all is an open decision, so this prints nothing and
+#   the sweeps skip the entry -- the same outcome as before, now by a stated
+#   rule instead of a `git ls-files` fatal nobody could see. Handing git the
+#   pattern verbatim is not a third option: a leading slash makes it an
+#   absolute filesystem path and git refuses it outright.
+#
+#   An entry this refuses is a KNOWN gap the callers skip. A pathspec it
+#   DOES return that git then refuses is a defect here, which is why the
+#   callers no longer hide that status.
+_canonical_entry_pathspec() {
+  local _entry="${1-}"
+  if [[ -z "${_entry}" || "${_entry}" == /* ]]; then
+    return 1
+  fi
+  printf '%s\n' "${_entry%/}"
+}
+
 # _untrack_canonical_in_repo <repo_root>
 #   For each canonical entry that's still git-tracked under <repo_root>,
 #   run `git rm --cached`. Working tree is preserved — the file just
@@ -459,20 +538,49 @@ _sync_logging_gitignore() {
 #   No-op when:
 #     - <repo_root> is not a git repo
 #     - no canonical entry matches a tracked path
+#     - an entry has no pathspec (see _canonical_entry_pathspec)
 #   Idempotent: re-running after the entries are gone is silent.
+#
+#   FAILS, loudly, when git refuses a pathspec this file derived. A pattern
+#   that cannot be translated is skipped by _canonical_entry_pathspec with a
+#   reason, so a refusal reaching git is a defect in the translation and not
+#   an entry to pass over.
 _untrack_canonical_in_repo() {
   local _repo="$1"
   if ! git -C "${_repo}" rev-parse --git-dir >/dev/null 2>&1; then
     return 0
   fi
-  local _entry _path
+  local _entry _path _tracked
   while IFS= read -r _entry; do
     [[ -z "${_entry}" ]] && continue
-    _path="${_entry%/}"
-    # ls-files emits matching tracked paths; empty output means nothing
-    # to untrack. -z guard avoids running `git rm` on empty pathspec.
-    if [[ -n "$(git -C "${_repo}" ls-files -- "${_path}" 2>/dev/null)" ]]; then
-      git -C "${_repo}" rm --cached -r --quiet -- "${_path}" >/dev/null 2>&1 || true
+    # An entry with no settled pathspec is a stated gap, named in full at
+    # _canonical_entry_pathspec, and is passed over here.
+    _path="$(_canonical_entry_pathspec "${_entry}")" || continue
+    # ls-files prints the tracked paths the pathspec matches and exits 0
+    # even when it matches none, so a NON-ZERO status is never "nothing to
+    # untrack" -- it is git refusing the pathspec, which is a defect in the
+    # pattern-to-pathspec translation and not a condition to skip over. Its
+    # stderr is deliberately NOT redirected: git's own diagnosis is the only
+    # thing that says what it would not take.
+    if ! _tracked="$(git -C "${_repo}" ls-files -- "${_path}")"; then
+      _log_err init gitignore_untrack_ls_files_failed \
+        "display=${_repo}: git ls-files refused the pathspec '${_path}' derived from the canonical .gitignore entry '${_entry}'; the untrack sweep stopped instead of skipping the entry silently." \
+        "repo=${_repo}" "entry=${_entry}" "pathspec=${_path}"
+      return 1
+    fi
+    # Empty output means nothing to untrack; the guard also keeps `git rm`
+    # off an empty pathspec.
+    [[ -n "${_tracked}" ]] || continue
+    # ls-files has just reported the pathspec as tracked, so `git rm` not
+    # taking it is a failure with nothing benign behind it. Under the `|| true`
+    # it used to carry, the entry stayed in the index while the sweep
+    # reported success -- and the resync then staged a .gitignore claiming
+    # the file is ignored over an index that still holds it.
+    if ! git -C "${_repo}" rm --cached -r --quiet -- "${_path}" >/dev/null; then
+      _log_err init gitignore_untrack_rm_failed \
+        "display=${_repo}: git rm --cached would not drop '${_path}' from the index although it is tracked there; the untrack sweep stopped instead of reporting success over an entry it did not untrack." \
+        "repo=${_repo}" "entry=${_entry}" "pathspec=${_path}"
+      return 1
     fi
   done < <(_canonical_gitignore_entries)
 }

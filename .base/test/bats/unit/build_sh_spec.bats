@@ -10,6 +10,44 @@
 #   * docker is stubbed via PATH prepend — the stub logs its argv to
 #     ${DOCKER_LOG} and exits 0. Combined with DRY_RUN=true in build.sh's
 #     _compose path, the stub only receives docker build / docker rmi calls.
+#
+# why: Unit tests for `build.sh` argument handling and control flow. Uses a
+# sandbox tree mirroring the expected layout (build.sh + `template/` subtree
+# with real `_lib.sh` / `i18n.sh`, mock `setup.sh`). `docker` is
+# PATH-shimmed so the stub captures argv; `build.sh` is symlinked (not
+# copied) so kcov attributes coverage to the real source file.
+#
+# Covers: `--help` (en/zh/zh-CN/ja), `--setup`/`-s`, auto-bootstrap on
+# missing `.env` / `setup.toml` / `compose.yaml`, drift-check path when all
+# three are present, bootstrap staying non-interactive (setup.sh direct, not
+# `setup_tui.sh`), defensive guard when setup produces no `.env`, TARGETARCH
+# build-arg forwarding, `--no-cache`, `--clean-tools`, positional `TARGET`,
+# **`-t` / `--target TARGET` alias** (#280: short + long form, last-wins
+# resolution against positional `[TARGET]` in both orderings, `-t`
+# value-required guard, usage help mention), `--lang` argument validation,
+# fallback `_detect_lang` branches (zh_TW/zh_CN/ja), real (non-dry-run)
+# docker build invocation, **version-scoped local test-tools tag** (#828:
+# the internal build derives `test-tools:<version>` from `.base/.version`
+# and forwards it as the `TEST_TOOLS_IMAGE` build-arg; fails loud on a
+# missing version, no bare-tag fallback), **the self-managed-repo tooling
+# tag** (#896: a repo with no `.base/` subtree has no pinned version to
+# scope a local tag by, so build.sh asks that repo's own
+# `script/test/test.sh --test-tools-image` rather than deriving a second
+# tag, and forwards the result on BOTH channels -- the `--build-arg` a
+# consumer Dockerfile reads and the exported environment a self-managed
+# `compose.yaml` interpolates; repos that do carry `.base/` keep the
+# version-scoped derivation), **runtime log-line i18n** (bootstrap /
+# drift-regen / err_no_env messages translate in all four languages via the
+# local `_msg()` table; English remains the default), and **`-C` / `--chdir`
+# flag** (docker_harness#53: pre-pass overrides FILE_PATH to redirect the
+# wrapper to a different repo, both short and long form, value-required and
+# directory-existence guards, usage help mention), and **`-v` / `--verbose`
+# / `-vv` / `--very-verbose` flag** (#311: exports `BUILDKIT_PROGRESS=plain`
+# so a hung `docker build`'s RUN step output is visible; `-vv` adds `set -x`
+# on the wrapper itself; usage help mentions all four spellings), and **#690
+# pre-build hook abort** (a failing `script/hooks/pre/build.sh` makes the
+# wrapper exit the hook's rc via `_run_pre_hook build "$@" || exit $?` AND
+# `docker compose build` never runs).
 
 bats_require_minimum_version 1.5.0
 
@@ -128,14 +166,14 @@ teardown() {
 @test "build.sh auto-regens .env / compose.yaml when drift detected" {
   # Regression (v0.9.5): drift used to be warn-only, leaving the stale
   # .env in place. Users had to remember `./build.sh --setup` after
-  # every git pull / setup.conf edit. Now the drift branch regens
+  # every git pull / setup.toml edit. Now the drift branch regens
   # automatically since .env / compose.yaml are derived artifacts.
   {
     echo "USER_NAME=tester"
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   # Patch the mock so check-drift subcommand reports drift (exit 1).
   cat > "${SANDBOX}/.base/dist/script/docker/wrapper/setup.sh" <<'EOS'
@@ -179,7 +217,7 @@ EOS
   assert_output --partial "setup.sh invoked --base-path ${SANDBOX}"
 }
 
-@test "build.sh skips setup.sh when .env AND setup.conf AND compose.yaml exist (drift-check path)" {
+@test "build.sh skips setup.sh when .env AND setup.toml AND compose.yaml exist (drift-check path)" {
   # Pre-create all three derived files → build.sh must NOT execute
   # setup.sh, only source it for drift detection.
   {
@@ -187,7 +225,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
@@ -195,17 +233,17 @@ EOS
   assert [ ! -f "${MOCK_SETUP_LOG}" ]
 }
 
-@test "build.sh bootstraps setup.sh when setup.conf is missing (even if .env exists)" {
+@test "build.sh bootstraps setup.sh when setup.toml is missing (even if .env exists)" {
   # Regression: previously build.sh only checked .env. If the user
-  # manually deleted setup.conf to reset to defaults, .env alone is
-  # stale and build would skip the bootstrap. Now missing setup.conf
+  # manually deleted setup.toml to reset to defaults, .env alone is
+  # stale and build would skip the bootstrap. Now missing setup.toml
   # also triggers the bootstrap path.
   {
     echo "USER_NAME=tester"
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  rm -f "${SANDBOX}/.setup.conf"
+  rm -f "${SANDBOX}/setup.toml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
   assert_output --partial "First run"
@@ -214,9 +252,9 @@ EOS
 
 @test "build.sh bootstraps setup.sh when compose.yaml is missing (fresh clone)" {
   # Regression (v0.9.2): v0.9.0 started gitignoring compose.yaml, so
-  # a fresh clone has .env.example absent + setup.conf tracked +
+  # a fresh clone has .env.example absent + setup.toml tracked +
   # compose.yaml missing. Prior bootstrap check only looked at .env /
-  # setup.conf and skipped to the drift path, which then blew up in
+  # setup.toml and skipped to the drift path, which then blew up in
   # _load_env because .env also wasn't there. Missing compose.yaml
   # must now trigger the bootstrap path on its own.
   {
@@ -224,7 +262,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   rm -f "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
@@ -280,21 +318,26 @@ EOS
 }
 
 @test "build.sh accepts positional TARGET argument" {
+  # Asserted on compose's ARGV, not on the transcript. The whole-transcript
+  # form this replaced was satisfied by the prune hint
+  # (`[dry-run] docker rmi <old-id-of mockuser/mockimg:test if displaced>`)
+  # and by the config summary, so pinning the compose target to a literal
+  # `devel` left this and the four cases below green.
   run bash "${SANDBOX}/build.sh" --dry-run test
   assert_success
-  assert_output --partial "test"
+  assert_compose_verb_target build test
 }
 
 @test "build.sh -t TARGET (short form) selects the build target (#280)" {
   run bash "${SANDBOX}/build.sh" --dry-run -t test
   assert_success
-  assert_output --partial "test"
+  assert_compose_verb_target build test
 }
 
 @test "build.sh --target TARGET (long form) selects the build target (#280)" {
   run bash "${SANDBOX}/build.sh" --dry-run --target test
   assert_success
-  assert_output --partial "test"
+  assert_compose_verb_target build test
 }
 
 @test "build.sh -t + positional: last positional wins (#280)" {
@@ -302,20 +345,74 @@ EOS
   # argument wins regardless of which style it was given in.
   run bash "${SANDBOX}/build.sh" --dry-run -t test runtime
   assert_success
-  # `runtime` was the last token, so it should be the active TARGET
-  assert_output --partial "runtime"
+  # `runtime` was the last token, so it should be the TARGET compose is
+  # handed -- and the loser must not be what compose got.
+  assert_compose_verb_target build runtime
 }
 
 @test "build.sh positional + -t: last -t wins (#280)" {
   run bash "${SANDBOX}/build.sh" --dry-run test -t runtime
   assert_success
-  assert_output --partial "runtime"
+  assert_compose_verb_target build runtime
 }
 
 @test "build.sh -t with no value errors clearly (#280)" {
   run bash "${SANDBOX}/build.sh" --dry-run -t
   assert_failure
   assert_output --partial "-t/--target requires a value"
+}
+
+# ════════════════════════════════════════════════════════════════════
+# Unrecognised leading-dash token is a usage error, not a target
+# ════════════════════════════════════════════════════════════════════
+
+# why: the reported defect, in its plainest form -- before this guard the
+# wrapper exited 0 and the only complaint came from compose, naming a service
+# the caller never typed.
+@test "build.sh refuses a mistyped flag instead of building it as a target (#1120)" {
+  run bash "${SANDBOX}/build.sh" --dry-run --no-cahce
+  assert_failure 2
+  assert_output --partial "--no-cahce"
+  refute_output --partial "build --no-cahce"
+}
+
+# why: the worst shape of the defect and the one a happy-path assertion cannot
+# tell apart from a correct run: the swallowed flag was overwritten by the next
+# token, so a wrong invocation produced the right build and said nothing.
+@test "build.sh refuses an unimplemented flag even when a target follows it (#1120)" {
+  # `--stage` is designed in ADR-00000011 and not implemented by the wrapper,
+  # which is why a caller plausibly types it.
+  run bash "${SANDBOX}/build.sh" --dry-run --stage test-tools
+  assert_failure 2
+  assert_output --partial "--stage"
+  refute_output --partial "build test-tools"
+}
+
+# why: the flag used to reach BOTH docker compose build (as the service name)
+# and docker rmi (as the image tag), so a refusal has to happen before either
+# -- not merely be reported after.
+@test "build.sh refuses a valueless unimplemented flag rather than naming it as the service (#1120)" {
+  run bash "${SANDBOX}/build.sh" --dry-run --stage
+  assert_failure 2
+  assert_output --partial "--stage"
+  refute_output --partial "build --stage"
+}
+
+# why: the load-bearing control case. The guard would be a regression if it
+# cost the positional TARGET the README documents, so this is what keeps the
+# fix from turning into a blanket refusal of the positional form.
+@test "build.sh still accepts a bare positional TARGET after the dash guard (#1120)" {
+  run bash "${SANDBOX}/build.sh" --dry-run runtime
+  assert_success
+  assert_output --partial "runtime"
+}
+
+# why: pins the boundary from the other side -- the token names a target that
+# really exists, so the leading dash is the only thing that may refuse it.
+@test "build.sh refuses a dash-prefixed spelling of a real target (#1120)" {
+  run bash "${SANDBOX}/build.sh" --dry-run --runtime
+  assert_failure 2
+  assert_output --partial "--runtime"
 }
 
 @test "build.sh --help mentions -t / --target (#280)" {
@@ -334,7 +431,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
     echo "TARGET_ARCH=arm64"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
@@ -349,7 +446,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
@@ -367,7 +464,7 @@ EOS
     echo "DOCKER_HUB_USER=mockuser"
     echo "BUILD_NETWORK=host"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
@@ -382,17 +479,25 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   run bash "${SANDBOX}/build.sh" --dry-run
   assert_success
   refute_output --partial "--network"
 }
 
-@test "build.sh --lang zh-TW prints Chinese usage text" {
+# why: Both Chinese usage heredocs open with the same two characters
+# meaning "Usage", so asserting that shared token could not tell
+# Traditional from Simplified: pointing the zh-CN arm at the Traditional
+# block left every locale test green. The token asserted here is the
+# help-flag description line in its Traditional spelling, which the
+# Simplified block cannot contain, and the refute names the Simplified
+# spelling that must not appear -- so the pair is red in both directions.
+@test "build.sh --lang zh-TW prints Traditional Chinese usage text" {
   run bash "${SANDBOX}/build.sh" --lang zh-TW --help
   assert_success
-  assert_output --partial "用法"
+  assert_output --partial "顯示此說明"
+  refute_output --partial "显示此说明"
 }
 
 @test "build.sh --lang requires a value" {
@@ -400,10 +505,16 @@ EOS
   assert_failure
 }
 
+# why: The Simplified half of the same decision. The shared "Usage" token
+# this used to assert is byte-identical in both Chinese heredocs, so a
+# zh-CN arm rendering the Traditional block read green. The token asserted
+# here is the help-flag description line in its Simplified spelling, which
+# the Traditional block cannot contain.
 @test "build.sh --lang zh-CN prints Simplified Chinese usage text" {
   run bash "${SANDBOX}/build.sh" --lang zh-CN --help
   assert_success
-  assert_output --partial "用法"
+  assert_output --partial "显示此说明"
+  refute_output --partial "顯示此說明"
 }
 
 @test "build.sh --lang ja prints Japanese usage text" {
@@ -425,11 +536,24 @@ EOS
   done
 }
 
-# ── /lint/-layout _detect_lang (flat dir: build.sh + _lib.sh + i18n.sh) ────
+# ── /lint/-layout _resolve_lang (flat dir: build.sh + _lib.sh + i18n.sh) ───
 # After the inline fallback is gone; scripts in the Dockerfile test
-# stage rely on _lib.sh + i18n.sh copied alongside. These tests exercise
-# that layout by symlinking build.sh (for kcov) and copying the helpers.
+# stage rely on _lib.sh + i18n.sh copied alongside. One locale exercises
+# that layout, by symlinking build.sh (for kcov) and copying the helpers.
 
+# why: The flat layout has no `template/` beside the wrapper, so the
+# wrapper's own bootstrap has to find `lib/i18n.sh` next to it and let
+# `_resolve_lang` pick the heredoc. That composition is the property only a
+# test in this file can pin, and one locale pins it. The zh_CN and ja twins
+# were folded away because the halves they added are pinned closer to the
+# source: the LANG-to-code mapping at the function seam in lib_spec.bats
+# (`_resolve_lang sets 'zh-CN' for zh_CN.UTF-8`, `... for zh_SG`, `... 'ja'
+# for ja_JP.UTF-8`) and each usage() arm by the `--lang` tests above.
+# Measured on the whole unit tier: pointing `_detect_lang`'s `zh_CN*|zh_SG*`
+# and `ja*` arms at "en" turned 14 of 4726 tests red with the twins present
+# and 6 with them gone -- the three `_resolve_lang` tests, the two
+# `_sanitize_lang` locale tests, and justfile_user_spec's Japanese recipe
+# summaries (base#1117).
 @test "build.sh in /lint/ layout maps zh_TW.UTF-8 to zh-TW" {
   local _tmp
   _tmp="$(mktemp -d)"
@@ -438,31 +562,8 @@ EOS
   cp /source/dist/script/docker/lib/* "${_tmp}/lib/"
   LANG=zh_TW.UTF-8 run bash "${_tmp}/build.sh" -h
   assert_success
-  assert_output --partial "用法"
-  rm -rf "${_tmp}"
-}
-
-@test "build.sh in /lint/ layout maps zh_CN.UTF-8 to zh-CN" {
-  local _tmp
-  _tmp="$(mktemp -d)"
-  ln -s /source/dist/script/docker/wrapper/build.sh "${_tmp}/build.sh"
-  mkdir -p "${_tmp}/lib"
-  cp /source/dist/script/docker/lib/* "${_tmp}/lib/"
-  LANG=zh_CN.UTF-8 run bash "${_tmp}/build.sh" -h
-  assert_success
-  assert_output --partial "用法"
-  rm -rf "${_tmp}"
-}
-
-@test "build.sh in /lint/ layout maps ja_JP.UTF-8 to ja" {
-  local _tmp
-  _tmp="$(mktemp -d)"
-  ln -s /source/dist/script/docker/wrapper/build.sh "${_tmp}/build.sh"
-  mkdir -p "${_tmp}/lib"
-  cp /source/dist/script/docker/lib/* "${_tmp}/lib/"
-  LANG=ja_JP.UTF-8 run bash "${_tmp}/build.sh" -h
-  assert_success
-  assert_output --partial "使用法"
+  assert_output --partial "顯示此說明"
+  refute_output --partial "显示此说明"
   rm -rf "${_tmp}"
 }
 
@@ -485,6 +586,33 @@ EOS
   # The resolved tag is forwarded to the compose build so the
   # downstream Dockerfile's FROM ${TEST_TOOLS_IMAGE} resolves it.
   assert_output --partial "TEST_TOOLS_IMAGE=test-tools:v9.9.9-test"
+}
+
+# why: the tooling Dockerfile COPYs dockerfile/toml_bridge.py from its
+# build context, a path only the vendored base carries -- a consumer root
+# has no dockerfile/ -- so the context is the `.base/` subtree, not the
+# consumer root (base#1172)
+@test "build.sh builds the local test-tools image with the .base subtree as its context (base#1172)" {
+  {
+    echo "USER_NAME=tester"
+    echo "IMAGE_NAME=mockimg"
+    echo "DOCKER_HUB_USER=mockuser"
+  } > "${SANDBOX}/.env.generated"
+  echo "# mock compose" > "${SANDBOX}/compose.yaml"
+
+  bash "${SANDBOX}/build.sh"
+  run cat "${DOCKER_LOG}"
+  assert_output --partial "-f ${SANDBOX}/.base/dockerfile/Dockerfile.test-tools ${SANDBOX}/.base -q"
+  refute_output --partial "-f ${SANDBOX}/.base/dockerfile/Dockerfile.test-tools ${SANDBOX} -q"
+}
+
+# why: --dry-run prints the build it would run; the printed context must
+# be the one the real build uses (base#1172)
+@test "build.sh --dry-run prints the .base subtree as the test-tools build context (base#1172)" {
+  run bash "${SANDBOX}/build.sh" --dry-run
+  assert_success
+  assert_output --partial "-f ${SANDBOX}/.base/dockerfile/Dockerfile.test-tools ${SANDBOX}/.base -q"
+  refute_output --partial "-f ${SANDBOX}/.base/dockerfile/Dockerfile.test-tools ${SANDBOX} -q"
 }
 
 @test "build.sh fails loud when .base/.version is missing (no bare test-tools:local fallback)" {
@@ -643,7 +771,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   cat > "${SANDBOX}/.base/dist/script/docker/wrapper/setup.sh" <<'EOS'
 #!/usr/bin/env bash
@@ -713,7 +841,7 @@ EOS
   # -y skips the interactive prompt; --dry-run makes the init.sh call
   # a printf instead of an exec so we can assert it without sandbox
   # side effects.
-  echo "old" > "${SANDBOX}/.setup.conf"
+  echo "# old" > "${SANDBOX}/setup.toml"
   run bash "${SANDBOX}/build.sh" --reset-conf --yes --dry-run
   assert_success
   assert_output --partial "[dry-run]"
@@ -724,26 +852,26 @@ EOS
   run bash "${SANDBOX}/build.sh" --help
   assert_success
   assert_output --partial "--reset-conf"
-  assert_output --partial ".setup.conf.bak"
+  assert_output --partial "setup.toml.bak"
 }
 
-@test "build.sh --reset-conf with no existing setup.conf / .env skips prompt" {
+@test "build.sh --reset-conf with no existing setup.toml / .env skips prompt" {
   # Nothing to overwrite → no confirmation needed, --dry-run just prints
   # the init.sh call and exits cleanly.
-  rm -f "${SANDBOX}/.setup.conf" "${SANDBOX}/.env.generated"
+  rm -f "${SANDBOX}/setup.toml" "${SANDBOX}/.env.generated"
   run bash "${SANDBOX}/build.sh" --reset-conf --dry-run
   assert_success
   refute_output --partial "proceed?"
 }
 
 @test "build.sh --reset-conf without -y on closed stdin aborts cleanly, no set-e crash (#702, #700)" {
-  # EOF path: an existing setup.conf forces the interactive confirm. With
+  # EOF path: an existing setup.toml forces the interactive confirm. With
   # no --yes and a closed stdin, `read` returns non-zero on EOF. Pre-fix,
   # the bare `read _reply` under `set -e` aborted at the read line BEFORE
   # the case could map empty->abort, so a piped/CI invocation died with NO
   # '[build] aborted.' diagnostic. Post-fix, EOF maps to an empty reply
   # which the default case treats as an explicit abort.
-  echo "old" > "${SANDBOX}/.setup.conf"
+  echo "# old" > "${SANDBOX}/setup.toml"
   run bash "${SANDBOX}/build.sh" --reset-conf </dev/null
   assert_failure 1
   assert_output --partial "[build] aborted."
@@ -839,6 +967,7 @@ EOS
   assert_success
 }
 
+# bats test_tags=kcov-fragile
 @test "build.sh -vv --dry-run enables bash trace (set -x output on stderr) (#311)" {
   run --separate-stderr bash "${SANDBOX}/build.sh" -vv --dry-run
   assert_success
@@ -869,7 +998,7 @@ EOS
     echo "IMAGE_NAME=mockimg"
     echo "DOCKER_HUB_USER=mockuser"
   } > "${SANDBOX}/.env.generated"
-  : > "${SANDBOX}/.setup.conf"
+  : > "${SANDBOX}/setup.toml"
   : > "${SANDBOX}/compose.yaml"
   mkdir -p "${SANDBOX}/script/hooks/pre"
   cat > "${SANDBOX}/script/hooks/pre/build.sh" <<'HOOK'

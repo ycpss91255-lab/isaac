@@ -11,6 +11,19 @@
 # build compute -- with a plain-language message telling the caller exactly
 # what to add to main.yaml. This is the contract test the acceptance
 # criteria call for.
+#
+# why: Drives `script/ci/preflight.sh` against the ACTUAL shipped
+# requirement manifests (`script/ci/preflight/build.manifest` +
+# `release.manifest`) with a deliberately-incomplete fake caller
+# environment. A complete caller passes; a caller that forgot `image_name`
+# (build) or `archive_name_prefix` (release) fails early with the
+# plain-language `main.yaml` fix. The build contract declares NO permission
+# requirement (#980): the one it used to carry demanded `packages: write`
+# for the `registry` buildx cache backend, which no job of the worker
+# declares and no caller could supply, so it failed every caller that
+# followed its instructions. The backend and the requirement were removed
+# together, and a caller that grants nothing beyond `contents: read` passes.
+# `--list` self-describes the remaining contract.
 
 bats_require_minimum_version 1.5.0
 
@@ -26,17 +39,14 @@ setup() {
 
 @test "build manifest: a complete caller passes preflight" {
   PREFLIGHT_INPUT_IMAGE_NAME=ros_noetic \
-  PREFLIGHT_PERM_PACKAGES=granted \
     run bash "${PREFLIGHT}" "${BUILD_MANIFEST}"
   assert_success
 }
 
 @test "build manifest: a caller that forgot image_name fails early, naming the fix" {
   # Simulate a downstream main.yaml that calls build-worker.yaml but omits
-  # `with: { image_name: ... }`. GHCR probe granted so only the input gap
-  # is exercised.
+  # `with: { image_name: ... }`.
   PREFLIGHT_INPUT_IMAGE_NAME="" \
-  PREFLIGHT_PERM_PACKAGES=granted \
     run bash "${PREFLIGHT}" "${BUILD_MANIFEST}"
   assert_failure
   assert_output --partial 'image_name'
@@ -44,46 +54,24 @@ setup() {
   assert_output --partial 'with:'
 }
 
-@test "build manifest: a registry-cache caller missing packages permission fails with the permissions fix (#801)" {
-  # cache_backend: registry selected, image_name supplied, but the GHCR
-  # packages: write probe reported missing -- the registry-cache backend
-  # needs `packages: write`. The caller is told to grant it instead of
-  # 403-ing deep in a 20-min build.
+# why: The caller that grants nothing. Every job of build-worker.yaml
+# declares `contents: read` and pushes nothing, so a caller holding no
+# other scope is a COMPLETE caller -- and the build contract must say so.
+# It did not: it demanded `packages: write` for a cache backend no job
+# could reach, so the one caller shape that is entirely correct failed the
+# gate written to help it (#980).
+@test "build manifest: a caller granting no write scope is complete (#980)" {
   PREFLIGHT_INPUT_IMAGE_NAME=ros_noetic \
-  PREFLIGHT_CACHE_BACKEND=registry \
-  PREFLIGHT_PERM_PACKAGES=missing \
-    run bash "${PREFLIGHT}" "${BUILD_MANIFEST}"
-  assert_failure
-  assert_output --partial 'packages'
-  assert_output --partial 'permissions:'
-}
-
-@test "build manifest: the default gha caller without packages permission still passes (#801 backward compat)" {
-  # cache_backend defaults to gha -> the buildx cache lives in GHA cache
-  # and the test-tools image is pulled anonymously, so no packages
-  # permission is required. An existing caller that never granted
-  # `packages: write` must not start failing.
-  PREFLIGHT_INPUT_IMAGE_NAME=ros_noetic \
-  PREFLIGHT_CACHE_BACKEND=gha \
   PREFLIGHT_PERM_PACKAGES=missing \
     run bash "${PREFLIGHT}" "${BUILD_MANIFEST}"
   assert_success
 }
 
-@test "build manifest: a registry-cache caller with packages granted passes (#801)" {
-  PREFLIGHT_INPUT_IMAGE_NAME=ros_noetic \
-  PREFLIGHT_CACHE_BACKEND=registry \
-  PREFLIGHT_PERM_PACKAGES=granted \
-    run bash "${PREFLIGHT}" "${BUILD_MANIFEST}"
-  assert_success
-}
-
-@test "build manifest --list: self-describes both requirements, packages as registry-conditional (#801)" {
+@test "build manifest --list: self-describes the contract, and demands no permission (#980)" {
   run bash "${PREFLIGHT}" --list "${BUILD_MANIFEST}"
   assert_success
   assert_output --partial 'image_name'
-  assert_output --partial 'packages'
-  assert_output --partial 'when PREFLIGHT_CACHE_BACKEND=registry'
+  refute_output --partial 'packages'
 }
 
 # ── release-worker caller contract ────────────────────────────────────
