@@ -77,7 +77,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 # (apt, locale-gen, useradd) have permission. devel stage drops back to
 # USER_NAME at the end. DL3002 false-positive is acknowledged upstream
 # (hadolint/hadolint#405); inline ignore is the recommended workaround.
-# hadolint ignore=DL3002
+# hadolint ignore=DL3002,DL3066
 USER root
 
 SHELL ["/bin/bash", "-x", "-euo", "pipefail", "-c"]
@@ -112,7 +112,7 @@ RUN if getent group "${USER_GID}" >/dev/null; then \
         usermod -l "${USER_NAME}" -d "/home/${USER_NAME}" -m \
             "$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
     else \
-        useradd -m -s /bin/bash -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}"; \
+        useradd -l -m -s /bin/bash -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}"; \
     fi && \
     echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     if getent group isaac-sim >/dev/null; then \
@@ -149,10 +149,10 @@ ARG GROUP="${USER_GROUP}"
 ARG ENTRYPOINT_FILE="script/entrypoint.sh"
 ARG CONFIG_DIR="/tmp/config"
 # Layered config/ override (base #254): two sequential COPYs into
-# /tmp/config/. The first brings .base/config/ defaults; the second
+# /tmp/config/. The first brings .base/dist/config/ defaults; the second
 # overlays <repo>/config/ on top. File-level merge — files in
 # <repo>/config/ replace same-path files in /tmp/config/; files only in
-# .base/config/ stay; files only in <repo>/config/ are added. Mental
+# .base/dist/config/ stay; files only in <repo>/config/ are added. Mental
 # model is the same as setup.conf section-replace, just at file
 # granularity. Trim <repo>/config/ files that match base default to
 # start receiving template-side improvements (we did this in the
@@ -258,7 +258,7 @@ RUN dangling="$(find /isaac-sim -xtype l -name '__init__.py' -path '*pip_prebund
 #     rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=0755 "./${ENTRYPOINT_FILE}" "/entrypoint.sh"
-# Layer 1: .base/config/ defaults (subtree-managed, updates with
+# Layer 1: .base/dist/config/ defaults (subtree-managed, updates with
 # .base/upgrade.sh).
 COPY --chown="${USER}":"${GROUP}" --chmod=0755 .base/dist/config "${CONFIG_DIR}"
 # Layer 2: <repo>/config/ overrides (per-repo, survives subtree pull).
@@ -395,6 +395,7 @@ FROM ${TEST_TOOLS_IMAGE} AS test-tools-stage
 
 FROM devel AS devel-test
 
+# hadolint ignore=DL3066
 USER root
 
 # Lint tools (from pre-built test-tools image; see TEST_TOOLS_IMAGE at top)

@@ -55,3 +55,10 @@ test/.still_*.png
 
 # Official Isaac test assets downloaded at test time (test/test_assets.py, #324)
 .cache/test-assets/
+.env.local
+.env.local.toml
+.env.local.bak
+env.local.toml
+setup.toml.bak
+.setup.conf.local.bak
+setup.local.toml
