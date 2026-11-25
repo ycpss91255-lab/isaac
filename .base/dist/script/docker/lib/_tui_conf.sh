@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# _tui_conf.sh — Pure-logic helpers for validating setup.conf values and
+# _tui_conf.sh — Pure-logic helpers for validating setup.toml values and
 # assembling mount/GPU fields. Sourced by setup_tui.sh, setup.sh, and
 # bats tests.
 #
@@ -73,20 +73,49 @@ _validate_mount() {
   return 0
 }
 
-# _assemble_mount_value <host> <container> [<mode>]
+# _validate_tmpfs <value>
 #
-# Builds the host:container[:mode] string for [devices] device_* and
-# [volumes] mount_* entries. Lets the TUI collect pieces separately
-# (path inputbox + mode picker) and assemble them safely.
-_assemble_mount_value() {
-  local _host="${1:?_assemble_mount_value requires host}"
-  local _container="${2:?_assemble_mount_value requires container}"
-  local _mode_str="${3-}"
-  if [[ -n "${_mode_str}" ]]; then
-    printf '%s:%s:%s\n' "${_host}" "${_container}" "${_mode_str}"
-  else
-    printf '%s:%s\n' "${_host}" "${_container}"
-  fi
+# [tmpfs] tmpfs_N: one RAM-backed mount point, in the single-string form
+# the shell view carries and _emit_tmpfs_block writes straight into
+# compose's `tmpfs:` list.
+#
+# Valid forms:
+#   <path>
+#   <path>:<option>[,<option>...]
+# where <path> is an absolute container path and each option is a
+# non-empty `key=value` or bare flag (`size=64m`, `mode=1777`). Exactly
+# 0 or 1 ':' separators -- the colon opens the options list, so a second
+# one is not a third field, it is a malformed list.
+#
+# The option CONTENTS are deliberately not a closed set: the kernel and
+# docker own that vocabulary, and the template documents only `size`.
+# What is checked is the shape, which is where the damage was: until
+# base#1095 `tmpfs` was the one SCHEMA_SECTIONS entry with no validator
+# at all, so a value carrying a newline was accepted and
+# _emit_tmpfs_block -- which reads the string with `while IFS= read -r`
+# -- turned every line after the first into a tmpfs entry of its own.
+# The operator got mounts they never wrote, with nothing said. Hence the
+# whitespace rejection, the same guard _validate_mount carries for the
+# same reason.
+_validate_tmpfs() {
+  local _v="${1-}"
+  [[ -z "${_v}" ]] && return 1
+  # A newline injects extra entries into compose's tmpfs: list; a space
+  # or tab makes the value word-split wherever it is passed as argv.
+  [[ "${_v}" =~ [[:space:]] ]] && return 1
+
+  # Matched rather than split: `IFS=':' read -ra` on `/tmp:` yields ONE
+  # field and `IFS=','` on `size=64m,` drops the trailing empty one, so
+  # a split-and-count reader calls both of those well formed and the
+  # empty options list reaches compose. The shape is stated once, as the
+  # pattern, so there is nothing for the separator handling to lose.
+  local _opt='[A-Za-z_][A-Za-z0-9_-]*(=[^,:]+)?'
+  # An absolute container path: a relative one is not a mount point
+  # docker accepts, and the template's own examples are absolute. The
+  # path may not carry a `:` -- that character opens the options list.
+  [[ "${_v}" =~ ^/[^:]+$ ]] && return 0
+  [[ "${_v}" =~ ^/[^:]+:${_opt}(,${_opt})*$ ]] && return 0
+  return 1
 }
 
 # _validate_gpu_count <value>
@@ -96,19 +125,6 @@ _validate_gpu_count() {
   local _v="${1-}"
   [[ "${_v}" == "all" ]] && return 0
   [[ "${_v}" =~ ^[1-9][0-9]*$ ]] && return 0
-  return 1
-}
-
-# _validate_enum <value> <opt1> [opt2...]
-#
-# Returns 0 if <value> matches any option exactly.
-_validate_enum() {
-  local _v="${1-}"; shift
-  [[ -z "${_v}" ]] && return 1
-  local _opt
-  for _opt in "$@"; do
-    [[ "${_v}" == "${_opt}" ]] && return 0
-  done
   return 1
 }
 
@@ -536,40 +552,115 @@ _validate_detect_mode() {
   esac
 }
 
+# _VALID_GPU_CAPABILITIES -- the capability names `[deploy] gpu_capabilities`
+# accepts, as data.
+#
+# The NVIDIA container-runtime driver capabilities plus compose's own
+# `gpu` -- an umbrella name compose understands rather than a driver
+# capability. An unknown name makes the container runtime refuse the
+# reservation at `up` time, which is why the key is validated at all.
+#
+# A `case` arm until base#1177, and the reason it is data now is that two
+# places have to agree on this list: the validator below, and the TUI's
+# `[deploy]` capability checklist, which derives its rows from here. They
+# were the same list written twice -- four hand-written rows against nine
+# accepted names -- so a configuration naming any of the other five
+# opened a screen with nothing checked and was rewritten by it. Adding a
+# capability here adds it to both at once, and adding its row label
+# (`deploy.caps.<name>`, in all four locale tables) is part of adding it:
+# `tui_editor_flow_spec` derives the rows and the labels from this array
+# and fails when either falls behind.
+#
+# The leading underscore is load-bearing: `_VALID_GPU_CAPABILITIES` is already
+# taken, as the name of the SHIPPED `.env` variable `env_emit.sh` writes
+# the resolved list to and `config_summary.sh` reads back. `_lib.sh`
+# loads this file (via schema.sh) and config_summary.sh into the same
+# process, so an array under that name shadows the operator's value --
+# measured: `${_VALID_GPU_CAPABILITIES:--}` then reads this array's first
+# element, printing `gpu` whatever the configuration says.
+#
+# Order is the screen's reading order, not a meaning: the four names the
+# shipped default carries stay where the checklist already had them so an
+# operator's muscle memory survives, and the five base#1177 restored
+# follow.
+declare -ga _VALID_GPU_CAPABILITIES=(
+  gpu compute utility graphics all video display compat32 ngx
+)
+
 # _validate_gpu_capabilities <value>
 #
 # [deploy] gpu_capabilities: the space-separated capability list emitted
 # into compose `deploy.resources.reservations.devices[].capabilities`.
-# The names are the NVIDIA container-runtime driver capabilities plus
-# compose's own `gpu`; an unknown name makes the container runtime
-# refuse the reservation at `up` time, so reject it here instead.
+#
+# The empty string is REFUSED (base#1267). It used to be accepted on the
+# reading that "reserve the devices, request no capability" is a
+# configuration an operator can state, and that `setup.sh set
+# deploy.gpu_capabilities ""` cleared the key. Neither held: the writer
+# stores `gpu_capabilities = ""` rather than removing the line,
+# `_resolve_deploy_context`'s `gpu` default applies only to an ABSENT key,
+# and `generate_compose_yaml` takes the list as `"${6:?}"` -- so the value
+# this validator accepted was one the next `apply` aborted on, after it
+# had already written .env / .env.generated / .env.local. The TUI's own
+# capability screen reached the same conclusion in base#1177 and refuses
+# an empty selection upstream of here; this closes the CLI half. To stop
+# reserving a GPU, the setting is `gpu_mode = "off"`.
+#
+# The accepted names are read off _VALID_GPU_CAPABILITIES rather than restated
+# here, so this function and the TUI screen cannot drift (base#1177).
 _validate_gpu_capabilities() {
   local _v="${1-}"
-  [[ -z "${_v}" ]] && return 0
-  local _cap
+  [[ -z "${_v}" ]] && return 1
+  local _cap _known_cap _known
   local -a _caps=()
   read -ra _caps <<< "${_v}"
   for _cap in "${_caps[@]}"; do
-    case "${_cap}" in
-      gpu|all|compute|compat32|graphics|utility|video|display|ngx) ;;
-      *) return 1 ;;
-    esac
+    _known=0
+    for _known_cap in "${_VALID_GPU_CAPABILITIES[@]}"; do
+      if [[ "${_cap}" == "${_known_cap}" ]]; then
+        _known=1
+        break
+      fi
+    done
+    (( _known )) || return 1
   done
   return 0
 }
 
 # _validate_dri_groups <value>
 #
-# [deploy] dri_groups: whether to detect the host's /dev/dri owning GIDs
-# and grant them via group_add. `auto` detects, anything else means
-# never -- which is why an unvalidated typo reads as an opt-out.
+# [deploy] dri_groups: which /dev/dri owning GIDs the container is
+# granted via group_add. Three forms:
+#
+#   auto            detect them from the host's /dev/dri (the default)
+#   off             grant none
+#   <gid> [<gid>…]  grant exactly these, space-separated
+#
+# The third is base#1094's: the validator took only `auto` and `off`, so
+# the key looked like a setting and behaved as a switch, and the only way
+# to pin the GIDs was the SETUP_DETECT_DRI_GROUPS environment variable --
+# the mechanism ADR-00000025 section 9 removed everywhere else ("no
+# ambient environment variable can steer the chain"). A list is refused
+# unless every word is a bare decimal GID: the value is interpolated into
+# compose's `group_add:` list, so a word that is not a number is YAML the
+# emitter would write and docker would then refuse.
 _validate_dri_groups() {
   local _v="${1-}"
   [[ -z "${_v}" ]] && return 0
   case "${_v}" in
     auto|off) return 0 ;;
-    *) return 1 ;;
   esac
+  # Space is the separator and the only whitespace allowed: a tab or a
+  # newline is not printable, and a newline would inject a group_add line
+  # of its own.
+  [[ "${_v}" =~ [^[:print:]] ]] && return 1
+  local -a _gids=()
+  read -ra _gids <<< "${_v}"
+  (( ${#_gids[@]} >= 1 )) || return 1
+  local _g
+  for _g in "${_gids[@]}"; do
+    [[ "${_g}" =~ ^(0|[1-9][0-9]*)$ ]] || return 1
+  done
+  return 0
 }
 
 # _validate_privileged <value>
@@ -632,30 +723,6 @@ _mount_host_path() {
   local -n _mhp_out="${2:?}"
   _mhp_out="${_v%%:*}"
 }
-
-# _mount_container_path <mount_str> <outvar>
-#
-# Extracts the container-side path (the middle component between the
-# first ':' and the optional mode suffix).
-_mount_container_path() {
-  local _v="${1-}"
-  local -n _mcp_out="${2:?}"
-
-  local -a _parts=()
-  IFS=':' read -ra _parts <<< "${_v}"
-  _mcp_out="${_parts[1]:-}"
-}
-
-# ════════════════════════════════════════════════════════════════════
-# NVIDIA MIG detection
-#
-# MIG (Multi-Instance GPU, A100/H100+) splits one physical GPU into
-# isolated slices addressable by UUID. Docker's `count=N` reservation
-# targets whole GPUs, so to pin a specific slice users must set
-# NVIDIA_VISIBLE_DEVICES=<MIG-UUID> via [environment]. The TUI uses
-# these helpers to detect MIG mode and show the user the available
-# slice UUIDs before they edit the [deploy] count.
-# ════════════════════════════════════════════════════════════════════
 
 # _detect_mig
 #

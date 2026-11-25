@@ -4,6 +4,38 @@
 # helper that tells the user when the upstream .base/dist/config/ tree
 # moved during a subtree pull so they can reconcile their per-repo
 # <repo>/config/ copy.
+#
+# why: Unit tests for `upgrade.sh` helpers. Uses the sed-range pattern to
+# extract one function at a time into a minimal harness (with `_log` /
+# `_error` stubs), so each helper runs in a sandboxed git repo without
+# needing to source the full `upgrade.sh` (which would trigger its top-level
+# `cd REPO_ROOT`).
+#
+# Covers: `_warn_config_drift` (silent / fires on drift / diff hint), the
+# three safety guards added after the v0.9.7 Jetson incident
+# (`_require_git_identity`, `_require_clean_merge_state`,
+# `_verify_subtree_intact` with rollback), structural invariants that pin
+# call-ordering in `_upgrade` (identity check runs before subtree pull,
+# integrity verification runs after, pre-pull HEAD is snapshotted for
+# rollback), the R1+ rewrite of `_verify_subtree_intact` (#477) that
+# replaces the hard-coded marker list with a path-agnostic structural
+# invariant + target-version match (catches destructive fast-forward, empty
+# subtree, malformed `.version`, and wrong-tag pulls), and the SemVer
+# §11-aware `_semver_cmp` + `_check` behavior added for issue #156
+# (prerelease ahead of latest stable must not be reported as "needing
+# downgrade").
+#
+# The `_migrate_lifecycle_restart_default` arms that used to live here are
+# gone with the function (base#1110). They were fail-open: the fixture built
+# its own driver/template pair with the vendored template saying
+# `restart = no`, a pairing no release has ever produced, so four green arms
+# stood over a migration that returned 0 without acting on every real
+# consumer. The replacement is in version_migrate_spec.bats (the migration,
+# now selected on the version interval) and in
+# integration/prev_release_upgrade_spec.bats (the same question asked
+# through a genuine released driver, which is what the fixture could not
+# do). The structural rule that keeps the shape from coming back is in
+# upgrade_migration_reachability_spec.bats.
 
 bats_require_minimum_version 1.5.0
 
@@ -33,34 +65,72 @@ _log_warn() { printf '[%s] WARNING: %s\n' "$1" "${*:2}" >&2; }
 _log_err()  { printf '[%s] ERROR: %s\n' "$1" "${*:2}" >&2; }
 _log()    { _log_info upgrade "$*"; }
 _error()  { _log_err upgrade "$*"; exit 1; }
+# The rollback path's own state. Production sets these at the top of
+# upgrade.sh and just before the subtree pull; the harness sources only
+# function bodies, so it stands them up here. REPO_ROOT is resolved at
+# source time, i.e. after the caller has cd-ed into the fixture repo --
+# the sweep refuses to run without it rather than deleting from /.
+_UPGRADE_PRE_HEAD=""
+_UPGRADE_UNTRACKED_SNAPSHOT=()
+_UPGRADE_DRIFT=()
+_UPGRADE_DRIFT_SPLIT=""
+_UPGRADE_DRIFT_UNVERIFIED=""
+REPO_ROOT="$(pwd -P)"
 EOS
   sed -n '/^_warn_config_drift() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_require_git_identity() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_require_clean_merge_state() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_verify_subtree_intact() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_rollback_subtree_pull() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_restore_pre_upgrade_state() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_remove_untracked_since_snapshot() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_list_untracked_paths() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_was_untracked_before_upgrade() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_semver_cmp() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_check() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
   sed -n '/^_get_latest_version() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
-  sed -n '/^_migrate_lifecycle_restart_default() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
-  sed -n '/^_trim_ws() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
-  sed -n '/^_lifecycle_restart_is() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_subtree_split_of() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_subtree_split_sha() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_collect_subtree_local_drift() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
+  sed -n '/^_warn_subtree_local_drift() {$/,/^}$/p' "${UPGRADE}" >> "${HARNESS}"
 }
 
-# _seed_restart_repo <dir> <vendored_template_restart> <repo_restart_block...>
-#   A downstream git repo carrying a vendored template `.setup.conf`
-#   (the pre-pull baseline the migration reads to decide whether this
-#   upgrade crosses the rescope) plus its own committed `.setup.conf`.
-_seed_restart_repo() {
-  local _dir="$1" _tpl_restart="$2"; shift 2
-  mkdir -p "${_dir}/.base/dist"
+# _seed_squashed_subtree <dir>
+#   A consumer repo whose `.base/` arrived as a real `git subtree add
+#   --squash`, so the squash commit carries git-subtree's own
+#   `git-subtree-dir:` / `git-subtree-split:` trailers -- the metadata the
+#   drift comparison resolves the upstream tree from. Built with the real
+#   porcelain rather than a hand-written commit message: a fixture that
+#   writes the trailers itself would pass while the real ones moved.
+#
+#   Prints the pre-add HEAD, which is what _collect_subtree_local_drift
+#   takes as the start of the range to search.
+_seed_squashed_subtree() {
+  local _dir="${1:?}"
+  local _up="${_dir}_upstream"
+  mkdir -p "${_up}/dist"
+  git -C "${_up}" init -q -b main
+  git -C "${_up}" config user.email t@t
+  git -C "${_up}" config user.name t
+  printf 'v0.0.1\n' > "${_up}/.version"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "${_up}/dist/shipped.sh"
+  git -C "${_up}" add -A
+  git -C "${_up}" commit -q -m upstream
+
+  mkdir -p "${_dir}"
   git -C "${_dir}" init -q -b main
   git -C "${_dir}" config user.email t@t
   git -C "${_dir}" config user.name t
-  printf '[lifecycle]\n%s\n' "${_tpl_restart}" > "${_dir}/.base/dist/.setup.conf"
-  printf '%s\n' "$@" > "${_dir}/.setup.conf"
+  printf 'consumer\n' > "${_dir}/README.md"
   git -C "${_dir}" add -A
   git -C "${_dir}" commit -q -m seed
+  local _pre
+  _pre="$(git -C "${_dir}" rev-parse HEAD)"
+  # stdout of the add is discarded so the printed sha is the ONLY thing this
+  # helper puts on it; git-subtree is chatty even under -q on some versions,
+  # and a two-line capture makes an unparseable rev range.
+  git -C "${_dir}" subtree add -q --prefix=.base "${_up}" main --squash >/dev/null
+  printf '%s\n' "${_pre}"
 }
 
 teardown() {
@@ -78,6 +148,7 @@ teardown() {
   refute_output --partial "WARNING"
 }
 
+# why: No drift
 @test "_warn_config_drift silent when pre and post hashes match" {
   local _git_dir="${TEMP_DIR}/same"
   mkdir -p "${_git_dir}/.base/dist/config"
@@ -98,6 +169,7 @@ teardown() {
   refute_output --partial "WARNING"
 }
 
+# why: Drift reported
 @test "_warn_config_drift prints WARNING + diff hint when hashes differ" {
   local _git_dir="${TEMP_DIR}/drift"
   mkdir -p "${_git_dir}/.base/dist/config"
@@ -123,11 +195,13 @@ teardown() {
 
 # ── upgrade.sh structural invariants ────────────────────────────────────────
 
+# why: Helper present
 @test "upgrade.sh defines _warn_config_drift" {
   run grep -F '_warn_config_drift()' "${UPGRADE}"
   assert_success
 }
 
+# why: Call site present
 @test "upgrade.sh invokes _warn_config_drift after subtree pull" {
   # The helper existing without a call site is a bug; count references
   # so a refactor that drops the invocation trips this test.
@@ -147,6 +221,7 @@ teardown() {
 
 # ── _require_git_identity ───────────────────────────────────────────────────
 
+# why: Happy path
 @test "_require_git_identity succeeds when name + email are set" {
   local _git_dir="${TEMP_DIR}/ident_ok"
   mkdir -p "${_git_dir}"
@@ -157,6 +232,7 @@ teardown() {
   assert_success
 }
 
+# why: Email guard
 @test "_require_git_identity fails when user.email is unset" {
   local _git_dir="${TEMP_DIR}/ident_noemail"
   mkdir -p "${_git_dir}"
@@ -173,6 +249,7 @@ teardown() {
   assert_output --partial "git identity not configured"
 }
 
+# why: Name guard
 @test "_require_git_identity fails when user.name is unset" {
   local _git_dir="${TEMP_DIR}/ident_noname"
   mkdir -p "${_git_dir}"
@@ -190,32 +267,53 @@ teardown() {
 
 # ── _require_clean_merge_state ──────────────────────────────────────────────
 
+# Helper: an empty repo with one commit, since _require_clean_merge_state
+# refuses a repo with no commits (base#1385)
+_mk_committed_repo() {
+  local _dir="$1"
+  mkdir -p "${_dir}"
+  git -C "${_dir}" init -q
+  git -C "${_dir}" -c user.email=t@t -c user.name=t \
+      commit -q --allow-empty -m "initial"
+}
+
+# why: Happy path
 @test "_require_clean_merge_state succeeds in clean repo" {
   local _git_dir="${TEMP_DIR}/clean"
-  mkdir -p "${_git_dir}"
-  git -C "${_git_dir}" init -q
+  _mk_committed_repo "${_git_dir}"
   run bash -c "cd '${_git_dir}' && source '${HARNESS}' && _require_clean_merge_state"
   assert_success
 }
 
+# why: Mid-merge guard
 @test "_require_clean_merge_state fails when MERGE_HEAD exists" {
   local _git_dir="${TEMP_DIR}/midmerge"
-  mkdir -p "${_git_dir}"
-  git -C "${_git_dir}" init -q
+  _mk_committed_repo "${_git_dir}"
   touch "${_git_dir}/.git/MERGE_HEAD"
   run bash -c "cd '${_git_dir}' && source '${HARNESS}' && _require_clean_merge_state"
   assert_failure
   assert_output --partial "MERGE_HEAD present"
 }
 
+# why: Mid-rebase guard
 @test "_require_clean_merge_state fails when rebase-merge dir exists" {
   local _git_dir="${TEMP_DIR}/midrebase"
-  mkdir -p "${_git_dir}"
-  git -C "${_git_dir}" init -q
+  _mk_committed_repo "${_git_dir}"
   mkdir -p "${_git_dir}/.git/rebase-merge"
   run bash -c "cd '${_git_dir}' && source '${HARNESS}' && _require_clean_merge_state"
   assert_failure
   assert_output --partial "rebase-merge present"
+}
+
+# why: A repo with no commits (unborn HEAD) is refused by name in
+# preflight rather than dying later on `git rev-parse HEAD` (base#1385)
+@test "_require_clean_merge_state fails in a repo with no commits (base#1385)" {
+  local _git_dir="${TEMP_DIR}/unborn"
+  mkdir -p "${_git_dir}"
+  git -C "${_git_dir}" init -q
+  run bash -c "cd '${_git_dir}' && source '${HARNESS}' && _require_clean_merge_state"
+  assert_failure
+  assert_output --partial "upgrade_no_commits"
 }
 
 # ── _verify_subtree_intact ──────────────────────────────────────────────────
@@ -236,6 +334,7 @@ _mk_subtree_repo() {
   git -C "${_dir}" commit -q -m "initial"
 }
 
+# why: R1+ happy path
 @test "_verify_subtree_intact succeeds when subtree dir + version match target (#477 happy path)" {
   local _git_dir="${TEMP_DIR}/intact_ok"
   _mk_subtree_repo "${_git_dir}"  # writes .version=v0.9.5
@@ -305,6 +404,7 @@ _mk_subtree_repo() {
   [ -f "${_git_dir}/.base/.version" ]
 }
 
+# why: R1+ semver-shape guard
 @test "_verify_subtree_intact rolls back when .version content is not semver (#477)" {
   local _git_dir="${TEMP_DIR}/intact_notsemver"
   _mk_subtree_repo "${_git_dir}"
@@ -326,6 +426,7 @@ _mk_subtree_repo() {
   assert_output "v0.9.5"
 }
 
+# why: R1+ wrong-tag detector
 @test "_verify_subtree_intact rolls back when .version does not match target (#477 wrong-tag detector)" {
   local _git_dir="${TEMP_DIR}/intact_wrongtag"
   _mk_subtree_repo "${_git_dir}"  # writes v0.9.5
@@ -342,6 +443,7 @@ _mk_subtree_repo() {
   assert_output --partial "v0.8.0"
 }
 
+# why: Failed-reset escalation (no false 'restored' message)
 @test "_rollback_subtree_pull surfaces a failed reset instead of falsely reporting 'restored' (#700)" {
   # The rollback exists to rescue a tree the destructive subtree FF
   # already mangled. If the rescue `git reset --hard` itself fails
@@ -366,19 +468,25 @@ _mk_subtree_repo() {
 
 # ── upgrade.sh structural invariants (safety guards) ───────────────────────
 
+# why: Pre-flight ordering
 @test "upgrade.sh calls _require_git_identity before subtree pull" {
   # Confirm both that the helper is called AND the ordering is correct.
+  # The anchor is the INVOCATION -- an indented `git subtree pull --prefix=`
+  # -- not the bare phrase: prose above the call site (a comment, an error
+  # message naming the step) would otherwise be read as the call and make
+  # this ordering check pass or fail on documentation.
   local _id_line _pull_line
   _id_line="$(grep -n '_require_git_identity$' "${UPGRADE}" | tail -1 | cut -d: -f1)"
-  _pull_line="$(grep -n 'git subtree pull' "${UPGRADE}" | head -1 | cut -d: -f1)"
+  _pull_line="$(grep -nE '^[[:space:]]*git subtree pull --prefix=' "${UPGRADE}" | head -1 | cut -d: -f1)"
   [ -n "${_id_line}" ]
   [ -n "${_pull_line}" ]
   (( _id_line < _pull_line ))
 }
 
+# why: Post-flight ordering + R1+ caller integration
 @test "upgrade.sh calls _verify_subtree_intact after subtree pull with target version (#477)" {
   local _pull_line _verify_line
-  _pull_line="$(grep -n 'git subtree pull' "${UPGRADE}" | head -1 | cut -d: -f1)"
+  _pull_line="$(grep -nE '^[[:space:]]*git subtree pull --prefix=' "${UPGRADE}" | head -1 | cut -d: -f1)"
   # Caller must pass both _pre_head AND target_ver so the wrong-tag
   # detector (R1+) is armed in production, not just in tests.
   _verify_line="$(grep -n '_verify_subtree_intact "\${_pre_head}" "\${target_ver}"' "${UPGRADE}" | head -1 | cut -d: -f1)"
@@ -387,6 +495,7 @@ _mk_subtree_repo() {
   (( _verify_line > _pull_line ))
 }
 
+# why: Rollback anchor
 @test "upgrade.sh snapshots pre-pull HEAD for rollback" {
   run grep -F 'git rev-parse HEAD' "${UPGRADE}"
   assert_success
@@ -432,54 +541,63 @@ _mk_subtree_repo() {
 #
 # Returns: 0 = equal, 1 = a < b, 2 = a > b.
 
+# why: Equality
 @test "_semver_cmp: equal versions return 0" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.11.0 v0.11.0; echo \$?"
   assert_success
   assert_output "0"
 }
 
+# why: Behind core
 @test "_semver_cmp: lower core returns 1" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.11.0 v0.12.0; echo \$?"
   assert_success
   assert_output "1"
 }
 
+# why: Ahead core
 @test "_semver_cmp: higher core returns 2" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.12.0 v0.11.0; echo \$?"
   assert_success
   assert_output "2"
 }
 
+# why: SemVer §11 a
 @test "_semver_cmp: pre-release < final at same core (rc1 < 0.12.0)" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.12.0-rc1 v0.12.0; echo \$?"
   assert_success
   assert_output "1"
 }
 
+# why: SemVer §11 b
 @test "_semver_cmp: final > pre-release at same core (0.12.0 > rc1)" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.12.0 v0.12.0-rc1; echo \$?"
   assert_success
   assert_output "2"
 }
 
+# why: Pre-release order
 @test "_semver_cmp: rc1 < rc2 (lex pre-release ordering)" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.12.0-rc1 v0.12.0-rc2; echo \$?"
   assert_success
   assert_output "1"
 }
 
+# why: Pre-release order
 @test "_semver_cmp: rc2 > rc1" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.12.0-rc2 v0.12.0-rc1; echo \$?"
   assert_success
   assert_output "2"
 }
 
+# why: Cross-core
 @test "_semver_cmp: pre-release of newer beats older final (0.12.0-rc1 > 0.11.0)" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.12.0-rc1 v0.11.0; echo \$?"
   assert_success
   assert_output "2"
 }
 
+# why: Cross-core
 @test "_semver_cmp: older final < pre-release of newer (0.11.0 < 0.12.0-rc1)" {
   run bash -c "source '${HARNESS}'; _semver_cmp v0.11.0 v0.12.0-rc1; echo \$?"
   assert_success
@@ -495,6 +613,7 @@ _mk_subtree_repo() {
 # mismatch (including "running rc1, latest stable is older v0.11.0")
 # as "needing downgrade" with exit 1.
 
+# why: Happy equal
 @test "_check: equal versions report up-to-date and exit 0" {
   run bash -c "
     source '${HARNESS}'
@@ -508,6 +627,7 @@ _mk_subtree_repo() {
   assert_output --partial "Already up to date"
 }
 
+# why: Behind
 @test "_check: behind latest reports update available and exits 1" {
   run bash -c "
     source '${HARNESS}'
@@ -519,6 +639,7 @@ _mk_subtree_repo() {
   assert_output --partial "Update available: v0.11.0 →v0.12.0"
 }
 
+# why: Regression #156
 @test "_check: prerelease ahead of latest stable exits 0 (issue #156 case)" {
   # Scenario fromuser's downstream pinned to v0.12.0-rc1
   # while the org's latest stable tag is still v0.11.0. _check should
@@ -536,6 +657,7 @@ _mk_subtree_repo() {
   refute_output --partial "Update available"
 }
 
+# why: Local-only tag
 @test "_check: stable later than latest stable exits 0 (defensive)" {
   # If local was hand-tagged to a future version not yet on the remote
   # (e.g. local-only release, or stale ls-remote), don't propose a
@@ -550,6 +672,7 @@ _mk_subtree_repo() {
   assert_output --partial "ahead"
 }
 
+# why: Leave prerelease
 @test "_check: prerelease behind latest stable proposes upgrade (rc1 →0.12.0)" {
   # Once v0.12.0 is published, a downstream still on v0.12.0-rc1
   # should be told to leave the prerelease and move to stable.
@@ -647,6 +770,7 @@ EOS
   assert_output "latest=v0.7.2"
 }
 
+# why: Empty result still surfaces real fetch failures
 @test "_get_latest_version: empty result feeds _check's 'Could not fetch' guard" {
   # Sanity: when the function returns nothing, _check still surfaces
   # the genuine failure mode via the existing emptiness guard. Without
@@ -671,6 +795,7 @@ EOS
 # tree. The user can still recover deliberately (e.g., set the version
 # file by hand or rerun with a clear --force flag if we ever add one).
 
+# why: Implicit-downgrade guard
 @test "_upgrade refuses to downgrade from a newer local version" {
   # Extract a minimal _upgrade by hand (the full body sources too many
   # external deps); we only need the entry-point downgrade guard. The
@@ -692,88 +817,329 @@ EOS
   refute_output --partial "FATAL"
 }
 
-# ── _migrate_lifecycle_restart_default ──────────────────────────────────────
+# ── Vendored drift against the release that was pulled ──────────────────────
 #
-# `[lifecycle] restart` was devel-scoped and shipped as a literal
-# `restart = no`; init.sh --gen-conf copies the WHOLE template, so every
-# downstream repo carries that literal. The key is now deploy-scoped with a
-# shipped default of `unless-stopped`, which makes the copied `no` stale by
-# construction -- left alone it silently denies the field bundle its
-# auto-start on host reboot.
+# The pair under test is _collect_subtree_local_drift (what the comparison
+# finds) and _warn_subtree_local_drift (what the user is told). The upstream
+# side is resolved from git-subtree's own squash trailers, so these arms
+# build the subtree with the real porcelain and let the helper find its own
+# way to the upstream tree.
 
-@test "_migrate_lifecycle_restart_default rewrites the stale template default, loudly" {
-  local _r="${TEMP_DIR}/stale"
-  _seed_restart_repo "${_r}" "restart = no" "[lifecycle]" "restart = no" "init = true"
+# why: The silence base#1092 is about -- an edit to a path upstream left
+# alone -- is invisible to the merge, so the only thing that can report it is
+# a tree comparison; this is the arm that proves the comparison finds the
+# edit at all, from the metadata the pull itself recorded
+@test "_collect_subtree_local_drift finds an edit to a vendored path (#1092)" {
+  local _r="${TEMP_DIR}/edited" _pre
+  _pre="$(_seed_squashed_subtree "${_r}")"
+  printf '# consumer edit\n' >> "${_r}/.base/dist/shipped.sh"
+  git -C "${_r}" add -A
+  git -C "${_r}" commit -q -m "edit inside the vendored tree"
 
-  run bash -c "source '${HARNESS}' && _migrate_lifecycle_restart_default '${_r}'"
+  run bash -c "
+    cd '${_r}'
+    source '${HARNESS}'
+    _collect_subtree_local_drift '${_pre}'
+    printf '%s\n' \"\${_UPGRADE_DRIFT[@]}\"
+  "
   assert_success
-  assert_output --partial "MIGRATION"
-  assert_output --partial "restart = unless-stopped"
-
-  run grep -Fx "restart = unless-stopped" "${_r}/.setup.conf"
-  assert_success
-  # Unrelated keys survive untouched.
-  run grep -Fx "init = true" "${_r}/.setup.conf"
-  assert_success
-  # The rewrite is committed, so the subsequent subtree pull sees a clean tree.
-  run git -C "${_r}" status --porcelain
-  assert_output ""
+  # The whole entry, not just the path: the status letter is what tells an
+  # edited vendored file from one the consumer added, and the reporter words
+  # those differently.
+  assert_line --regexp '^M[[:space:]]dist/shipped\.sh$'
 }
 
-@test "_migrate_lifecycle_restart_default leaves a deliberately chosen policy alone" {
-  local _r="${TEMP_DIR}/chosen"
-  _seed_restart_repo "${_r}" "restart = no" "[lifecycle]" "restart = on-failure:5"
+# why: A clean tree has to produce an EMPTY finding set, because a report
+# that fires on every upgrade names nothing; this arm fails if the
+# comparison ever picks up the subtree prefix itself or the consumer files
+# that live outside it
+@test "_collect_subtree_local_drift finds nothing on a byte-exact vendored tree (#1092)" {
+  local _r="${TEMP_DIR}/clean" _pre
+  _pre="$(_seed_squashed_subtree "${_r}")"
 
-  run bash -c "source '${HARNESS}' && _migrate_lifecycle_restart_default '${_r}'"
+  run bash -c "
+    cd '${_r}'
+    source '${HARNESS}'
+    _collect_subtree_local_drift '${_pre}'
+    printf 'count=%s split=%s\n' \"\${#_UPGRADE_DRIFT[@]}\" \"\${_UPGRADE_DRIFT_SPLIT:+resolved}\"
+  "
   assert_success
-  refute_output --partial "MIGRATION"
-  run grep -Fx "restart = on-failure:5" "${_r}/.setup.conf"
-  assert_success
+  # The resolved upstream commit is asserted alongside the zero: a count of
+  # zero is also what a comparison that never found an upstream tree to
+  # compare against reports, and that is the vacuous pass this arm would
+  # otherwise be.
+  assert_output "count=0 split=resolved"
 }
 
-@test "_migrate_lifecycle_restart_default is inert once the vendored template ships the new default" {
-  # Post-rescope the repo owns its `no`; a later deliberate choice of `no`
-  # must never be rewritten again.
-  local _r="${TEMP_DIR}/post"
-  _seed_restart_repo "${_r}" "restart = unless-stopped" "[lifecycle]" "restart = no"
-
-  run bash -c "source '${HARNESS}' && _migrate_lifecycle_restart_default '${_r}'"
-  assert_success
-  refute_output --partial "MIGRATION"
-  run grep -Fx "restart = no" "${_r}/.setup.conf"
-  assert_success
-}
-
-@test "_migrate_lifecycle_restart_default ignores a restart key outside [lifecycle]" {
-  local _r="${TEMP_DIR}/othersection"
-  _seed_restart_repo "${_r}" "restart = no" "[stage:runtime]" "restart = no"
-
-  run bash -c "source '${HARNESS}' && _migrate_lifecycle_restart_default '${_r}'"
-  assert_success
-  refute_output --partial "MIGRATION"
-  run grep -Fx "restart = no" "${_r}/.setup.conf"
-  assert_success
-}
-
-@test "_migrate_lifecycle_restart_default is a no-op without a repo .setup.conf" {
-  local _r="${TEMP_DIR}/noconf"
-  mkdir -p "${_r}/.base/dist"
-  printf '[lifecycle]\nrestart = no\n' > "${_r}/.base/dist/.setup.conf"
-
-  run bash -c "source '${HARNESS}' && _migrate_lifecycle_restart_default '${_r}'"
-  assert_success
-  assert_output ""
-}
-
-@test "_migrate_lifecycle_restart_default is a no-op without a vendored template baseline" {
-  # Cannot tell whether this upgrade crosses the rescope -> touch nothing.
-  local _r="${TEMP_DIR}/notpl"
+# why: A comparison that cannot find the release to compare against reports
+# the same zero findings as a clean tree, and that is the shape of silence
+# base#1092 is about -- so the reason is recorded rather than the absence
+# being left to read as agreement
+@test "_collect_subtree_local_drift records why it could not compare when the range holds no subtree squash (#1092)" {
+  local _r="${TEMP_DIR}/nosquash"
   mkdir -p "${_r}"
-  printf '[lifecycle]\nrestart = no\n' > "${_r}/.setup.conf"
+  git -C "${_r}" init -q -b main
+  git -C "${_r}" config user.email t@t
+  git -C "${_r}" config user.name t
+  printf 'consumer\n' > "${_r}/README.md"
+  git -C "${_r}" add -A
+  git -C "${_r}" commit -q -m seed
 
-  run bash -c "source '${HARNESS}' && _migrate_lifecycle_restart_default '${_r}'"
+  run bash -c "
+    cd '${_r}'
+    source '${HARNESS}'
+    _collect_subtree_local_drift \"\$(git rev-parse HEAD)\"
+    printf 'count=%s split=%s reason=%s\n' \"\${#_UPGRADE_DRIFT[@]}\" \"\${_UPGRADE_DRIFT_SPLIT}\" \"\${_UPGRADE_DRIFT_UNVERIFIED}\"
+  "
   assert_success
-  refute_output --partial "MIGRATION"
-  run grep -Fx "restart = no" "${_r}/.setup.conf"
+  assert_output --regexp '^count=0 split= reason=.+$'
+}
+
+# why: The other way the comparison can fail to run -- the squash names an
+# upstream commit this object store does not hold, so the tree to compare
+# against cannot be resolved. A zero here would be the check reporting a clean
+# tree it never looked at
+@test "_collect_subtree_local_drift records why it could not compare when the recorded upstream commit is absent (#1092)" {
+  local _r="${TEMP_DIR}/noobject" _pre
+  _pre="$(_seed_squashed_subtree "${_r}")"
+
+  # A well-formed sha this repo does not hold is what a pruned or
+  # never-fetched upstream commit looks like from here. Injected by overriding
+  # the resolver, so the case is about what the comparison does with an
+  # unresolvable answer rather than about how it got one.
+  run bash -c "
+    cd '${_r}'
+    source '${HARNESS}'
+    _subtree_split_sha() { printf '%s' 0123456789abcdef0123456789abcdef01234567; }
+    _collect_subtree_local_drift '${_pre}'
+    printf 'count=%s reason=%s\n' \"\${#_UPGRADE_DRIFT[@]}\" \"\${_UPGRADE_DRIFT_UNVERIFIED}\"
+  "
   assert_success
+  assert_output --regexp '^count=0 reason=.+$'
+}
+
+# why: Recording the reason is only half of it -- the consumer has to be told,
+# because an upgrade that printed nothing is exactly what they saw before this
+# check existed
+@test "_warn_subtree_local_drift says the comparison could not run rather than nothing (#1092)" {
+  run bash -c "
+    source '${HARNESS}'
+    _UPGRADE_DRIFT=()
+    _UPGRADE_DRIFT_UNVERIFIED='no subtree squash in deadbeef..HEAD'
+    _warn_subtree_local_drift
+  " 2>&1
+  assert_success
+  assert_output --partial "could not be checked"
+  assert_output --partial "no subtree squash in deadbeef..HEAD"
+}
+
+# why: Naming the files is the whole requirement -- a count with no paths
+# leaves the consumer exactly where the silence did -- and the path has to be
+# repo-relative, which is what they type at the prompt, not the
+# subtree-relative form the comparison works in
+@test "_warn_subtree_local_drift names each drifted path repo-relative (#1092)" {
+  run bash -c "
+    source '${HARNESS}'
+    _UPGRADE_DRIFT=(\"M\$(printf '\\t')dist/shipped.sh\" \"A\$(printf '\\t')dist/mine.sh\" \"D\$(printf '\\t')dist/gone.sh\")
+    _UPGRADE_DRIFT_SPLIT=0123456789abcdef0123456789abcdef01234567
+    _warn_subtree_local_drift
+  " 2>&1
+  assert_success
+  assert_output --partial "3 path(s) under .base/ do not match what base shipped"
+  assert_output --partial ".base/dist/shipped.sh (differs from upstream)"
+  assert_output --partial ".base/dist/mine.sh (only in this repo)"
+  assert_output --partial ".base/dist/gone.sh (missing from this repo)"
+  assert_output --partial "git diff 0123456789ab HEAD:.base"
+}
+
+# why: Silence on a clean tree is the behaviour every consumer sees on every
+# upgrade, so it is the one the reporter has to get right even though it
+# prints nothing
+@test "_warn_subtree_local_drift says nothing when no drift was recorded (#1092)" {
+  run bash -c "
+    source '${HARNESS}'
+    _UPGRADE_DRIFT=()
+    _UPGRADE_DRIFT_UNVERIFIED=""
+    _warn_subtree_local_drift
+  " 2>&1
+  assert_success
+  assert_output ""
+}
+
+# why: `upgrade_started` is the event for the one line that announces the
+# upgrade ("Upgrading: X -> Y"). The generic _log helper stamped it on every
+# line -- step markers, check results, the done banner and the config-drift
+# WARNING -- so a JSON reader filtering on the event saw every line of
+# the run as a "started" record (base#1364)
+@test "upgrade.sh: upgrade_started is emitted only by the 'Upgrading:' line (base#1364)" {
+  run grep -n 'upgrade_started' "${UPGRADE}"
+  assert_success
+  assert_equal "${#lines[@]}" "1"
+  assert_output --partial 'Upgrading:'
+}
+
+# _json_harness
+#   Print the path of a harness that sources the REAL _lib.sh under
+#   LOG_FORMAT=json and the REAL `_log` helper from upgrade.sh, plus the
+#   real _semver_cmp / _check / _warn_config_drift / _warn_setup_conf_drift
+#   bodies. The stub harness above replaces `_log`, so it cannot see what
+#   body the helper forwards; this one can. `git` and the version getters
+#   are stubbed so the drift and check paths run without a fixture repo.
+_json_harness() {
+  local _h="${TEMP_DIR}/json_harness.sh"
+  {
+    printf 'export LOG_FORMAT=json\n'
+    printf 'source /source/dist/script/docker/lib/_lib.sh\n'
+    printf 'TEMPLATE_REL=.base\n'
+    printf '_get_local_version() { printf "%%s" "${_LV}"; }\n'
+    printf '_get_latest_version() { printf "%%s" "${_RV}"; }\n'
+    printf 'git() { printf "%%s\\n" "${_GIT_POST}"; }\n'
+    grep -E '^_log\(\) \{' "${UPGRADE}"
+    sed -n '/^_semver_cmp() {$/,/^}$/p' "${UPGRADE}"
+    sed -n '/^_check() {$/,/^}$/p' "${UPGRADE}"
+    sed -n '/^_warn_config_drift() {$/,/^}$/p' "${UPGRADE}"
+    sed -n '/^_warn_setup_conf_drift() {$/,/^}$/p' "${UPGRADE}"
+  } > "${_h}"
+  printf '%s' "${_h}"
+}
+
+# _upgrade_call_line <display-prefix>
+#   The one `_log ...` call in _upgrade whose display text starts with
+#   <display-prefix>, exactly as upgrade.sh writes it. Matched on the
+#   display text, never on the event, so a call site that changes its
+#   event is caught by the body assertion rather than by a missed grep.
+_upgrade_call_line() {
+  grep -E "^[[:space:]]*_log [a-z_]+ \"$1" "${UPGRADE}" | head -n 1
+}
+
+# _assert_record <output> <display-fixed-text> <severity> <body>
+_assert_record() {
+  local _line
+  _line="$(printf '%s\n' "$1" | grep -F -- "\"display\":\"$2")"
+  [ -n "${_line}" ] || { echo "no record with display '$2' in: $1" >&2; return 1; }
+  [[ "${_line}" == *"\"severity_text\":\"$3\""* ]] || { echo "severity: ${_line}" >&2; return 1; }
+  [[ "${_line}" == *"\"body\":\"$4\""* ]] || { echo "body: ${_line}" >&2; return 1; }
+}
+
+# why: The source count above cannot see what the helper forwards. Run the
+# real `_log` on the real call lines of _upgrade: the announcement has to
+# emit upgrade_started and the step and done lines must not -- a helper
+# that dropped its event argument for a fixed body would fail one side
+@test "upgrade.sh: the real _log emits upgrade_started for 'Upgrading:' and its own body for step / done (base#1364)" {
+  local _h _ann _step _done
+  _h="$(_json_harness)"
+  _ann="$(_upgrade_call_line 'Upgrading: ')"
+  _step="$(_upgrade_call_line 'Step 1/5: ')"
+  _done="$(_upgrade_call_line 'Done! ')"
+  [ -n "${_ann}" ] && [ -n "${_step}" ] && [ -n "${_done}" ]
+  run bash -c "
+    source '${_h}'
+    local_ver=v1.0.0 target_ver=v1.1.0
+    ${_ann}
+    ${_step}
+    ${_done}
+  " 2>&1
+  assert_success
+  _assert_record "${output}" 'Upgrading: v1.0.0' INFO upgrade_started
+  _assert_record "${output}" 'Step 1/5: git subtree pull' INFO upgrade_step
+  _assert_record "${output}" 'Done! Upgraded to v1.1.0' INFO upgrade_completed
+  run grep -c '"body":"upgrade_started"' <<< "${output}"
+  assert_output "1"
+}
+
+# why: The check path is what `upgrade --check` prints on every run; its
+# lines report a comparison, not a start
+@test "upgrade.sh: _check logs upgrade_version_check / upgrade_up_to_date / upgrade_available through the real _log (base#1364)" {
+  local _h
+  _h="$(_json_harness)"
+  run bash -c "source '${_h}'; _LV=v1.0.0 _RV=v1.0.0 _check" 2>&1
+  assert_success
+  _assert_record "${output}" 'Local:  v1.0.0' INFO upgrade_version_check
+  _assert_record "${output}" 'Already up to date.' INFO upgrade_up_to_date
+  run bash -c "source '${_h}'; _LV=v1.0.0 _RV=v1.1.0 _check" 2>&1
+  assert_failure 1
+  _assert_record "${output}" 'Update available: v1.0.0' INFO upgrade_available
+  refute_output --partial '"body":"upgrade_started"'
+}
+
+# why: The drift WARNING lines tell the consumer their config was NOT
+# updated; logged as upgrade_started they read as the upgrade beginning
+@test "upgrade.sh: config / setup.toml drift lines log their drift body through the real _log (base#1364)" {
+  local _h
+  _h="$(_json_harness)"
+  run bash -c "source '${_h}'; _GIT_POST=bbbbbbbbbbbbbbbb _warn_config_drift aaaaaaaaaaaaaaaa; _GIT_POST=bbbbbbbbbbbbbbbb _warn_setup_conf_drift aaaaaaaaaaaaaaaa" 2>&1
+  assert_success
+  _assert_record "${output}" 'WARNING: .base/dist/config/ changed upstream' INFO upgrade_config_drift
+  _assert_record "${output}" 'WARNING: .base/dist/setup.toml changed upstream' INFO upgrade_setup_conf_drift
+  refute_output --partial '"body":"upgrade_started"'
+}
+
+# ── missing subtree root (base#1382) ────────────────────────────────────────
+#
+# The walk-up that finds the subtree root runs before the logger is sourced,
+# so its failure used to print a bare `upgrade.sh: cannot locate subtree
+# root ...` line that a LOG_FORMAT=json consumer cannot parse. Both arms run
+# a fixture copy of upgrade.sh in a temp dir with no `.version` above it,
+# never the live tree (base#1075).
+
+# Parse every line of $1 as JSON (a substring match would pass a malformed
+# record that happens to carry the fragments) and require exactly one
+# ERROR / 17 record whose body is upgrade_subtree_root_not_found and whose
+# display names the script directory $2. $3 is "logger" when the record must
+# come from log.sh, which stamps code.filepath, and "fallback" when it must
+# be the hand-written no-logger record, which omits it.
+_assert_root_record() {
+  python3 -c '
+import json, sys
+out, sdir, src = sys.argv[1], sys.argv[2], sys.argv[3]
+recs = []
+for ln in out.splitlines():
+    if not ln.strip():
+        continue
+    try:
+        recs.append(json.loads(ln))
+    except ValueError as e:
+        sys.exit("not JSON: %r (%s)" % (ln, e))
+hits = [r for r in recs if r.get("body") == "upgrade_subtree_root_not_found"]
+if len(hits) != 1:
+    sys.exit("want 1 upgrade_subtree_root_not_found record, got %d in: %r" % (len(hits), out))
+r = hits[0]
+want = "upgrade.sh: cannot locate subtree root above " + sdir
+checks = [
+    ("severity_text", r.get("severity_text"), "ERROR"),
+    ("severity_number", r.get("severity_number"), 17),
+    ("display", (r.get("attributes") or {}).get("display"), want),
+    ("service.name", (r.get("attributes") or {}).get("service.name"), "upgrade"),
+]
+for name, got, exp in checks:
+    if got != exp:
+        sys.exit("%s: got %r, want %r in %r" % (name, got, exp, r))
+attrs = r.get("attributes") or {}
+if src == "logger" and "code.filepath" not in attrs:
+    sys.exit("code.filepath missing: record did not come from log.sh: %r" % r)
+if src == "fallback" and "code.filepath" in attrs:
+    sys.exit("code.filepath present: want the no-logger fallback record: %r" % r)
+' "$1" "$2" "$3"
+}
+
+# why: With the logger reachable (dist/script/docker/lib/ beside the copy)
+# the failure must be a structured ERROR record naming the registered event
+@test "upgrade.sh: a missing subtree root emits upgrade_subtree_root_not_found under LOG_FORMAT=json (base#1382)" {
+  local _fx="${TEMP_DIR}/nosubtree/dist/script"
+  mkdir -p "${_fx}"
+  cp -R /source/dist/script/base /source/dist/script/docker "${_fx}/"
+  run env LOG_FORMAT=json bash "${_fx}/base/upgrade.sh" 2>&1
+  assert_failure 1
+  _assert_root_record "${output}" "$(cd -- "${_fx}/base" && pwd -P)" logger
+}
+
+# why: The issue's own repro copies upgrade.sh alone, so log.sh is missing
+# too; the failure must still name the registered event and exit 1
+@test "upgrade.sh: a lone copy with no logger still names upgrade_subtree_root_not_found and exits 1 (base#1382)" {
+  local _fx="${TEMP_DIR}/lone"
+  mkdir -p "${_fx}"
+  cp /source/dist/script/base/upgrade.sh "${_fx}/"
+  run env LOG_FORMAT=json bash "${_fx}/upgrade.sh" 2>&1
+  assert_failure 1
+  _assert_root_record "${output}" "$(cd -- "${_fx}" && pwd -P)" fallback
 }

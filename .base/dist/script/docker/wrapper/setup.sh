@@ -2,19 +2,24 @@
 # setup.sh - Auto-detect system parameters and generate .env.generated +
 # compose.yaml
 #
-# Reads the per-repo <repo>/.setup.conf override (falling back to the
-# .base/dist/.setup.conf template default) for the repo's runtime
+# Reads the per-repo <repo>/setup.toml override (falling back to the
+# .base/dist/setup.toml template default) for the repo's runtime
 # configuration ([image] rules, [build] apt_mirror, [deploy] GPU,
 # [gui], [network], [volumes]), runs system detection (UID/GID, hardware,
 # docker hub user, GPU, GUI, workspace path), then emits:
 #   - <repo>/.env.generated (variable values + SETUP_* metadata for drift
-#                          detection; the hand-authored <repo>/.env overlay
-#                          is scaffolded once and never rewritten)
+#                          detection; compose interpolation only)
+#   - <repo>/.env          (the container-bound defaults: [environment] +
+#                          the [lifecycle] watchdog block)
 #   - <repo>/compose.yaml  (full compose with baseline + conditional blocks)
 #
-# Both output files are derived artifacts (gitignored). Source of truth is
-# setup.conf + system detection. WS_PATH is detected once and written back
-# to <repo>/.setup.conf [volumes] mount_1; subsequent runs read mount_1.
+# <repo>/.env.local is scaffolded once and never rewritten -- it is the
+# operator's override layer, loaded after .env so its keys win.
+#
+# All generated files are derived artifacts (gitignored). Source of truth is
+# setup.toml + system detection. WS_PATH is detected once and written back
+# to <repo>/setup.toml as the source of the first `[[volumes]]` entry;
+# subsequent runs read that entry.
 #
 # Usage: setup.sh [-h|--help] [--base-path <path>] [--lang en|zh-TW|zh-CN|ja]
 
@@ -51,10 +56,10 @@ _resolve_lang _LANG
 
 _setup_msg_env() {
   case "${_LANG}:${1:?}" in
-    zh-TW:done)     echo ".env.generated 與 compose.yaml 更新完成" ;;
-    zh-CN:done)     echo ".env.generated 与 compose.yaml 更新完成" ;;
-    ja:done)        echo ".env.generated と compose.yaml 更新完了" ;;
-    *:done)         echo ".env.generated + compose.yaml updated" ;;
+    zh-TW:done)     echo ".env / .env.generated 與 compose.yaml 更新完成" ;;
+    zh-CN:done)     echo ".env / .env.generated 与 compose.yaml 更新完成" ;;
+    ja:done)        echo ".env / .env.generated と compose.yaml 更新完了" ;;
+    *:done)         echo ".env / .env.generated / compose.yaml updated" ;;
     zh-TW:comment)  echo "自動偵測欄位請勿手動修改，如需變更 WS_PATH 可直接編輯此檔案" ;;
     zh-CN:comment)  echo "自动检测字段请勿手动修改，如需变更 WS_PATH 可直接编辑此文件" ;;
     ja:comment)     echo "自動検出フィールドは手動で編集しないでください。WS_PATH の変更はこのファイルを直接編集してください" ;;
@@ -93,14 +98,14 @@ _setup_msg_errors() {
 
 _setup_msg_warnings() {
   case "${_LANG}:${1:?}" in
-    zh-TW:no_repo_conf)    echo "未找到 repo 自有的 setup.conf — 全部 section 將使用模板預設值" ;;
-    zh-CN:no_repo_conf)    echo "未找到 repo 自有的 setup.conf — 全部 section 将使用模板默认值" ;;
-    ja:no_repo_conf)       echo "repo 固有の setup.conf が見つかりません — 全ての section でテンプレートのデフォルト値を使用します" ;;
-    *:no_repo_conf)        echo "no per-repo setup.conf — using template defaults for all sections" ;;
-    zh-TW:empty_repo_conf) echo "repo 的 setup.conf 沒有任何 section 覆寫 — 全部 section 將使用模板預設值" ;;
-    zh-CN:empty_repo_conf) echo "repo 的 setup.conf 没有任何 section 覆写 — 全部 section 将使用模板默认值" ;;
-    ja:empty_repo_conf)    echo "repo の setup.conf にセクション上書きがありません — 全ての section でテンプレートのデフォルト値を使用します" ;;
-    *:empty_repo_conf)     echo "per-repo setup.conf has no section overrides — using template defaults for all sections" ;;
+    zh-TW:no_repo_conf)    echo "未找到 repo 自有的 setup.toml — 全部 section 將使用模板預設值" ;;
+    zh-CN:no_repo_conf)    echo "未找到 repo 自有的 setup.toml — 全部 section 将使用模板默认值" ;;
+    ja:no_repo_conf)       echo "repo 固有の setup.toml が見つかりません — 全ての section でテンプレートのデフォルト値を使用します" ;;
+    *:no_repo_conf)        echo "no per-repo setup.toml — using template defaults for all sections" ;;
+    zh-TW:empty_repo_conf) echo "repo 的 setup.toml 沒有任何 section 覆寫 — 全部 section 將使用模板預設值" ;;
+    zh-CN:empty_repo_conf) echo "repo 的 setup.toml 没有任何 section 覆写 — 全部 section 将使用模板默认值" ;;
+    ja:empty_repo_conf)    echo "repo の setup.toml にセクション上書きがありません — 全ての section でテンプレートのデフォルト値を使用します" ;;
+    *:empty_repo_conf)     echo "per-repo setup.toml has no section overrides — using template defaults for all sections" ;;
   esac
 }
 
@@ -133,18 +138,18 @@ _setup_msg_usage() {
 
 _setup_msg_reset() {
   case "${_LANG}:${1:?}" in
-    zh-TW:confirm)   echo "將以模板預設值覆寫 setup.conf（舊檔備份為 .setup.conf.bak / .env.bak）。繼續嗎？" ;;
-    zh-CN:confirm)   echo "将以模板默认值覆写 setup.conf（旧文件备份为 .setup.conf.bak / .env.bak）。继续吗？" ;;
-    ja:confirm)      echo "テンプレートのデフォルト値で setup.conf を上書きします（旧ファイルは .setup.conf.bak / .env.bak にバックアップ）。続行しますか？" ;;
-    *:confirm)       echo "Overwrite setup.conf with template default? (prior setup.conf → .bak, prior .env → .env.bak)" ;;
+    zh-TW:confirm)   echo "將以模板預設值覆寫 setup.toml（舊檔備份為 setup.toml.bak / .env.bak）。繼續嗎？" ;;
+    zh-CN:confirm)   echo "将以模板默认值覆写 setup.toml（旧文件备份为 setup.toml.bak / .env.bak）。继续吗？" ;;
+    ja:confirm)      echo "テンプレートのデフォルト値で setup.toml を上書きします（旧ファイルは setup.toml.bak / .env.bak にバックアップ）。続行しますか？" ;;
+    *:confirm)       echo "Overwrite setup.toml with template default? (prior setup.toml → .bak, prior .env → .env.bak)" ;;
     zh-TW:aborted)   echo "已取消，未變更任何檔案" ;;
     zh-CN:aborted)   echo "已取消，未更改任何文件" ;;
     ja:aborted)      echo "中断されました。ファイルは変更されていません" ;;
     *:aborted)       echo "Aborted; no files changed" ;;
-    zh-TW:done)      echo "setup.conf 已重設為模板預設值（先前內容備份於 .bak）" ;;
-    zh-CN:done)      echo "setup.conf 已重置为模板默认值（之前内容备份至 .bak）" ;;
-    ja:done)         echo "setup.conf をテンプレートのデフォルトにリセットしました（旧内容は .bak に保存）" ;;
-    *:done)          echo "setup.conf reset to template default (prior contents saved to .bak)" ;;
+    zh-TW:done)      echo "setup.toml 已重設為模板預設值（先前內容備份於 .bak）" ;;
+    zh-CN:done)      echo "setup.toml 已重置为模板默认值（之前内容备份至 .bak）" ;;
+    ja:done)         echo "setup.toml をテンプレートのデフォルトにリセットしました（旧内容は .bak に保存）" ;;
+    *:done)          echo "setup.toml reset to template default (prior contents saved to .bak)" ;;
     zh-TW:needs_yes) echo "非互動模式：請加 --yes 才會執行 reset（避免誤刪）" ;;
     zh-CN:needs_yes) echo "非交互模式：请加 --yes 才会执行 reset（避免误删）" ;;
     ja:needs_yes)    echo "非対話モード: --yes を指定しないと reset は実行されません（誤削除防止）" ;;
@@ -152,12 +157,38 @@ _setup_msg_reset() {
   esac
 }
 
+_setup_msg_resources() {
+  case "${_LANG}:${1:?}" in
+    zh-TW:shm_size_inert) echo "[resources] 已設定 shm_size，但生效的 [network] ipc 是 host——docker honours shm_size only when ipc is not host；請將 [network] ipc 設為 private 或 shareable" ;;
+    zh-CN:shm_size_inert) echo "[resources] 已设置 shm_size，但生效的 [network] ipc 是 host——docker honours shm_size only when ipc is not host；请将 [network] ipc 设为 private 或 shareable" ;;
+    ja:shm_size_inert)    echo "[resources] に shm_size が設定されていますが、有効な [network] ipc が host です——docker honours shm_size only when ipc is not host。[network] ipc を private または shareable にしてください" ;;
+    *:shm_size_inert)     echo "[resources] shm_size is configured but the effective [network] ipc is host -- docker honours shm_size only when ipc is not host, so the value is dropped; set [network] ipc to private or shareable" ;;
+  esac
+}
+
 _setup_msg_network() {
   case "${_LANG}:${1:?}" in
-    zh-TW:ports_inert) echo "[network] 已設定 port_*，但生效的 mode 不是 bridge —— compose 只有在 mode = bridge 時才會發布 ports，因此該映射會被丟棄" ;;
-    zh-CN:ports_inert) echo "[network] 已设置 port_*，但生效的 mode 不是 bridge —— compose 仅在 mode = bridge 时才会发布 ports，因此该映射会被丢弃" ;;
-    ja:ports_inert)    echo "[network] に port_* が設定されていますが、有効な mode が bridge ではありません —— compose は mode = bridge のときだけ ports を公開するため、このマッピングは破棄されます" ;;
-    *:ports_inert)     echo "[network] port_* is configured but the effective mode is not bridge -- compose publishes ports only under mode = bridge, so the mapping is dropped" ;;
+    zh-TW:network_name_inert) echo "[network] 已設定 network_name，但生效的 mode 不是 bridge——compose joins a named network only under mode = bridge，mode 優先；請將 mode 設為 bridge 或清除 network_name" ;;
+    zh-CN:network_name_inert) echo "[network] 已设置 network_name，但生效的 mode 不是 bridge——compose joins a named network only under mode = bridge，mode 优先；请将 mode 设为 bridge 或清除 network_name" ;;
+    ja:network_name_inert)    echo "[network] に network_name が設定されていますが、有効な mode が bridge ではありません——compose joins a named network only under mode = bridge。mode が優先されます。mode を bridge にするか、network_name を空にしてください" ;;
+    *:network_name_inert)     echo "[network] network_name is set but the effective mode is not bridge -- compose joins a named network only under mode = bridge, so mode wins and the name is ignored; set mode = bridge, or clear network_name" ;;
+    zh-TW:ports_inert) echo "已設定 [[network.ports]]，但生效的 mode 不是 bridge —— compose 只有在 mode = bridge 時才會發布 ports，因此該映射會被丟棄" ;;
+    zh-CN:ports_inert) echo "已设置 [[network.ports]]，但生效的 mode 不是 bridge —— compose 仅在 mode = bridge 时才会发布 ports，因此该映射会被丢弃" ;;
+    ja:ports_inert)    echo "[[network.ports]] が設定されていますが、有効な mode が bridge ではありません —— compose は mode = bridge のときだけ ports を公開するため、このマッピングは破棄されます" ;;
+    *:ports_inert)     echo "[[network.ports]] is configured but the effective mode is not bridge -- compose publishes ports only under mode = bridge, so the mapping is dropped" ;;
+  esac
+}
+
+_setup_msg_lifecycle() {
+  case "${_LANG}:${1:?}" in
+    zh-TW:restart_invalid) echo "setup.toml:[lifecycle] restart 的值無效（需為 no、always、unless-stopped、on-failure 或 on-failure:N），已略過 restart 欄位" ;;
+    zh-CN:restart_invalid) echo "setup.toml:[lifecycle] restart 的值无效（需为 no、always、unless-stopped、on-failure 或 on-failure:N），已跳过 restart 字段" ;;
+    ja:restart_invalid)    echo "setup.toml:[lifecycle] restart の値が無効です（no、always、unless-stopped、on-failure、on-failure:N のいずれかにしてください）。restart フィールドは省略されます" ;;
+    *:restart_invalid)     echo "setup.toml:[lifecycle] restart is invalid (not one of no/always/unless-stopped/on-failure/on-failure:N), so the restart field is omitted" ;;
+    zh-TW:init_invalid)    echo "setup.toml:[lifecycle] init 的值無效（需為 true 或 false），已略過 init 欄位" ;;
+    zh-CN:init_invalid)    echo "setup.toml:[lifecycle] init 的值无效（需为 true 或 false），已跳过 init 字段" ;;
+    ja:init_invalid)       echo "setup.toml:[lifecycle] init の値が無効です（true または false にしてください）。init フィールドは省略されます" ;;
+    *:init_invalid)        echo "setup.toml:[lifecycle] init is invalid (not true or false), so the init field is omitted" ;;
   esac
 }
 
@@ -175,10 +206,10 @@ _setup_msg_stage() {
     zh-CN:reserved_tag)             echo "Dockerfile stage 名称使用 template 控制的 image tag namespace，请改名" ;;
     ja:reserved_tag)                echo "Dockerfile stage 名が template が管理する image tag namespace を使用しています。改名してください" ;;
     *:reserved_tag)                 echo "Dockerfile stage name uses a template-controlled image tag namespace; rename it" ;;
-    zh-TW:unknown_referenced)       echo "setup.conf 內 [stage:...] 對應的 stage 在 Dockerfile 中不存在，已忽略該區段" ;;
-    zh-CN:unknown_referenced)       echo "setup.conf 内 [stage:...] 对应的 stage 在 Dockerfile 中不存在，已忽略该区段" ;;
-    ja:unknown_referenced)          echo "setup.conf 内の [stage:...] が指す stage が Dockerfile に存在しません。該当セクションは無視されます" ;;
-    *:unknown_referenced)           echo "setup.conf [stage:...] references a stage missing from the Dockerfile; section ignored" ;;
+    zh-TW:unknown_referenced)       echo "setup.toml 內 [stage:...] 對應的 stage 在 Dockerfile 中不存在，已忽略該區段" ;;
+    zh-CN:unknown_referenced)       echo "setup.toml 内 [stage:...] 对应的 stage 在 Dockerfile 中不存在，已忽略该区段" ;;
+    ja:unknown_referenced)          echo "setup.toml 内の [stage:...] が指す stage が Dockerfile に存在しません。該当セクションは無視されます" ;;
+    *:unknown_referenced)           echo "setup.toml [stage:...] references a stage missing from the Dockerfile; section ignored" ;;
     zh-TW:override_key_not_allowed) echo "[stage:...] 區段內含不在 per-stage 允許清單內的 key，已忽略該 key" ;;
     zh-CN:override_key_not_allowed) echo "[stage:...] 区段内含不在 per-stage 允许清单内的 key，已忽略该 key" ;;
     ja:override_key_not_allowed)    echo "[stage:...] セクション内に per-stage 許可リスト外の key が含まれています。該当 key は無視されます" ;;
@@ -219,60 +250,68 @@ usage() {
       cat >&2 <<'EOF'
 Usage: ./setup.sh [<subcommand>] [-h|--help] [--base-path <path>] [--lang <en|zh-TW|zh-CN|ja>]
 
-Regenerate .env.generated + compose.yaml from setup.conf + system
-detection. `.env` is the hand-authored workload overlay: apply scaffolds
-it once and never rewrites it, so hand edits there are safe.
+Regenerate .env / .env.generated / compose.yaml from setup.toml + system
+detection. The standard name is ours, a suffix marks a local variant:
+`.env` is regenerated here, and `.env.local` is yours -- scaffolded once,
+never rewritten, and loaded after `.env` so its keys win.
 Normally invoked indirectly via `./build.sh --setup` or `./setup_tui.sh`
 Save; run directly for non-interactive / scripted / CI use.
 
 Subcommands:
-  apply         (default) Regenerate .env.generated + compose.yaml. No-arg
-                invocation falls back to apply for backward compat.
-  check-drift   Compare current system / setup.conf against
+  apply         Regenerate .env / .env.generated / compose.yaml.
+                A bare ./setup.sh (no subcommand) prints this help;
+                name `apply` explicitly to regenerate.
+  check-drift   Compare current system / setup.toml against
                 .env.generated's SETUP_* metadata. Exit 0 when in sync,
                 exit 1 (with drift descriptions on stderr) when a regen
                 is needed.
                 Used by build.sh / run.sh to decide auto-regen.
   set <section>.<key> <value> [--local]
-                Write a single value into <base-path>/.setup.conf
+                Write a single value into <base-path>/setup.toml
                 (creates the section / key if missing). Validates
                 known typed keys (deploy.gpu_count / volumes.mount_*
                 / devices.cgroup_rule_* / network.port_* /
                 environment.env_* / resources.shm_size). Does NOT
-                regenerate .env.generated — run `apply` afterwards if
-                needed.
-                --local writes <base-path>/.setup.conf.local instead:
-                the gitignored per-worktree layer, whose sections
-                REPLACE the committed file's on this machine only.
-                Without --local, a write to a section .setup.conf.local
+                regenerate .env / .env.generated — run `apply`
+                afterwards if needed.
+                --local writes <base-path>/setup.local.toml instead:
+                the gitignored per-worktree layer. On this machine
+                only, its tables override only the keys they name and
+                its arrays replace the committed list whole.
+                Without --local, a write to a section setup.local.toml
                 already defines is warned about by name -- it is still
-                the value CI and other checkouts use, but it will not
-                change anything here.
+                the value CI and other checkouts use, but here a key
+                the local layer also names, or an entry of an array it
+                declares, stays shadowed.
   show <section>[.<key>]
                 Print the value of a single key, or all key=value
                 pairs in a section (in on-disk order). Exits non-zero
                 when the section / key is absent.
   list [<section>]
                 Without an arg: print every section header + key in
-                setup.conf. With an arg: equivalent to `show <section>`.
+                setup.toml. With an arg: equivalent to `show <section>`.
   add <section>.<list> <value> [--local]
-                Append a value to a list-style section. Picks the next
-                free numeric suffix (max+1) and writes `<list>_N = <value>`.
-                e.g. `add volumes.mount /foo:/bar` lands in `mount_<next>`.
+                Append a value to a list. `volumes.mount`, `network.port`
+                and `devices.cgroup_rule` append a new `[[volumes]]`,
+                `[[network.ports]]` or `[[devices.cgroup_rules]]` entry
+                built from the value, e.g. `add volumes.mount /foo:/bar`
+                appends `[[volumes]]` with source = "/foo", target = "/bar".
+                `environment.env` writes the next free `env_N` key.
                 Same validators, same --local target, as `set`.
-  remove <section>.<key> [--local]            Delete the exact key.
-  remove <section>.<list> <value> [--local]   Delete the first key under
-                the section matching `<list>_*` whose value equals <value>.
-                --local operates on .setup.conf.local instead.
+  remove <section>.<key> [--local]            Delete the exact key or
+                entry (`volumes.mount_2` is the 2nd `[[volumes]]` entry).
+  remove <section>.<list> <value> [--local]   Delete the first entry of
+                that list whose value equals <value>.
+                --local operates on setup.local.toml instead.
   reset [-y|--yes]
-                Overwrite setup.conf with the template default. Prior
-                setup.conf / .env are saved to .setup.conf.bak / .env.bak.
+                Overwrite setup.toml with the template default. Prior
+                setup.toml / .env are saved to setup.toml.bak / .env.bak.
                 Without --yes, prompts for confirmation; non-tty
                 without --yes refuses to proceed.
   deploy [--stage S] [--output D] [--dry-run] [-y|--yes]
-         [--allow-local-override]
+         [--allow-local-override] [--local-conf F]
                 Ships an image to the field. This is
-                NOT the [deploy] section of setup.conf, which configures
+                NOT the [deploy] section of setup.toml, which configures
                 GPU reservation only and is named after Compose's
                 `deploy:` key -- edit that with `./setup_tui.sh gpu`
                 (`deploy` there is a kept alias).
@@ -280,7 +319,7 @@ Subcommands:
                 (default runtime): docker build --target S tagged
                 <name>:<stage>-<version>, docker save | xz, a fully-
                 resolved self-contained compose.yaml (no variable
-                interpolation, no setup.conf/.env dep, dev-host binds
+                interpolation, no setup.toml/.env dep, dev-host binds
                 stripped, restart added, tunable-manifest config bound),
                 a thin up/down/logs deploy.sh, editable config/, and a
                 README. Previews the resolved compose (every resolved
@@ -288,7 +327,7 @@ Subcommands:
                 plan only; -y skips the prompt. Default output is
                 <base-path>/deploy/<name>-<stage>-<version>/. Field flow:
                 copy the folder to the target, ./deploy.sh up.
-                REFUSES while <base-path>/.setup.conf.local exists: that
+                REFUSES while <base-path>/setup.local.toml exists: that
                 file is gitignored, so a bundle built from it cannot be
                 reproduced from a clean checkout.
                 --allow-local-override builds anyway and records the
@@ -309,7 +348,7 @@ Options:
 
 Apply-only options (#338):
   --gui auto|force|off  Per-invocation override for [gui] mode. Wins
-                        over $SETUP_GUI env var and setup.conf. Useful
+                        over $SETUP_GUI env var and setup.toml. Useful
                         for debugging X11 or one-off headless runs on
                         a GUI repo. Equivalent forms: `--gui=auto`.
   --no-x11-cookie       Skip the SSH X11 cookie rewrite even when
@@ -317,6 +356,21 @@ Apply-only options (#338):
                         stays enabled per [gui] mode resolution;
                         $XAUTHORITY stays at the host value the user's
                         SSH session populated. Debug knob for #321.
+  --local-conf FILE     Read FILE as the conf chain's TOP layer instead
+                        of <base-path>/setup.local.toml. The layer's
+                        semantics are unchanged -- it may override any
+                        section, tables merge key by key and arrays are
+                        replaced whole -- only its address moves, which
+                        is what lets an orchestrator drive one repo N
+                        times with N parameter sets and no write into the
+                        repo (ADR-00000036). A FILE that is not a
+                        readable regular file is refused, and so is one
+                        whose name does not end in .toml: the chain's
+                        readers dispatch on the filename, so such a layer
+                        would be parsed as INI and the whole chain with
+                        it. The resolution never silently proceeds one
+                        layer short, or under another grammar.
+                        Honoured by `apply` and `deploy`.
   --print-resolved      Run all detection + resolution logic and
                         print the effective state to stdout as
                         `KEY=VALUE` lines (one per line), then exit
@@ -342,19 +396,97 @@ Host-detection overrides (env vars):
                         GIDs differ from the build host, or to pin them.
                         Empty string means "no /dev/dri groups".
 
-Outputs (apply only — both derived artifacts, gitignored):
-  <base-path>/.env          Exported variables + SETUP_* drift metadata
-  <base-path>/compose.yaml  Full compose with baseline + conditional
-                            blocks (GPU / GUI / extra volumes / etc.)
+Apply-only options (ADR-00000036):
+  -o, --output DIR      Write the generated set into DIR instead of
+                        <base-path>. The set is complete and
+                        self-contained: .env.generated, .env, .env.local
+                        and a compose.yaml whose build contexts point at
+                        <base-path> rather than at DIR. The repo's own
+                        configuration is not written by such a call -- an
+                        apply that would have to (a first-time bootstrap,
+                        or a stale absolute source in the first
+                        `[[volumes]]` entry) is refused instead, and the
+                        plain `apply` settles it.
 
-Source of truth is setup.conf (template default + optional per-repo
-override via section-replace). Edit setup.conf, not the derived files.
+Outputs (apply only — both derived artifacts, gitignored):
+  <output>/.env.generated   Resolved variables + SETUP_* drift metadata
+                            (what check-drift compares against)
+  <output>/.env             Container-bound defaults ([environment])
+  <output>/compose.yaml     Full compose with baseline + conditional
+                            blocks (GPU / GUI / extra volumes / etc.)
+  (<output> is <base-path> unless --output names another directory)
+
+Source of truth is setup.toml, layered over the template default and
+under the optional setup.local.toml: tables merge key by key and arrays
+are replaced whole. Edit setup.toml, not the derived files.
 EOF
       ;;
   esac
   exit 0
 }
 
+
+# ════════════════════════════════════════════════════════════════════
+# _setup_dispatch <subcommand> [args...]
+#
+# Route an already-validated subcommand to its handler and return the
+# handler's exit status. Called UNGUARDED from main -- see the comment at
+# the call site for why no `|| _rc=$?` may be put on it.
+# ════════════════════════════════════════════════════════════════════
+_setup_dispatch() {
+  local _subcmd="${1:?"${FUNCNAME[0]}: missing subcommand"}"
+  shift
+  case "${_subcmd}" in
+    apply)        _setup_apply       "$@" ;;
+    check-drift)  _setup_check_drift "$@" ;;
+    set)          _setup_set         "$@" ;;
+    show)         _setup_show        "$@" ;;
+    list)         _setup_list        "$@" ;;
+    add)          _setup_add         "$@" ;;
+    remove)       _setup_remove      "$@" ;;
+    reset)        _setup_reset       "$@" ;;
+    deploy)       _setup_deploy      "$@" ;;
+  esac
+}
+
+# The argv the post-setup hook is handed: main's args with the subcommand
+# already shifted off, exactly as the inline call used to pass them. A
+# global because the EXIT-trap callback below runs outside main's scope.
+_SETUP_POST_HOOK_ARGV=()
+
+# ════════════════════════════════════════════════════════════════════
+# _setup_post_hook_atexit
+#
+# The post-setup hook, run from the process EXIT trap. Registered by main
+# once the pre-hook has passed, so the pre/post pairing is unchanged and
+# the hook still fires on the success and the failure path alike.
+#
+# Why the EXIT trap and not a line after the dispatch: setup.sh runs under
+# `set -euo pipefail` whenever it is the entry point, so a subcommand that
+# returns non-zero aborts main there and then -- an inline call after it is
+# unreachable on exactly the runs a reporting hook exists for. Guarding the
+# dispatch instead (`_setup_dispatch ... || _rc=$?`) would reach the inline
+# call, but bash suppresses errexit for the ENTIRE call tree of a `||` left
+# operand: every handler would then run with `set -e` off, and an unguarded
+# mid-apply failure (an unwritable .env, ENOSPC) would stop aborting and
+# instead print the done message and exit 0 over a half-written config set.
+# transcript.sh owns the single EXIT trap and _atexit fires on an errexit
+# abort too, so the hook is reached without opening that hole.
+#
+# A failing hook still wins over the subcommand's own rc -- recorded with
+# _atexit_set_exit_code, NOT with a bare `exit`. `exit` from inside a
+# callback terminates the shell mid atexit loop, before
+# _transcript_exit_handler reaches _transcript_finalize: the run would end
+# with an unstripped log/setup/<ts>-<id>.log.raw, no transcript_complete
+# line and latest.log still naming the previous run, on exactly the
+# failing run worth reading (ADR-00000007).
+# ════════════════════════════════════════════════════════════════════
+_setup_post_hook_atexit() {
+  local _hook_rc=0
+  _run_post_hook setup \
+    "${_SETUP_POST_HOOK_ARGV[@]+"${_SETUP_POST_HOOK_ARGV[@]}"}" || _hook_rc=$?
+  (( _hook_rc == 0 )) || _atexit_set_exit_code "${_hook_rc}"
+}
 
 # ════════════════════════════════════════════════════════════════════
 # main
@@ -401,22 +533,15 @@ main() {
   # subcommands get uniform pre/post coverage.
   _run_pre_hook setup "$@" || exit $?
 
-  case "${_subcmd}" in
-    apply)        _setup_apply       "$@" ;;
-    check-drift)  _setup_check_drift "$@" ;;
-    set)          _setup_set         "$@" ;;
-    show)         _setup_show        "$@" ;;
-    list)         _setup_list        "$@" ;;
-    add)          _setup_add         "$@" ;;
-    remove)       _setup_remove      "$@" ;;
-    reset)        _setup_reset       "$@" ;;
-    deploy)       _setup_deploy      "$@" ;;
-  esac
-  local _rc=$?
+  # post-setup hook: registered on the EXIT trap rather than called after
+  # the dispatch, so it fires on the failure path too WITHOUT a `||` guard
+  # on the dispatch -- which would disable errexit inside every handler.
+  # See _setup_post_hook_atexit.
+  _SETUP_POST_HOOK_ARGV=("$@")
+  _atexit _setup_post_hook_atexit
 
-  # post-setup hook fires after the subcommand returns.
-  _run_post_hook setup "$@" || exit $?
-  return "${_rc}"
+  # Deliberately unguarded: errexit must stay in force inside the handlers.
+  _setup_dispatch "${_subcmd}" "$@"
 }
 
 # Guard: only run main when executed directly, not when sourced (for testing)

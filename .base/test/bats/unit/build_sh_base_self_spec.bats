@@ -2,12 +2,18 @@
 #
 # Unit tests for the docker wrapper in the BASE SELF-USE topology:
 # base uses the very wrapper it ships, but base is the template SOURCE, so
-# its tree has NO `.base/` subtree, NO .setup.conf, NO
+# its tree has NO `.base/` subtree, NO setup.toml, NO
 # generated .env.generated, and a HAND-AUTHORED compose.yaml (its
 # test-harness services). The consumer-shaped sandbox in build_sh_spec.bats
 # always has `.base/` + a mock setup.sh; this file models the base-self
 # shape (real files shipped under dist/, wrapper reached via a
 # script/<x>.sh symlink) instead.
+#
+# why: build.sh in the base self-use topology (#713): base is the template
+# SOURCE, so its tree has no `.base/` subtree, no setup.conf, no
+# .env.generated, and a hand-authored compose.yaml. Covers lib resolution
+# via the base-self path and `--target test-tools` dispatching `docker
+# compose build` while skipping the setup-sync lifecycle.
 
 bats_require_minimum_version 1.5.0
 
@@ -36,7 +42,7 @@ setup() {
   touch "${SANDBOX}/dockerfile/Dockerfile.test-tools"
 
   # Hand-authored compose.yaml with a test-tools service that builds from
-  # Dockerfile.test-tools (base's shape). No .setup.conf,
+  # Dockerfile.test-tools (base's shape). No setup.toml,
   # no .env.generated -- the states that distinguish base from a consumer.
   cat > "${SANDBOX}/compose.yaml" <<'EOS'
 services:

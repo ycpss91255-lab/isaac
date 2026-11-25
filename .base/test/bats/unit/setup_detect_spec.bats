@@ -1,4 +1,11 @@
 #!/usr/bin/env bats
+#
+# why: Mirrors `lib/setup_detect.sh`. Isolated host-detection units:
+# `detect_user_info`, `detect_hardware`, `detect_docker_hub_user`,
+# `detect_gpu` / `detect_gpu_count` (incl. the nameref regression),
+# `detect_gui`, `_is_ssh_x11` (#321), the SSH X11 cookie rewrite
+# (`_setup_ssh_x11_cookie`, #321/#688), the `detect_image_name` rule engine
+# + sanitization, `detect_ws_path`, and `_reconcile_workspace_path` (#569).
 
 bats_require_minimum_version 1.5.0
 
@@ -266,10 +273,12 @@ fi'
 }
 
 @test "detect_image_name honors per-repo setup.conf [image] rules" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = prefix:foo_
-rule_2 = @basename
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "prefix:foo_"
+
+[[image.rules]]
+rule = "@basename"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/home/user/foo_bar"
@@ -277,11 +286,15 @@ EOF
 }
 
 @test "detect_image_name rules apply in order (first match wins)" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = prefix:docker_
-rule_2 = suffix:_ws
-rule_3 = @default:unused
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "prefix:docker_"
+
+[[image.rules]]
+rule = "suffix:_ws"
+
+[[image.rules]]
+rule = "@default:unused"
 EOF
   local _result
   # path has docker_ prefix AND _ws somewhere — prefix wins
@@ -290,10 +303,12 @@ EOF
 }
 
 @test "detect_image_name @default:<value> used when no rule matches" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = prefix:nonexistent_
-rule_2 = @default:myfallback
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "prefix:nonexistent_"
+
+[[image.rules]]
+rule = "@default:myfallback"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/home/user/plain"
@@ -307,9 +322,9 @@ EOF
 }
 
 @test "detect_image_name returns unknown when no rule matches and no @default" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = prefix:nonexistent_
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "prefix:nonexistent_"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/home/user/plain"
@@ -364,9 +379,9 @@ EOF
 # _rule_basename
 # ════════════════════════════════════════════════════════════════════
 @test "detect_image_name uses @basename rule alone (exercises _rule_basename)" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = @basename
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "@basename"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/home/user/plainname"
@@ -382,9 +397,9 @@ EOF
 # reject the generated project name.
 # ════════════════════════════════════════════════════════════════════
 @test "detect_image_name replaces '.' with '-' (regression: tmp.abcdef → tmp-abcdef)" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = @basename
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "@basename"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/tmp/tmp.abcdef"
@@ -392,9 +407,9 @@ EOF
 }
 
 @test "detect_image_name collapses runs of '-' and strips leading/trailing separators" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = @basename
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "@basename"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/tmp/..weird..name.."
@@ -406,11 +421,15 @@ EOF
 # detect_image_name string rule
 # ════════════════════════════════════════════════════════════════════
 @test "detect_image_name string:<value> short-circuits path parsing" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = string:my_app
-rule_2 = prefix:docker_
-rule_3 = @default:should_not_reach
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "string:my_app"
+
+[[image.rules]]
+rule = "prefix:docker_"
+
+[[image.rules]]
+rule = "@default:should_not_reach"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/home/user/docker_something"
@@ -418,9 +437,9 @@ EOF
 }
 
 @test "detect_image_name string value is still lowercased + sanitized" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[image]
-rule_1 = string:My.App.Name
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[[image.rules]]
+rule = "string:My.App.Name"
 EOF
   local _result
   BASE_PATH="${TEMP_DIR}" detect_image_name _result "/tmp/whatever"
@@ -437,18 +456,20 @@ EOF
 @test "_reconcile_workspace_path: portable form detects WS_PATH locally, mount_1 untouched (#569)" {
   local _base="${TEMP_DIR}/repo"
   mkdir -p "${_base}"
-  # shellcheck disable=SC2016  # literal ${WS_PATH} is the portable form stored in setup.conf
-  printf '[volumes]\nmount_1 = ${WS_PATH}:/home/${USER_NAME}/work\n' \
-    > "${_base}/.setup.conf"
+  # shellcheck disable=SC2016  # literal ${WS_PATH} is the portable form stored in setup.toml
+  printf '[[volumes]]\nsource = "${WS_PATH}"\ntarget = "/home/${USER_NAME}/work"\n' \
+    > "${_base}/setup.toml"
   local -a _vk=() _vv=()
   _load_setup_conf "${_base}" "volumes" _vk _vv
   local _ws=""
-  _reconcile_workspace_path "${_base}" "${_base}/.setup.conf" _vk _vv _ws
+  _reconcile_workspace_path "${_base}" "${_base}/setup.toml" _vk _vv _ws
   # detect_ws_path fallback = base_path itself = ${_base}.
   assert_equal "${_ws}" "$(cd "${_base}" && pwd -P)"
-  # mount_1 stays the portable form (no rewrite).
-  run cat "${_base}/.setup.conf"
-  assert_output --partial 'mount_1 = ${WS_PATH}:/home/${USER_NAME}/work'
+  # mount_1 stays the portable form (no rewrite), asserted through the
+  # bridge, which is what numbers the `[[volumes]]` entry back to mount_1.
+  run toml_bridge_parse "${_base}/setup.toml" --kv
+  assert_success
+  assert_line 'volumes	mount_1	${WS_PATH}:/home/${USER_NAME}/work'
 }
 
 @test "_reconcile_workspace_path: absolute existing host path is honored as WS_PATH (#569)" {
@@ -456,62 +477,143 @@ EOF
   mkdir -p "${_base}"
   local _pinned="${TEMP_DIR}/pinned_ws"
   mkdir -p "${_pinned}"
-  printf '[volumes]\nmount_1 = %s:/work\n' "${_pinned}" \
-    > "${_base}/.setup.conf"
+  printf '[[volumes]]\nsource = "%s"\ntarget = "/work"\n' "${_pinned}" \
+    > "${_base}/setup.toml"
   local -a _vk=() _vv=()
   _load_setup_conf "${_base}" "volumes" _vk _vv
   local _ws=""
-  _reconcile_workspace_path "${_base}" "${_base}/.setup.conf" _vk _vv _ws
+  _reconcile_workspace_path "${_base}" "${_base}/setup.toml" _vk _vv _ws
   assert_equal "${_ws}" "${_pinned}"
-  # conf untouched (absolute path honored, not rewritten).
-  run cat "${_base}/.setup.conf"
-  assert_output --partial "mount_1 = ${_pinned}:/work"
+  # conf untouched (absolute path honored, not rewritten): the entry still
+  # numbers back to the pinned mount_1 the fixture wrote.
+  run toml_bridge_parse "${_base}/setup.toml" --kv
+  assert_success
+  assert_line "volumes	mount_1	${_pinned}:/work"
 }
 
 @test "_reconcile_workspace_path: stale absolute path warns + rewrites mount_1 to portable (#569)" {
   local _base="${TEMP_DIR}/repo"
   mkdir -p "${_base}"
-  printf '[volumes]\nmount_1 = /nonexistent/contributor-a/repo:/work\n' \
-    > "${_base}/.setup.conf"
+  printf '[[volumes]]\nsource = "/nonexistent/contributor-a/repo"\ntarget = "/work"\n' \
+    > "${_base}/setup.toml"
   local -a _vk=() _vv=()
   _load_setup_conf "${_base}" "volumes" _vk _vv
   local _ws=""
-  run _reconcile_workspace_path "${_base}" "${_base}/.setup.conf" _vk _vv _ws
+  run _reconcile_workspace_path "${_base}" "${_base}/setup.toml" _vk _vv _ws
   assert_success
   assert_output --partial "stale"
-  # mount_1 migrated back to the portable form.
-  run cat "${_base}/.setup.conf"
-  assert_output --partial 'mount_1 = ${WS_PATH}:/home/${USER_NAME}/work'
+  # mount_1 migrated back to the portable form: the rewritten `[[volumes]]`
+  # entry numbers back to the portable value, and the stale host path is
+  # gone from the effective config.
+  run toml_bridge_parse "${_base}/setup.toml" --kv
+  assert_success
+  assert_line 'volumes	mount_1	${WS_PATH}:/home/${USER_NAME}/work'
   refute_output --partial "/nonexistent/contributor-a/repo"
+}
+
+# why: setup.toml has no [volumes] mount_1 key; the stale-path warning must
+# name the entry as setup.toml or the CLI address spells it
+@test "_reconcile_workspace_path: stale-path warning names [[volumes]] / volumes.mount_1, not INI mount_1 (base#1365)" {
+  local _base="${TEMP_DIR}/repo"
+  mkdir -p "${_base}"
+  printf '[[volumes]]\nsource = "/nonexistent/contributor-a/repo"\ntarget = "/work"\n' \
+    > "${_base}/setup.toml"
+  local -a _vk=() _vv=()
+  _load_setup_conf "${_base}" "volumes" _vk _vv
+  local _ws=""
+  run _reconcile_workspace_path "${_base}" "${_base}/setup.toml" _vk _vv _ws
+  assert_success
+  assert_output --partial "stale"
+  refute_output --partial "[volumes] mount_1"
+  refute_output --regexp "Rewriting mount_1"
+  [[ "${output}" == *"[[volumes]]"* || "${output}" == *"volumes.mount_1"* ]]
 }
 
 @test "_reconcile_workspace_path: empty mount_1 detects WS_PATH only, conf untouched (#569)" {
   local _base="${TEMP_DIR}/repo"
   mkdir -p "${_base}"
-  printf '[volumes]\nmount_1 =\n' > "${_base}/.setup.conf"
+  # A cleared workspace bind: the entry is present but empty, which the
+  # bridge numbers back as an empty mount_1.
+  printf '[[volumes]]\nsource = ""\n' > "${_base}/setup.toml"
   local -a _vk=() _vv=()
   _load_setup_conf "${_base}" "volumes" _vk _vv
   local _ws=""
-  _reconcile_workspace_path "${_base}" "${_base}/.setup.conf" _vk _vv _ws
+  _reconcile_workspace_path "${_base}" "${_base}/setup.toml" _vk _vv _ws
   assert_equal "${_ws}" "$(cd "${_base}" && pwd -P)"
-  run cat "${_base}/.setup.conf"
-  assert_output --partial "mount_1 ="
+  # conf untouched: mount_1 still reads back empty, not rewritten to the
+  # portable form.
+  run toml_bridge_parse "${_base}/setup.toml" --kv
+  assert_success
+  assert_line 'volumes	mount_1	'
 }
 
 @test "_reconcile_workspace_path: first-time bootstrap copies template + writes portable mount_1 (#569)" {
   local _base="${TEMP_DIR}/repo"
   mkdir -p "${_base}"
-  local _repo_conf="${_base}/.setup.conf"
+  local _repo_conf="${_base}/setup.toml"
   # No repo conf yet -> bootstrap from the real template.
   [ ! -f "${_repo_conf}" ]
   local -a _vk=() _vv=()
   local _ws=""
   _reconcile_workspace_path "${_base}" "${_repo_conf}" _vk _vv _ws
-  # template was copied into place + mount_1 written portable.
+  # template was copied into place + mount_1 written portable, as a
+  # `[[volumes]]` entry the bridge numbers back.
   assert [ -f "${_repo_conf}" ]
-  run cat "${_repo_conf}"
-  assert_output --partial 'mount_1 = ${WS_PATH}:/home/${USER_NAME}/work'
+  run toml_bridge_parse "${_repo_conf}" --kv
+  assert_success
+  assert_line 'volumes	mount_1	${WS_PATH}:/home/${USER_NAME}/work'
   assert_equal "${_ws}" "$(cd "${_base}" && pwd -P)"
+}
+
+# why: The bootstrap is the setup.toml a fresh `init.sh` leaves behind: a
+# `cp` of the template, then the mount_1 upsert, which lands its rewrite
+# with `mv` from a 0600 `mktemp` sibling. A newly created setup.toml must
+# carry the mode any new file gets under the caller's umask (what every
+# other generated file gets), not 0600. umask 022 so the 0600 the bug
+# leaves and the 0644 a new file gets are told apart.
+@test "_reconcile_workspace_path: first-time bootstrap leaves setup.toml at the umask mode, not 0600 (base#1356)" {
+  local _base="${TEMP_DIR}/repo"
+  mkdir -p "${_base}"
+  local _repo_conf="${_base}/setup.toml"
+  local _expect
+  _expect="$(umask 022; : > "${TEMP_DIR}/umask-probe"; stat -c '%a' "${TEMP_DIR}/umask-probe")"
+  (
+    umask 022
+    local -a _vk=() _vv=()
+    local _ws=""
+    _reconcile_workspace_path "${_base}" "${_repo_conf}" _vk _vv _ws
+  )
+  run toml_bridge_parse "${_repo_conf}" --kv
+  assert_success
+  assert_line 'volumes	mount_1	${WS_PATH}:/home/${USER_NAME}/work'
+  run stat -c '%a' "${_repo_conf}"
+  assert_output "${_expect}"
+}
+
+# why: The stale-path branch rewrites an existing, user-owned setup.toml
+# through the same upsert, so it must keep the file's exact mode. umask
+# 077 so only the file's own mode can pass (the base#1323 precedent).
+@test "_reconcile_workspace_path: the stale-path rewrite keeps setup.toml's exact mode under umask 077 (base#1356)" {
+  local _base="${TEMP_DIR}/repo"
+  mkdir -p "${_base}"
+  local _mode
+  for _mode in 664 644; do
+    printf '[[volumes]]\nsource = "/nonexistent/contributor-a/repo"\ntarget = "/work"\n' \
+      > "${_base}/setup.toml"
+    chmod "${_mode}" "${_base}/setup.toml"
+    (
+      umask 077
+      local -a _vk=() _vv=()
+      _load_setup_conf "${_base}" "volumes" _vk _vv
+      local _ws=""
+      _reconcile_workspace_path "${_base}" "${_base}/setup.toml" _vk _vv _ws
+    ) >/dev/null 2>&1
+    run toml_bridge_parse "${_base}/setup.toml" --kv
+    assert_success
+    assert_line 'volumes	mount_1	${WS_PATH}:/home/${USER_NAME}/work'
+    run stat -c '%a' "${_base}/setup.toml"
+    assert_output "${_mode}"
+  done
 }
 
 # ════════════════════════════════════════════════════════════════════
@@ -582,13 +684,14 @@ EOS
   chmod +x "${_bin}/xauth"
 
   PATH="${_bin}:${PATH}" DISPLAY="localhost:10.0" \
-    run bash -c "
+    run --separate-stderr bash -c "
+      export LOG_FORMAT=json
       source /source/dist/script/docker/wrapper/setup.sh
       _setup_ssh_x11_cookie '${TEMP_DIR}'
     "
-  assert_failure
-  assert_output --partial "empty cookie file"
-  assert_output --partial "XAUTHORITY left at host value"
+  assert_refusal 1 xauth_empty_cookie
+  assert_stderr_contains "empty cookie file"
+  assert_stderr_contains "XAUTHORITY left at host value"
 }
 
 @test "_setup_ssh_x11_cookie returns 1 with warning when nmerge pipe exits non-zero (#688)" {
@@ -611,13 +714,14 @@ EOS
   chmod +x "${_bin}/xauth"
 
   PATH="${_bin}:${PATH}" DISPLAY="localhost:10.0" \
-    run bash -c "
+    run --separate-stderr bash -c "
+      export LOG_FORMAT=json
       source /source/dist/script/docker/wrapper/setup.sh
       _setup_ssh_x11_cookie '${TEMP_DIR}'
     "
-  assert_failure
-  assert_output --partial "cookie rewrite failed"
-  assert_output --partial "XAUTHORITY left at host value"
+  assert_refusal 1 xauth_rewrite_failed
+  assert_stderr_contains "cookie rewrite failed"
+  assert_stderr_contains "XAUTHORITY left at host value"
 }
 
 @test "_setup_ssh_x11_cookie returns 1 with warning when xauth is not installed (#321)" {
@@ -626,7 +730,8 @@ EOS
   # builtin. Lets the function exercise its xauth-missing branch
   # without touching PATH (which would also break setup.sh's own
   # dirname / sed / etc. lookups during source).
-  run bash -c "
+  run --separate-stderr bash -c "
+    export LOG_FORMAT=json
     source /source/dist/script/docker/wrapper/setup.sh
     command() {
       if [[ \"\${1:-}\" == '-v' && \"\${2:-}\" == 'xauth' ]]; then
@@ -636,7 +741,7 @@ EOS
     }
     DISPLAY=localhost:10.0 _setup_ssh_x11_cookie '${TEMP_DIR}'
   "
-  assert_failure
-  assert_output --partial "xauth"
-  assert_output --partial "not in PATH"
+  assert_refusal 1 ssh_x11_no_xauth
+  assert_stderr_contains "xauth"
+  assert_stderr_contains "not in PATH"
 }

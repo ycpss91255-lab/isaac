@@ -1,7 +1,7 @@
 # base — Context
 
 `base` is the shared container template that downstream repos under the
-`ycpss91255-docker` org vendor as a `.base/` subtree: it owns the
+`ycpss91255-lab` org vendor as a `.base/` subtree: it owns the
 wrappers, the `setup.conf` -> `.env`/`compose.yaml` resolution, and the
 self-test gate. This glossary fixes the domain vocabulary so future work
 and architecture reviews stop re-coining terms. It is a glossary only —
@@ -14,7 +14,7 @@ issues.
 ### Domain
 
 **base**:
-The container-template SOURCE repo (this repo, `ycpss91255-docker/base`;
+The container-template SOURCE repo (this repo, `ycpss91255-lab/base`;
 formerly named "template", renamed to base); the single source downstream
 repos vendor.
 _Avoid_: template repo (that is a different, distinct repo — see **template
@@ -37,7 +37,13 @@ _Avoid_: downstream/ (the old name), shipped/, shared/.
 **`.base` subtree contract**:
 The frozen set of paths inside `.base/` (now `.base/dist/...`) that a
 downstream repo and `upgrade.sh` rely on; restructuring base must preserve
-it (ADR-00000006, amended by #714).
+it (ADR-00000006, amended by #714, #915 and #1077). Moving such a path in
+lockstep with this repo's callers is not enough when an ALREADY-RELEASED
+caller names it -- the consumer's vendored copy is what drives an upgrade
+and can never be updated retroactively -- so the old location keeps a
+forwarder (today: the repo-root `init.sh` and `upgrade.sh`).
+`prev_release_upgrade_spec.bats` is the enforcement, and it can only see a
+frozen path a release INSIDE its window still names.
 _Avoid_: subtree layout, base API.
 
 **origin**:
@@ -48,7 +54,8 @@ _Avoid_: source, canonical copy.
 
 **base-own tooling**:
 base's self-only tooling that is NOT shipped to downstream repos:
-`script/test`, `script/release` (real directories, no `dist/` origin).
+`script/test`, `script/release`, `script/watch` (real directories, no
+`dist/` origin).
 _Avoid_: internal scripts, CI tooling.
 
 **Wrapper**:
@@ -73,7 +80,7 @@ ADR-00000023 sec. 4).
 _Avoid_: app image (acceptable informally), product image.
 
 **template repo**:
-`ycpss91255-docker/template`, the GitHub Template repo — a pre-scaffolded
+`ycpss91255-lab/template`, the GitHub Template repo — a pre-scaffolded
 downstream skeleton with `.base/` already vendored, used to bootstrap new
 downstream repos. Distinct from **base** and from **`just template`**.
 _Avoid_: starter, skeleton repo (informal only).
@@ -118,7 +125,8 @@ of stage the compose emitter gives a `restart:` policy to. Defined by
 callers so the rule has one definition: everything is deployable EXCEPT
 `devel` (it is the interactive shell), any `*-test` stage (it exists to
 run, assert and exit), `sys` / `devel-base` (build intermediates with no
-runnable service), and the legacy aliases `base` / `test`.
+runnable service), `test-tools-stage` (the template's tooling source for
+the `*-test` stages), and the legacy aliases `base` / `test`.
 _Avoid_: field stage (acceptable informally), production stage,
 runtime stage (that is one example name, not the category).
 
@@ -150,17 +158,41 @@ _Avoid_: config search path, override cascade, merge order.
 The per-worktree layer of the chain: gitignored, never touched by tooling,
 visible on one machine. Where `[project] name` belongs so two worktrees of
 one repo can run at once. Written with `setup.sh set --local`. Distinct
-from ADR-00000022's per-instance `.env` overlay, which acts AFTER
+from ADR-00000022's per-instance `.env.local` overlay, which acts AFTER
 `compose.yaml` is generated.
 _Avoid_: local config, instance config, per-instance override.
 
 **Project name**:
 The compose project a checkout runs under, resolved ONCE by
 `_resolve_project_name` (`lib/compose.sh`) from `[project] name` (empty =
-derive `<DOCKER_HUB_USER>-<IMAGE_NAME>`) into `.env.generated` as
-`PROJECT_NAME`. Both the wrapper's `-p` and the emitted `name:` read that
-one value. Not the image tag, which is a separate axis.
+derive `<DOCKER_HUB_USER>-<IMAGE_NAME>`; there is no second OS-user rung,
+because detection already falls back to the OS user) into
+`.env.generated` as `PROJECT_NAME`. Both the wrapper's `-p` and the emitted
+`name:` read that one value. It is also the ONLY per-host isolation the
+stack has: the DEV stack emits no `container_name:` and the field-deploy
+bundle (`just docker setup deploy`) is the one exemption, so compose
+derives `<project>-<service>-<n>` (ADR-00000022 §3, 2026-08-26 amendment).
+That bundle -- `_generate_resolved_compose` -- still bakes a `container_name:`,
+deliberately: one stack per device, never co-located.
+Not the image tag, which is a separate axis.
 _Avoid_: instance name, stack name, container prefix.
+
+**Pending project name**:
+`PROJECT_NAME_PENDING` in `.env.generated`: a name the DEFAULT now derives
+for this checkout but which cannot take effect yet, because containers may
+still exist under the recorded one and compose cannot relabel a running
+container. Only a changed derivation is carried this way; a configured
+`[project] name` takes effect at once. Deciding to DEFER is `setup
+apply`'s half: it records the pending name and keeps `PROJECT_NAME` on the
+name the containers are under (`_carry_project_name`, `lib/compose.sh`),
+because it cannot ask whether that project is still occupied -- setup.sh
+resolves configuration on hosts where docker need not be reachable. The
+wrapper's half is ADOPTION alone: it reports the deferral on every `build`
+/ `run` and takes the pending name on the first one that finds the old
+project empty (`lib/wrapper.sh` `_wrapper_settle_project_name`,
+ADR-00000022 §3). Transient by design: the next `setup apply` re-derives
+it.
+_Avoid_: staged name, project rename flag.
 
 **setup.conf schema**:
 The set of valid sections/keys and their validation rules, single-sourced
@@ -181,9 +213,10 @@ replaces (#220).
 _Avoid_: stage config, per-stage section.
 
 **Env vs workload parameter boundary**:
-The split between set-once `[environment]` defaults (baked into the image
-as `ENV`) and volatile per-task variables in the gitignored `.env`
-workload overlay (ADR-00000003).
+The split between set-once `[environment]` defaults (written to the
+generated `.env` and baked into the image as `ENV`) and volatile per-task
+variables in the gitignored `.env.local` (ADR-00000003, A2 reversed in
+#868: the standard name is ours, a suffix marks the local variant).
 _Avoid_: env split, config layering.
 
 **Field deploy**:
@@ -204,6 +237,21 @@ travel. The dev binds do not.
 _Avoid_: release bundle, tarball, image bundle (it is more than the
 image), `deploy.sh` bundle.
 
+**Config component**:
+One directory directly under a repo's `config/` — the unit the structured
+app-config channel provisions. The population is derived, never listed:
+every `config/*/` qualifies, `config/shell/` and `config/pip/` included
+(they are consumed by a *different* channel — the Dockerfile's layered
+`COPY config /tmp/config`, deleted in the same `RUN` — so a bind or bake
+at `/opt/app/config/<component>` shares neither its path nor its moment).
+Both halves of **PRD invariant 8** read the one derivation
+(`_collect_config_components`, `lib/deploy.sh`): dev bind-mounts each at
+`/opt/app/config/<component>`, deploy `COPY`-bakes each at the same path.
+A regular file sitting directly under `config/` is provisioned by neither
+half and is WARNed about by name (#1000).
+_Avoid_: `config/app`, app config dir, component config (ambiguous with
+**`deploy.manifest`**'s per-file tunables).
+
 **`deploy.manifest`**:
 A committed `config/<component>/deploy.manifest` (INI-lite, one section
 per **deployable stage**) naming the absolute container paths a field
@@ -214,9 +262,24 @@ read-only unless the path declares `rw`. base moves the files the manifest
 lists and never parses their contents (ADR-00000023 sec. 5, #870).
 _Avoid_: tunable list, override manifest, config manifest.
 
+**Preset selector**:
+A committed repo-root **symlink** whose link text names a path under
+`config/`, declaring which of a component's curated presets this repo
+bakes (e.g. `camera.yaml -> config/realsense/yaml/none.yaml`). The build
+reads it through an `ARG` whose default is the symlink's own name, so
+`--build-arg` overrides one build with no tracked change; the committed
+target is the inert preset. The population is derived
+(`_collect_preset_selectors`, `lib/deploy.sh`) from the link's target, not
+its filename, which is what excludes base's own root symlinks; every
+`setup` run names each selector and WARNs about one whose preset is not in
+the repo (ADR-00000030).
+_Avoid_: profile symlink, config switch, camera.yaml (one repo's instance
+of it).
+
 **Managed `.gitignore` block**:
 The base-owned region of a downstream `.gitignore` that `lib/gitignore.sh`
-(re)syncs to ignore derived artifacts (`.env`, `compose.yaml`).
+(re)syncs to ignore derived artifacts (`.env`, `compose.yaml`) and the
+untracked local layers (`.env.local`, `.setup.conf.local`).
 _Avoid_: ignore block, generated gitignore.
 
 ### Logging and observability
@@ -248,6 +311,22 @@ captures only the orchestration phase and then `_transcript_detach`s
 before the session. `run -d` is non-interactive (full capture).
 _Avoid_: foreground/background (orthogonal), TTY verb.
 
+**ABI axis**:
+Which leading components of a dependency's version its ABI is expressed in
+-- `major` for a library that breaks only on a major, `major.minor` where
+the SONAME carries the minor. Declared per dependency by the repo doing the
+bumping and never defaulted: it is a fact about the dependency, so a default
+would be base guessing on somebody else's behalf, in the direction that
+releases a break (ADR-00000031, `script/ci/abi-gate.sh`).
+_Avoid_: semver level, compatibility level.
+
+**Dependency-bump gate**:
+The shared answer to "may this pin change auto-release" -- one question, and
+a refusal for everything it cannot decide, so an unanswerable bump goes to a
+person instead of releasing itself. It approves a Z and can produce nothing
+else (ADR-00000031 amending ADR-00000027).
+_Avoid_: release gate (that is the CI required-check set), ABI check.
+
 ### Architecture seams
 
 Concepts named by the 2026-06-11 architecture review
@@ -277,12 +356,59 @@ from a resolved-stage value, isolating per-service YAML shape from the
 generator (#566).
 _Avoid_: compose generator (that is the whole `generate_compose_yaml`).
 
+**ENTRYPOINT orchestrator**:
+`dist/script/docker/runtime/entrypoint.sh` -- base-owned, shipped in the
+runtime helper directory, installed at `/usr/local/lib/base/entrypoint.sh`
+and named as the image's `ENTRYPOINT`. Opens the log tee, sources the
+**container bringup**, arms the watchdog, execs the workload (#945,
+ADR-00000032).
+_Avoid_: the entrypoint (ambiguous with the repo's file), entrypoint
+wrapper.
+
+**Container bringup**:
+A repo's own `script/entrypoint.sh`, installed at `/entrypoint.sh` and
+SOURCED by the **ENTRYPOINT orchestrator**. Holds only the repo's own
+start-up (an overlay to source, env to export); no `exec`, no base
+plumbing. Repo-owned: seeded once by `init.sh` and never rewritten by a
+subtree pull, which is why base's plumbing may not live in it.
+_Avoid_: the entrypoint, repo entrypoint (both read as "the ENTRYPOINT").
+
 **Dockerfile-migration list**:
 The declarative ordered `{detect, transform}` migration table in
-`lib/dockerfile_migrate.sh` that `upgrade.sh` Step 5 iterates (via the
-`apply_migrations` dispatcher) to heal downstream Dockerfiles + entrypoints,
-replacing the ad-hoc Step-5 seds (#567, folds #579 facet B).
+`lib/dockerfile_migrate.sh` that `init.sh`'s Step-3 resync and `upgrade.sh`
+Step 5 both iterate (via the `apply_migrations` dispatcher) to heal
+downstream Dockerfiles + entrypoints, replacing the ad-hoc Step-5 seds
+(#567, folds #579 facet B). A run records what it actually rewrote
+(`migrated_files`), and the resync stages that record together with the
+rest of its own output -- the installed paths this run wrote and the
+retired root names it removed -- so the heal reaches the caller's commit
+whichever release is driving (#1036).
 _Avoid_: upgrade seds, Dockerfile patcher.
+
+**Version interval**:
+The pair (the base version a consumer came FROM, the version it is now ON)
+that one upgrade crossed, read by `init.sh`'s Step-3 resync out of the
+consumer's own history: `from` is `<prefix>/.version` at the subtree-pull
+merge's first parent, `to` is the one on disk. Where there is none -- a
+bootstrap, a standalone `just base init`, a re-established subtree -- nothing
+was crossed and nothing is owed (#1097). `BASE_MIGRATION_FROM` names the
+`from` half by hand, which is the only way to retry an interval whose
+migrations were skipped: every released `upgrade.sh` commits at its Step 4,
+so the merge the interval is read from has stopped being HEAD by the time the
+user reads the warning.
+_Avoid_: upgrade range, version window ("window" is ADR-00000006's word for
+how long a frozen path must survive).
+
+**Version-bound migration**:
+A migration declared as landing in a release rather than detecting its own
+applicability, in `lib/version_migrate.sh`'s ordered registry. The runner
+selects `from < V <= to` over the **version interval**, version ascending,
+so each one stops guessing whether it still applies. No record of what has
+run is kept -- the interval is re-derived every time -- so each migration is
+idempotent. Contrast the **Dockerfile-migration list**, whose entries test
+the tree's shape and so stay available as repairs long after the release that
+needed them (#1097).
+_Avoid_: versioned migration, release migration.
 
 ## Relationships
 
@@ -309,7 +435,7 @@ _Avoid_: upgrade seds, Dockerfile patcher.
   Three environment knobs re-aim it, each with a working default and no
   reason to be set in normal use (`--help` reprints them):
   - `BASE_REPO` — the upstream polled for `releases/latest`. Default
-    `ycpss91255-docker/base`, from the shared upstream constant
+    `ycpss91255-lab/base`, from the shared upstream constant
     (`dist/script/base/upstream.sh`) that also gives `upgrade.sh` its
     `TEMPLATE_REMOTE` default. It is **also the repo named in the release
     link of the issue the monitor files**, so a wrong value both answers
@@ -334,9 +460,10 @@ _Avoid_: upgrade seds, Dockerfile patcher.
 > **Dev:** "And if I `setup.sh deploy --stage probe`?"
 > **Maintainer:** "That produces a **deploy bundle** for `probe`, if
 > `probe` is a **deployable stage**.
-> Its `[environment]` defaults are baked as image `ENV`, but your `.env`
-> workload overlay and the `~/work` bind stay behind — that is the **env
-> vs workload parameter boundary**."
+> Its `[environment]` defaults ride the bundle's own `.env` and are baked
+> as image `ENV`, but your `.env.local` and the `~/work` bind stay behind
+> — that is the **env vs workload parameter boundary**. The bundle ships
+> its own empty `.env.local` for you to fill in on the field host."
 
 ## Flagged ambiguities
 
@@ -347,3 +474,8 @@ _Avoid_: upgrade seds, Dockerfile patcher.
 - "entrypoint" was used for both the **wrapper** scripts and the container
   `ENTRYPOINT` — resolved: "wrapper" for the former, "ENTRYPOINT" for the
   latter.
+- "entrypoint" then split again, between the file that IS the container
+  `ENTRYPOINT` and the repo file it runs — resolved: **ENTRYPOINT
+  orchestrator** for base's, **container bringup** for the repo's. The
+  repo's file keeps the on-disk name `script/entrypoint.sh`; the
+  distinction is in the word, not the path (#945).

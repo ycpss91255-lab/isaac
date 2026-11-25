@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 #
-# schema.sh — setup.conf validation registry + dispatcher (epic).
+# schema.sh — setup.toml validation registry + dispatcher (epic).
 #
 # Single source of truth for "is this <section>.<key> = <value> valid?".
 # Both setup.sh (the `set` / `add` subcommands, via _setup_validate_kv)
 # and the TUI route their accept/reject decision through
 # `_schema_validate`, so the two can no longer drift — the TUI can no
 # longer accept input that setup.sh rejects, and vice versa.
+#
+# That claim used to be true of the top-level sections and false of
+# `[stage:*]` (base#1268). A per-stage editor hands the section in as
+# `stage:<name>.<section>`, `_schema_canonical_key` had a normalisation
+# rule for `logging.<svc>` and none for that, so every per-stage key
+# resolved to the empty string and the gate accepted anything — on the
+# one path with no `setup.sh set` equivalent to fall back on. The rule now
+# lives beside the logging one, so both compound section spellings reach
+# the same key set and the sentence above holds for the whole file.
 #
 # The registry only maps a canonical (section,key) to the NAME of the
 # validator function; the validator bodies stay in _tui_conf.sh. This
@@ -88,6 +97,7 @@ declare -gA SCHEMA_VALIDATOR=(
   [devices.device_]=_validate_mount
   [devices.cgroup_rule_]=_validate_cgroup_rule
   [environment.env_]=_validate_env_kv
+  [tmpfs.tmpfs_]=_validate_tmpfs
   [network.port_]=_validate_port_mapping
   [additional_contexts.context_]=_validate_additional_context
   [security.cap_add_]=_validate_capability
@@ -95,22 +105,81 @@ declare -gA SCHEMA_VALIDATOR=(
 )
 
 # ════════════════════════════════════════════════════════════════════
-# SCHEMA_SECTIONS — the ordered list of setup.conf sections.
+# SCHEMA_SECTIONS — the ordered list of setup.toml sections.
 #
 # Single source for "which sections exist, in what order" (the order
-# matches the setup.conf template headers). Consumers derive from this
+# matches the setup.toml template headers). Consumers derive from this
 # instead of hand-maintaining parallel section lists:
 #   - setup.sh's _setup_known_section (via _schema_is_section)
 #   - the TUI menu dispatch + CLI subcommand recognition
 # so adding a section here makes it known/dispatchable without editing
-# those call sites. Note some sections (image / gui / tmpfs) carry only
-# free-form keys and so have no SCHEMA_VALIDATOR rows; the list is kept
-# explicit rather than derived from the validator map so those sections
-# are not dropped.
+# those call sites. Every section here now carries at least one
+# SCHEMA_VALIDATOR row, and schema_coverage_spec derives that claim from
+# the two registries rather than restating it, so a section added
+# without a validator is a red test. The list is still kept explicit
+# rather than derived from the validator map, because the ORDER is the
+# template's and the map has none.
+#
+# This comment used to name image / gui / tmpfs as free-form-only
+# sections. It had been stale for a while in two of the three --
+# image.rule_ and gui.mode both have validators -- and base#1095 closed
+# the last one: `tmpfs` validated nothing, so `setup.sh set
+# tmpfs.tmpfs_1` accepted a value carrying a newline and
+# _emit_tmpfs_block wrote it into compose.yaml as several entries. A
+# comment naming one hole as a group of three is what made the last one
+# look accepted rather than left.
 declare -ga SCHEMA_SECTIONS=(
   project image build deploy lifecycle gui network security resources
   environment tmpfs devices volumes additional_contexts logging
 )
+
+# ════════════════════════════════════════════════════════════════════
+# The sections that have SUB-SECTIONS: a name that can appear as
+# `<name>.<sub>` and own keys there, rather than owning keys directly
+# under `<name>`.
+#
+# This exists because `<section>.<key>` is a LOSSY join -- either half
+# may contain a dot -- and the split back (`_conf_split_nskey` in
+# conf.sh) cannot recover which dot was the join's. No string rule can:
+# `logging.max_size` and `logging.web.driver` share a prefix and split
+# at different dots. The splitter used to carry the answer as a literal
+# `logging.*.*` match, which made this list one name long by
+# construction and is why base#1152's whole `base.*` namespace and
+# base#1184's `[base.watchdog]` could not land.
+#
+# Adding a name here is the whole of making it sub-sectioned. Nothing in
+# conf.sh is edited for it, which is the property
+# conf_accessor_spec.bats asserts by extending this array in a fixture.
+#
+# It is deliberately SEPARATE from SCHEMA_SECTIONS rather than a mark on
+# it. `logging` is in both; `stage:<name>` is in neither and must not be
+# -- its dot is in the KEY (`stage:headless.gui.mode` is section
+# `stage:headless`, key `gui.mode`), so registering it would split that
+# key at the wrong end. A per-service `[logging.<svc>]` is likewise not
+# a SCHEMA_SECTIONS entry: that open-ended shape is _setup_known_section's
+# business, and this list answers a narrower question than membership.
+# ════════════════════════════════════════════════════════════════════
+declare -ga SCHEMA_SUBSECTIONED=(
+  logging
+)
+
+# ════════════════════════════════════════════════════════════════════
+# _schema_is_subsectioned <name>
+#
+# Returns 0 when <name> is registered as having sub-sections, 1
+# otherwise. The single predicate over SCHEMA_SUBSECTIONED, for the
+# same reason _schema_is_section is the single one over
+# SCHEMA_SECTIONS: a consumer that re-derives the list is a consumer
+# that goes stale when the list grows.
+# ════════════════════════════════════════════════════════════════════
+_schema_is_subsectioned() {
+  local _s="${1-}"
+  local _name
+  for _name in "${SCHEMA_SUBSECTIONED[@]}"; do
+    [[ "${_name}" == "${_s}" ]] && return 0
+  done
+  return 1
+}
 
 # ════════════════════════════════════════════════════════════════════
 # SCHEMA_I18N — the i18n-index (deferred fromepic).
@@ -139,8 +208,8 @@ declare -ga SCHEMA_SECTIONS=(
 declare -gA SCHEMA_I18N=(
   # ── scalar keys ──────────────────────────────────────────────────
   # project.name: config-file / CLI only. The TUI edits the COMMITTED
-  # .setup.conf, while the per-worktree name belongs in the gitignored
-  # .setup.conf.local that `setup.sh set --local project.name <x>` writes
+  # setup.toml, while the per-worktree name belongs in the gitignored
+  # setup.local.toml that `setup.sh set --local project.name <x>` writes
   # -- a layer the menu has no concept of. Surfacing a project-name row
   # there would edit the wrong file by default, so this is a deliberate
   # no-editor opt-out, not a missing translation.
@@ -197,6 +266,7 @@ declare -gA SCHEMA_I18N=(
   [devices.device_]=devices.device.prompt
   [devices.cgroup_rule_]=devices.cgroup.prompt
   [environment.env_]=environment.entry.prompt
+  [tmpfs.tmpfs_]=tmpfs.entry.prompt
   [network.port_]=ports.entry.prompt
   [additional_contexts.context_]=additional_contexts.entry.prompt
   [security.cap_add_]=security.cap_add.prompt
@@ -204,12 +274,28 @@ declare -gA SCHEMA_I18N=(
 )
 
 # SCHEMA_EMPTY records the per-key empty-value policy. Default (a key
-# absent from this map) is "allow": an empty value clears the key and is
-# always accepted. The exception is keys whose validator rejects empty by
-# design — they are marked "validate" so the empty string is passed
-# through to the validator (which rejects it).
+# absent from this map) is "allow": an empty value is always accepted.
+# The exception is keys whose validator rejects empty by design — they
+# are marked "validate" so the empty string is passed through to the
+# validator (which rejects it).
+#
+# "allow" used to be described here as "an empty value clears the key",
+# and that was the defect base#1267 turned up, not the behaviour: on the
+# `setup.sh set` path `_upsert_conf_value` -> `_conf_upsert_scalar`
+# writes `<key> = ""`, so the key is left PRESENT and empty. Only the
+# TUI's `_mark_removed` actually removes a line, so clearing is a TUI
+# gesture and never something this policy performs. A key whose readers
+# cannot carry an empty value therefore cannot rely on "allow" meaning
+# the key goes away; it belongs below.
 declare -gA SCHEMA_EMPTY=(
   [deploy.gpu_count]=validate
+  # base#1267: `gpu` is the default for an ABSENT gpu_capabilities
+  # (deploy.sh), so a present-empty key resolves to "" and reaches
+  # `generate_compose_yaml`'s `local _gpu_caps="${6:?}"`, which aborts the
+  # whole apply after the .env files are already written. `set` reported
+  # success over a configuration the next command refuses; the refusal
+  # belongs at the one gate the CLI and the TUI share.
+  [deploy.gpu_capabilities]=validate
 )
 
 # ════════════════════════════════════════════════════════════════════
@@ -220,7 +306,7 @@ declare -gA SCHEMA_EMPTY=(
 # nothing else: the next key added to the template reopens it, which is
 # exactly how gui.mode / deploy.gpu_mode / gpu_capabilities / dri_groups
 # / security_opt_ / image.rule_ / security.privileged slipped through.
-# schema_coverage_spec asserts that EVERY key the shipped setup.conf
+# schema_coverage_spec asserts that EVERY key the shipped setup.toml
 # declares -- live line or commented example -- resolves to a
 # SCHEMA_VALIDATOR entry or appears here, so "unregistered key with a
 # fixed value set" is a CI failure rather than a runtime surprise.
@@ -230,12 +316,22 @@ declare -gA SCHEMA_EMPTY=(
 # accepts arbitrary input; an empty reason fails the coverage spec.
 # Opting out is a deliberate, reviewable statement -- not a default.
 #
-# Currently empty: every shipped key has a value set worth enforcing.
-#
 # Declarative data, read by schema_coverage_spec's completeness gate
 # rather than by any function in this lib -- so the unused-variable
 # warning is expected here and nowhere else in the file.
 # shellcheck disable=SC2034
+#
+# EMPTY, and that is a statement rather than an omission: every key the
+# shipped template declares resolves to a validator. The last row here
+# read "a tmpfs entry is a mount point with no fixed value set: any path
+# the kernel accepts is valid" -- true about the path's CONTENT and
+# beside the point, because the shape was never free. base#1095 measured
+# what the row bought: `tmpfs_1` carrying a newline was accepted and
+# _emit_tmpfs_block wrote it into compose.yaml as several entries.
+# `volumes.mount_` has exactly the same "any path" latitude and still
+# refuses whitespace, so the row was reclassifying a hole as a policy.
+# A future key with a genuinely open value set belongs here with its
+# reason; none has one today.
 declare -gA SCHEMA_FREEFORM=()
 
 # ════════════════════════════════════════════════════════════════════
@@ -282,13 +378,23 @@ _schema_section_keys() {
 #
 # Resolves (section,key) to its registry canonical key in <out_canon>,
 # or the empty string when the key is free-form (not in the registry).
-# Normalises per-service logging sections ([logging.<svc>] -> logging)
-# and numbered list keys (port_3 -> port_).
+# Normalises the two compound section spellings (per-service logging
+# sections, [logging.<svc>] -> logging; per-stage overrides,
+# [stage:<name>.<section>] -> <section>) and numbered list keys
+# (port_3 -> port_).
 # ════════════════════════════════════════════════════════════════════
 _schema_canonical_key() {
   local _section="${1-}"
   local _key="${2-}"
   local -n _sck_out="${3:?_schema_canonical_key: missing out var}"
+
+  # [stage:<name>.<section>] per-stage overrides are the SAME setting as
+  # the top-level one and share its key set, so the stage namespace is
+  # stripped before anything else (base#1268). Shortest-match, so only the
+  # stage name goes and a compound section under it -- stage:dev.logging --
+  # is left for the rule below. A bare `stage:<name>` names no section and
+  # matches nothing here, which is correct: it carries no key set.
+  [[ "${_section}" == stage:*.* ]] && _section="${_section#stage:*.}"
 
   # [logging.<svc>] per-service overrides share the [logging] key set.
   [[ "${_section}" == logging.* ]] && _section="logging"
@@ -358,8 +464,10 @@ _schema_validate() {
   # Free-form key: accept any value.
   [[ -z "${_canon}" ]] && return 0
 
-  # Empty-value policy. Default "allow" (empty clears the key); only keys
-  # marked "validate" delegate the empty string to their validator.
+  # Empty-value policy. Default "allow" (empty is accepted without asking
+  # the validator -- it does NOT clear the key; see SCHEMA_EMPTY above);
+  # only keys marked "validate" delegate the empty string to their
+  # validator.
   local _policy="${SCHEMA_EMPTY[${_canon}]:-allow}"
   if [[ -z "${_value}" && "${_policy}" == "allow" ]]; then
     return 0

@@ -97,6 +97,26 @@ to N>=2 -> setup.conf. Only one repo -> escape hatch.
   setup.conf's merge semantics.
 - setup.conf keeps section-replace semantics. No change to
   key-level merge.
+
+**Amendment (ADR-37 D4 #1130, 2026-09-07): type-aware merge for TOML.**
+The `.setup.toml` format introduces type-aware merge semantics: scalar
+keys within a `[table]` get key-level merge (upper layer overrides only
+the keys it defines; unmentioned keys inherit), while `[[array of
+tables]]` entries get array replace (the entire array comes from the
+highest layer that defines it). This applies only to TOML layers; the
+INI `.setup.conf` chain retains section-replace. The TOML merge runs
+in Python inside the containerised bridge (ADR-37), where type
+information (dict vs list) is natively available.
+
+**Amendment (#1137, 2026-10-10):** "the highest layer that defines it"
+includes a layer that defines it with ZERO entries -- see ADR-00000037's
+zero-entry amendment for why the absent key and the empty array are not
+the same state.
+
+**Amendment (#1235, 2026-10-11):** the key-level half of that rule can
+change what a scalar resolves to wherever section-replace had masked a
+lower layer's value -- see ADR-00000037's masked-scalar amendment for the
+accepted cost and the check an upgrader runs.
 - If the same kind of customization appears in 3+ repos later,
   re-evaluate -- it may graduate into setup.conf.
 - Downstream repos can still write `compose.override.yaml` for

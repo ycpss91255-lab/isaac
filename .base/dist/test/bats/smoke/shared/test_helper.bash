@@ -55,6 +55,72 @@ assert_cmd_runs() {
   fi
 }
 
+# ── The reproducibility manifest's adoption state ───────────────────────────
+
+# reproducibility_manifest_state <env-path> <pkgs-path> <dir-path>
+#
+# Print one word saying whether the image under test is supposed to carry
+# the reproducibility manifest, so a spec over that manifest can tell "this
+# repo has not ported the record yet" from "this repo ported it and the
+# record is gone". Those two look identical from the two FILES' absence,
+# which is why that absence is not what decides.
+#
+#   adopted   at least one half of the manifest is present, so every
+#             assertion about the record is in scope -- including one about
+#             the half that is missing.
+#   missing   neither half is present, and <dir-path> is there. The
+#             instruction that creates that directory is the instruction
+#             that writes the record, so the stage ran and the record is
+#             gone: adopted and lost.
+#   unported  neither half, and no directory either. The image carries no
+#             footprint of the record at all, so this repo never claimed to
+#             keep it.
+#
+# WHY THE IMAGE DECIDES, AND NOT THE DOCKERFILE'S TEXT. The question is
+# about THIS image, and the image is what the spec can read directly. An
+# earlier form of this helper read the consumer's Dockerfile at
+# /lint/Dockerfile and looked for a redirection into one of the paths, which
+# is a shell question answered in awk, and codex review found two classes of
+# false positive in two rounds: a redirection the scan saw inside quoted text
+# or an inline comment (`RUN echo "> <path>"`), and a write that lives in a
+# stage the image under test does not descend from (the runtime re-emit, when
+# only devel-test is being built). The tail of that question has no end --
+# quoting, heredocs, build args, `COPY --from` -- and every miss falls the
+# WRONG WAY: a false adoption costs an un-ported repo its skip and turns its
+# upgrade into a broken build, which is the one outcome this reading exists
+# to prevent.
+#
+# The directory asks nothing about shell and nothing about stages. It is
+# created by the same instruction that writes the two files -- `mkdir -p
+# <dir> && ... > <env> && ... > <pkgs>` in the shipped template's sys stage
+# and again in its runtime re-emit -- and nothing else in the shipped tree
+# creates it. Its presence IS the ancestry answer: the directory is in the
+# image under test, or it is not.
+#
+# The residual cost is stated rather than hidden. An edit that removes the
+# whole RUN -- the mkdir with the redirections -- reads as `unported` and
+# skips, where reading the Dockerfile would have caught it. That is the
+# direction the error has to fall, and base's own smoke harness is covered
+# from the other side: test/bats/system/smoke_harness_spec.bats builds it and
+# refuses any `# skip` in the output.
+#
+# Usage: reproducibility_manifest_state <env-path> <pkgs-path> <dir-path>
+reproducibility_manifest_state() {
+  local _env="${1:?reproducibility_manifest_state: missing env path}"
+  local _pkgs="${2:?reproducibility_manifest_state: missing pkgs path}"
+  local _dir="${3:?reproducibility_manifest_state: missing dir path}"
+
+  if [[ -e "${_env}" || -e "${_pkgs}" ]]; then
+    printf 'adopted\n'
+  elif [[ -d "${_dir}" ]]; then
+    printf 'missing\n'
+  else
+    printf 'unported\n'
+  fi
+  return 0
+}
+
+
 # Fail the test unless <path> exists and is a regular file.
 #
 # Usage: assert_file_exists <path>
@@ -119,6 +185,36 @@ assert_pip_pkg() {
       | batslib_decorate "pip package not installed" \
       | fail
   fi
+}
+
+# ── Entry-point model probe ─────────────────────────────────────────────────
+
+# True when <path> is a PRE-ADR-00000032 single-file entry point -- one that
+# execs the workload itself, and is therefore the container's ENTRYPOINT
+# rather than a bringup base's orchestrator sources.
+#
+# The exec is the discriminator because it is the one line the two models
+# cannot share: a bringup must not carry one (taking over the process
+# mid-source means the watchdog never arms and the orchestrator's own exec
+# never runs), so an exec says "this file IS the entry point" -- which is
+# the fact a spec running INSIDE the image cannot otherwise get at, the
+# Dockerfile's ENTRYPOINT line being unreadable from in there. The pattern
+# is deliberately the same one `dockerfile_migrate.sh` warns on
+# (_DFM_BRINGUP_EXEC_RE), so the build-time probe and the upgrade-time
+# notice cannot disagree about what counts as an exec.
+#
+# Why a probe at all: the shared smoke baseline reaches a consumer through
+# `.base/dist/`, which `just base upgrade` refreshes, while the Dockerfile that
+# would install the orchestrator is the consumer's own and hand-edited. A
+# repo that has not migrated therefore gets the spec before it gets the
+# file, and failing it would turn an upgrade into a broken build over a
+# model the repo never adopted.
+#
+# Usage: entrypoint_is_single_file <path>
+entrypoint_is_single_file() {
+  local _path="${1:?entrypoint_is_single_file: missing path}"
+  [[ -f "${_path}" ]] || return 1
+  grep -qE '^[[:space:]]*exec[[:space:]]' "${_path}"
 }
 
 # ── Wrapper drivers ─────────────────────────────────────────────────────────

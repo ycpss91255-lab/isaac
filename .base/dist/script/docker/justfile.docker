@@ -7,7 +7,9 @@
 # no top-level `just build`).
 #
 # ADR-00000005: `just` replaces the GNU make wrapper. Each recipe forwards
-# 1:1 to ./script/<wrapper>.sh with full `{{args}}` passthrough, so
+# 1:1 to ./script/<wrapper>.sh with full passthrough -- as `"$@"` since
+# base#1289, not as a `{{args}}` interpolation, which is what makes
+# "verbatim" below true of a flag carrying a space or a `|` -- so
 # docker-native flags / sub-commands reach the script verbatim -- no
 # MAKEOVERRIDES guard, no mandatory `--` separator, and no
 # EXEC_ARGS env shim; make's argv quirks simply do not apply.
@@ -29,6 +31,24 @@
 # (verified), so build.sh & friends run from there.
 set working-directory := '../..'
 
+# Arguments reach a recipe body as "$@", not as an unquoted {{args}}
+# interpolation. An unquoted interpolation hands the recipe's own shell a
+# string to re-split, and this is the CONSUMER's interface: measured on
+# this file before the change, `just docker exec --filter 'bare
+# invocation'` handed the wrapper three arguments instead of two and
+# exited 0, while `--filter 'foo|bar'` became a shell pipeline that died
+# with `bar: not found` at status 127. base#1284 found the same shape in
+# script/test/justfile.test; base#1289 is it here.
+#
+# No recipe in this file reads $0 / $1 / $@ for anything but forwarding --
+# `grep -nE '\$[0-9@*]'` over it matches nothing -- so the setting changes
+# the meaning of no existing line. The one `-h` scan below -- `start`'s --
+# keeps its `{{args}}`: it wants the arguments JOINED into one string to
+# pattern-match against, which is what the interpolation gives it and
+# what `case` then matches as text. `set positional-arguments` is
+# additive, so that interpolation still works beside "$@".
+set positional-arguments := true
+
 # source_file (not justfile) is this module's own file: inside a mod?'d
 # module justfile resolves to the ROOT entry, so listing it would show the
 # entry's namespaces instead of the docker verbs. source_file pins
@@ -46,21 +66,43 @@ alias h := help
 # just docker help (or `just docker h`) -> language-aware recipe listing:
 # translated one-line summaries via the shared `_msg help` i18n renderer
 # (honours $LANG / --lang). Bare `just docker` and `just --list` stay English.
-help *args:
-    @"$(dirname "$(readlink -f '{{source_file()}}')")/lib/help.sh" docker {{args}}
+# The blank line below detaches this rationale from the --list doc, which
+# just takes from the last comment line above the recipe (base#1326).
 
+# List the docker recipes in your language (--lang / $LANG)
+help *args:
+    @"$(dirname "$(readlink -f '{{source_file()}}')")/lib/help.sh" docker "$@"
+
+# lifecycle: BEGINS a flow. The image is what `run` / `start` / the test
+# namespace are about to use, so a reclaim here would collect a project
+# that is about to be used. What the build leaves behind is ended by
+# `stop`, and the per-checkout artifacts by the scoped reclaim `stop` and
+# `just test` already run unasked.
+#
 # Build devel image (e.g. just docker build test  |  just docker build --no-cache)
 build *args:
-    ./script/build.sh {{args}}
+    ./script/build.sh "$@"
 
-# Run container interactively (e.g. just run  |  just run -d)
+# lifecycle: BEGINS a flow. The container it starts is the point of
+# pressing it. A foreground run installs its own EXIT teardown (it downs
+# the project with --remove-orphans); a detached one is ended by
+# `just docker stop`, which is also where the scoped reclaim runs.
+#
+# Run container interactively (e.g. just docker run  |  just docker run -d)
 run *args:
-    ./script/run.sh {{args}}
+    ./script/run.sh "$@"
 
-# Build + run in one step (e.g. just start  |  just start --no-cache).
 # `-h|--help` short-circuits with the composite-verb usage and exits
 # WITHOUT building or running -- otherwise --help would forward to
 # build.sh (prints its help, exit 0) and the recipe would run.sh anyway.
+# The blank line below detaches this rationale from the --list doc
+# (base#1326); the lifecycle note stays in the block attached to the
+# recipe, where the lifecycle spec reads it.
+
+# lifecycle: BEGINS a flow, being exactly the two verbs it composes. Ended
+# by `just docker stop`.
+#
+# Build + run in one step (e.g. just docker start  |  just docker start --no-cache)
 start *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -83,25 +125,29 @@ start *args:
         exit 0
         ;;
     esac
-    ./script/build.sh {{args}}
+    ./script/build.sh "$@"
     ./script/run.sh
 
-# Exec into a running container (e.g. just exec -t bats-src bash)
+# lifecycle: CONTINUES a flow. It attaches to a container someone else
+# started and creates nothing, so it has nothing to reclaim -- and no
+# standing to end what it did not begin.
+#
+# Exec into a running container (e.g. just docker exec -t <svc> bash)
 exec *args:
-    ./script/exec.sh {{args}}
+    ./script/exec.sh "$@"
 
 # Stop and remove containers
 stop *args:
-    ./script/stop.sh {{args}}
+    ./script/stop.sh "$@"
 
 # Prune build cache / dangling images
 prune *args:
-    ./script/prune.sh {{args}}
+    ./script/prune.sh "$@"
 
-# Regenerate .env.generated + compose.yaml from setup.conf
+# Print the setup subcommands (just docker setup apply regenerates .env / .env.generated / compose.yaml from setup.toml)
 setup *args:
-    ./script/setup.sh {{args}}
+    ./script/setup.sh "$@"
 
-# Interactive TUI to edit setup.conf
+# Interactive TUI to edit setup.toml
 setup-tui *args:
-    ./script/setup_tui.sh {{args}}
+    ./script/setup_tui.sh "$@"

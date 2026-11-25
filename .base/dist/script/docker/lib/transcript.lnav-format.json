@@ -1,7 +1,7 @@
 {
   "$schema": "https://lnav.org/schemas/format-v1.schema.json",
   "ycpss91255_wrapper_transcript": {
-    "title": "ycpss91255-docker wrapper transcript",
+    "title": "ycpss91255-lab wrapper transcript",
     "description": "Plain-text wrapper transcript lines (#606/#609): `<ISO ts> [service] LEVEL: msg`. Coexists with log.lnav-format.json (JSON, *.jsonl); docker raw output lines fall through as body.",
     "regex": {
       "std": {

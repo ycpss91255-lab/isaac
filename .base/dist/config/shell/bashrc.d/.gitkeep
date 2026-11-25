@@ -4,5 +4,5 @@
 # overrides go under <repo>/config/shell/bashrc.d/ and overlay via
 # the layered COPY chain in Dockerfile.example.
 #
-# See ycpss91255-docker/template#254 for the layered config/
+# See ycpss91255-lab/template#254 for the layered config/
 # override design.

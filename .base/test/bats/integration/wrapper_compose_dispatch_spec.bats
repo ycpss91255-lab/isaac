@@ -17,6 +17,17 @@
 #
 # Level-1 (file generation + dry-run only) -- docker is never invoked;
 # --dry-run makes every wrapper print its compose command and stop.
+#
+# why: Behaviour-based assertion (#490) that every wrapper routes its
+# `docker compose` calls through the `-p`-injecting dispatcher. Reuses the
+# `fresh_clone_portability_spec.bats` fixture pattern (cp `/source` ->
+# `.base/`, symlink the wrappers from the repo root, materialize `.env` +
+# `compose.yaml` via `build.sh --dry-run`), then runs each wrapper with
+# `--dry-run` and inspects the planned `[dry-run] docker compose -p
+# <project> <verb>` line. Immune to internal renames (replaces the old
+# name-coupled `_compose_project` / `_app_cleanup` greps in
+# `template_spec.bats`) and catches a raw-`docker compose` bypass (a missing
+# `-p`). **Level 1** (no Docker invocation).
 
 setup() {
   export LOG_FORMAT=text
@@ -36,11 +47,11 @@ setup() {
     ln -s ".base/dist/script/docker/wrapper/${_w}.sh" "${REPO_DIR}/${_w}.sh"
   done
 
-  # Seed a per-repo setup.conf from the template so apply renders .env +
+  # Seed a per-repo setup.toml from the template so apply renders .env +
   # compose.yaml deterministically.
   mkdir -p "${REPO_DIR}"
-  cp "${REPO_DIR}/.base/dist/.setup.conf" \
-     "${REPO_DIR}/.setup.conf"
+  cp "${REPO_DIR}/.base/dist/setup.toml" \
+     "${REPO_DIR}/setup.toml"
 
   cd "${REPO_DIR}"
 
@@ -57,6 +68,7 @@ teardown() {
 
 # ── compose dispatch (behaviour-based) ──────────────────────────────────────────
 
+# why: build dispatch
 @test "build.sh --dry-run dispatches compose build with -p project flag" {
   run bash "${REPO_DIR}/build.sh" --dry-run
   assert_success
@@ -66,6 +78,7 @@ teardown() {
   assert_output --partial ' build'
 }
 
+# why: run devel up+exec
 @test "run.sh --dry-run (default devel) dispatches compose up + exec with -p" {
   run bash "${REPO_DIR}/run.sh" --dry-run
   assert_success
@@ -73,18 +86,21 @@ teardown() {
   assert_output --regexp '\[dry-run\] docker compose -p [a-zA-Z0-9._-]+ .* exec '
 }
 
+# why: exec dispatch
 @test "exec.sh --dry-run dispatches compose exec with -p" {
   run bash "${REPO_DIR}/exec.sh" --dry-run
   assert_success
   assert_output --regexp '\[dry-run\] docker compose -p [a-zA-Z0-9._-]+ .* exec '
 }
 
+# why: stop dispatch
 @test "stop.sh --dry-run dispatches compose down with -p" {
   run bash "${REPO_DIR}/stop.sh" --dry-run
   assert_success
   assert_output --regexp '\[dry-run\] docker compose -p [a-zA-Z0-9._-]+ .* down'
 }
 
+# why: EXIT-trap cleanup
 @test "run.sh foreground --dry-run installs cleanup that downs with --remove-orphans" {
   run bash "${REPO_DIR}/run.sh" --dry-run
   assert_success
@@ -93,6 +109,7 @@ teardown() {
   assert_output --regexp '\[dry-run\] docker compose -p [a-zA-Z0-9._-]+ .* down --remove-orphans -t'
 }
 
+# why: bypass catcher
 @test "no wrapper dispatches compose without -p (bypass regression)" {
   # Every `docker compose` invocation must go through the -p-injecting
   # dispatcher. A raw `docker compose ...` (wrong project name) is the
@@ -135,9 +152,9 @@ teardown() {
   assert_output --partial "docker compose -p ${_recorded}"
 }
 
-@test "[project] name in .setup.conf.local moves BOTH the -p and the emitted name:" {
-  printf '[project]\nname = %s\n' "myapp-worktree-2" \
-    > "${REPO_DIR}/.setup.conf.local"
+@test "[project] name in setup.local.toml moves BOTH the -p and the emitted name:" {
+  printf '[project]\nname = "%s"\n' "myapp-worktree-2" \
+    > "${REPO_DIR}/setup.local.toml"
   run bash "${REPO_DIR}/build.sh" --dry-run
   assert_success
   assert_output --partial "docker compose -p myapp-worktree-2"
@@ -157,8 +174,8 @@ teardown() {
   # hand-edited derived artifact and no environment variable.
   local _second="${TMP_ROOT}/${REPO_NAME}-2"
   cp -a "${REPO_DIR}" "${_second}"
-  printf '[project]\nname = %s\n' "myapp-worktree-2" \
-    > "${_second}/.setup.conf.local"
+  printf '[project]\nname = "%s"\n' "myapp-worktree-2" \
+    > "${_second}/setup.local.toml"
 
   run bash "${REPO_DIR}/build.sh" --dry-run
   assert_success
