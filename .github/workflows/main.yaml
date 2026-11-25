@@ -148,7 +148,7 @@ jobs:
   core-build:
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    uses: ycpss91255-lab/base/.github/workflows/build-worker.yaml@v0.42.0
+    uses: ycpss91255-lab/base/.github/workflows/build-worker.yaml@v0.43.0-rc7
     with:
       image_name: docker
       # Isaac Sim base image is itself the runtime (15+ GB binary tree);
@@ -245,6 +245,6 @@ jobs:
   release:
     needs: gate
     if: startsWith(github.ref, 'refs/tags/')
-    uses: ycpss91255-lab/base/.github/workflows/release-worker.yaml@v0.42.0
+    uses: ycpss91255-lab/base/.github/workflows/release-worker.yaml@v0.43.0-rc7
     with:
       archive_name_prefix: docker

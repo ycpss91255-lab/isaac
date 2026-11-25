@@ -23,3 +23,10 @@ log/
 # documents/Kit/shared/screenshots with mode 000, which fails the build
 # context with "permission denied".
 isaac-sim/
+.env.local
+.env.local.toml
+.env.local.bak
+env.local.toml
+setup.toml.bak
+.setup.conf.local.bak
+setup.local.toml
