@@ -40,14 +40,14 @@ def openbase_usd_path() -> Path:
 
     Raises:
         FileNotFoundError: when the USD file is absent. The production
-            models now live in ``ycpss91255-docker/sim_asset``.
+            models now live in ``ycpss91255-lab/sim_asset``.
     """
     p = SRC_DIR / "model" / "usd" / "robot" / "openbase" / "openbase.usda"
     if not p.is_file():
         raise FileNotFoundError(
             f"OpenBase USD not found at {p}. "
             "Robot models have moved to the sim_asset repository "
-            "(ycpss91255-docker/sim_asset). Clone it and regenerate the "
+            "(ycpss91255-lab/sim_asset). Clone it and regenerate the "
             "USD from URDF, or copy the USD into this path."
         )
     return p

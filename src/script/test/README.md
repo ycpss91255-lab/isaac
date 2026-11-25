@@ -84,7 +84,7 @@ succeeded.
 ## Why this dir, not isaac_ws/src/docker/test/
 
 `isaac_ws/src/docker/test/` belongs to the docker repo
-(`ycpss91255-docker/isaac`) and tests the container image / wrappers,
+(`ycpss91255-lab/isaac`) and tests the container image / wrappers,
 not the scripts that run inside it. The standalone scripts live in
-`isaac_ws/src/script/` (this repo, `ycpss91255-research/isaac`); their smoke
+`isaac_ws/src/script/` (this repo, `ycpss91255-lab/isaac`); their smoke
 lives alongside them so it travels with them.

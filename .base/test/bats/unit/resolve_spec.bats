@@ -1,4 +1,11 @@
 #!/usr/bin/env bats
+#
+# why: Mirrors `lib/resolve.sh`. The host-detection resolvers in isolation:
+# `_resolve_gpu` / `_resolve_gui` (auto / force / off), `_resolve_runtime`
+# and `_resolve_build_network` over `_detect_jetson`, the documented
+# `SETUP_DETECT_JETSON` / `SETUP_DETECT_DRI_GROUPS` operator-override
+# contract (#760) for `_detect_jetson` / `_detect_dri_groups`, and
+# `_compute_conf_hash`.
 
 bats_require_minimum_version 1.5.0
 
@@ -190,9 +197,9 @@ load "${BATS_TEST_DIRNAME}/setup_spec_helper"
 @test "_compute_conf_hash differs when per-repo setup.conf changes" {
   local _h1 _h2
   _compute_conf_hash "${TEMP_DIR}" _h1
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gpu]
-mode = off
+mode = "off"
 EOF
   _compute_conf_hash "${TEMP_DIR}" _h2
   [[ "${_h1}" != "${_h2}" ]]

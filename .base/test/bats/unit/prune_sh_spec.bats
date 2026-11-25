@@ -7,6 +7,61 @@
 # invoked with which flags.
 #
 # Refs
+#
+# why: Unit tests for the new `script/docker/prune.sh` wrapper (#319) —
+# atomic docker garbage cleanup with conservative per-target `--filter
+# until=` defaults (network=10m, image=24h, builder=24h, volume=no filter).
+# Sandbox + PATH-shimmed `docker` stub mirrors the build/run/exec/stop spec
+# strategy; `docker compose` is never invoked here so no `.env` seeding is
+# required beyond the sandbox layout.
+#
+# Covers: `--help` (en/zh-TW/zh-CN/ja), no-target exit-2 hint (English +
+# zh-TW), `--until` / `--lang` value-required guards, unknown-flag exit-2,
+# individual `--networks` / `--images` / `--builder` / `--volumes` dry-run
+# output (each with its own default grace; volume output omits `--filter`),
+# **`--all` aggregator** (network + image + builder; volumes intentionally
+# excluded), **`--until <dur>` override** across all selected targets,
+# **volume confirmation prompt** (`n` aborts with exit-1 + i18n "aborted"
+# message; closed-stdin EOF aborts cleanly with no set-e crash (#702); `-y`
+# skips the prompt; zh-TW prompt body asserts), `-C` / `--chdir` parity
+# (accepted but no-op for daemon-wide prune; value-required + directory
+# guards), usage help mentions every flag family, and **#388
+# `--worktree-orphans` mode** (13 cases): per-test smart docker stub keyed
+# on `DOCKER_IMAGES_OUTPUT` / `DOCKER_RMI_LOG` mocks `docker images` +
+# `rmi`; fixtures construct real `<workspace>/worktree/<name>/` dirs so the
+# existence check has something to consult. Cases cover empty-list no-op,
+# owner-match + missing worktree → rmi, owner-match + worktree alive → keep,
+# main-checkout pattern (no hyphen) → keep, **two safety gates**: bare-name
+# image → skip ("Skipping N bare-name image" log), other-owner image → skip
+# ("Skipping N image(s) owned by another user" log). Plus `--repo` filter,
+# `--dry-run` plan-only output, `-y` skip prompt, missing `--workspace` +
+# empty `.env` → exit 2, `--workspace` flag wins over `.env` `WS_PATH`,
+# `--owner` flag wins over `.env` `DOCKER_HUB_USER`, and `--help` mentions
+# all four new flags.
+#
+# Plus the **`--worktree-orphans` interactive confirmation gate (#699)** —
+# the destructive `docker rmi` loop only reaches its prompt when neither
+# `-y` nor `--dry-run` is given, a branch the cases above never exercised.
+# Three cases mirror the `--volumes` prompt pair for the more destructive
+# image removal: piped `y` confirms and the candidate lands in
+# `DOCKER_RMI_LOG`; piped `n` aborts with exit-1 + "aborted by user" and an
+# empty `DOCKER_RMI_LOG`; closed stdin (`</dev/null`, no `-y`) aborts
+# cleanly with the same diagnostic instead of dying on a `set -e` `read` EOF
+# — prune.sh maps `read` EOF to an empty reply (`read -r _reply ||
+# _reply=""`) so the default case treats it as an explicit abort.
+#
+# Regression guard for **issue #282** — the four user-facing wrappers
+# (`build.sh` / `run.sh` / `exec.sh` / `stop.sh`) must resolve `_lib.sh`
+# through the post-#263 `.base/` subtree prefix on a fresh clone of any
+# downstream repo. Pre-fix the wrappers hard-coded `template/` and a freshly
+# cloned downstream repo (where the subtree now lives under `.base/`) failed
+# at the `_lib.sh` source step with "cannot find _lib.sh".
+#
+# Covers: `--help` succeeds for each wrapper when
+# `.base/script/docker/_lib.sh` exists alongside the wrapper symlink; the
+# documented "cannot find _lib.sh" error path still fires (with the new
+# `.base/...` path in the diagnostic) when neither `.base/` nor the sibling
+# fallback is present.
 
 bats_require_minimum_version 1.5.0
 
@@ -56,16 +111,30 @@ teardown() {
   assert_output --partial "prune.sh"
 }
 
+# why: Both Chinese usage heredocs open with the same two characters
+# meaning "Usage", so asserting that shared token could not tell
+# Traditional from Simplified: pointing the zh-CN arm at the Traditional
+# block left every locale test green. The token asserted here is the
+# help-flag description line in its Traditional spelling, which the
+# Simplified block cannot contain, and the refute names the Simplified
+# spelling that must not appear -- so the pair is red in both directions.
 @test "prune.sh --lang zh-TW prints Traditional Chinese usage text" {
   run bash "${SANDBOX}/prune.sh" --lang zh-TW --help
   assert_success
-  assert_output --partial "用法"
+  assert_output --partial "顯示此說明"
+  refute_output --partial "显示此说明"
 }
 
+# why: The Simplified half of the same decision. The shared "Usage" token
+# this used to assert is byte-identical in both Chinese heredocs, so a
+# zh-CN arm rendering the Traditional block read green. The token asserted
+# here is the help-flag description line in its Simplified spelling, which
+# the Traditional block cannot contain.
 @test "prune.sh --lang zh-CN prints Simplified Chinese usage text" {
   run bash "${SANDBOX}/prune.sh" --lang zh-CN --help
   assert_success
-  assert_output --partial "用法"
+  assert_output --partial "显示此说明"
+  refute_output --partial "顯示此說明"
 }
 
 @test "prune.sh --lang ja prints Japanese usage text" {

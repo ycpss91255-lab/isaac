@@ -1,6 +1,6 @@
 """Hosted guard: the cross-container round-trip owns a DEDICATED compose project.
 
-Regression guard for ycpss91255-docker/omniverse_web_viewer#55 (isaac-side
+Regression guard for ycpss91255-lab/omniverse_web_viewer#55 (isaac-side
 root cause). ``test_cross_container_roundtrip`` runs the Isaac runner via
 ``docker compose -p <COMPOSE_PROJECT> run --rm ...``; its teardown tears down
 that whole compose project (``docker compose -p <project> down`` /

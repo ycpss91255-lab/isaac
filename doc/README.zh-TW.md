@@ -2,11 +2,11 @@
 
 **[English](../README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
 
-NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-docker/base`](https://github.com/ycpss91255-docker/base)（前身為 `ycpss91255-docker/template`）為基礎建立。
+NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
 
 Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner、`UrdfConverter`、`AppLauncher`；ADR-0018）。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
 
-本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD / URDF 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-research/isaac` 與 `ycpss91255-docker/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-docker/isaac/issues/78) 合併至此。
+本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD / URDF 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
 ## 前置需求
 
@@ -36,7 +36,7 @@ NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；為何不�
 | 一個用來開發的互動 shell | `just docker build`（devel） | `just docker run` |
 | 透過 WebRTC 看模擬畫面 | `just docker build -t stream` | `just docker run -t stream -d`，接著看「連接 WebRTC livestream」 |
 
-冷啟動的第一次 build 大約要一小時：先 pull 20.7 GB 的 NGC base image，再安裝 Isaac Lab。GitHub-hosted CI 的 build 花了 45 到 84 分鐘（[45 分](https://github.com/ycpss91255-docker/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-docker/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-docker/isaac/actions/runs/42491566385/job/128764928999)）。之後的 build 會重用 layer cache，其他 stage 也共用這些 layer，所以 build 第二個 stage 只要幾秒到幾分鐘。
+冷啟動的第一次 build 大約要一小時：先 pull 20.7 GB 的 NGC base image，再安裝 Isaac Lab。GitHub-hosted CI 的 build 花了 45 到 84 分鐘（[45 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)）。之後的 build 會重用 layer cache，其他 stage 也共用這些 layer，所以 build 第二個 stage 只要幾秒到幾分鐘。
 
 Production stage（兩個 stage 啟動後都 idle — driver 腳本用 exec 送進執行中的 container）：
 
@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage 樹：`devel-base` -> `devel`（共用層：isaac 程式與共用設定）-> `gui` / `stream` / `headless`。只有 `gui` service 掛 X11（`.setup.conf` 的 `[stage:gui] gui.mode = auto`；頂層 `[gui]` 為 `off`，所以 `devel` 與其他 stage 都不掛）：`just docker run -t gui`。兩個 stage 透過 [base #215](https://github.com/ycpss91255-docker/base/issues/215) auto-emit 為 profile-gated compose service：`headless`（pure sim，`ISAAC_LIVESTREAM=0`）與 `stream`（sim + WebRTC，`ISAAC_LIVESTREAM=2`）。兩者啟動後都 `CMD ["sleep","infinity"]` idle（沒有 `runheadless.sh -v` ENTRYPOINT）— container 持續存活，由你用 `just docker exec -t <stage> <cmd>` 把 driver 腳本（`/isaac-sim/python.sh <driver.py>`，讀 `ISAAC_LIVESTREAM=2` 開 stream）或一次性 `/usr/local/bin/runheadless-host-config.sh` 送進去；streaming 起來後 web-viewer 連 `:5173`。使用 `just docker run -t <stage> -d` 啟動。
+> Stage 樹：`devel-base` -> `devel`（共用層：isaac 程式與共用設定）-> `gui` / `stream` / `headless`。只有 `gui` service 掛 X11（`.setup.conf` 的 `[stage:gui] gui.mode = auto`；頂層 `[gui]` 為 `off`，所以 `devel` 與其他 stage 都不掛）：`just docker run -t gui`。兩個 stage 透過 [base #215](https://github.com/ycpss91255-lab/base/issues/215) auto-emit 為 profile-gated compose service：`headless`（pure sim，`ISAAC_LIVESTREAM=0`）與 `stream`（sim + WebRTC，`ISAAC_LIVESTREAM=2`）。兩者啟動後都 `CMD ["sleep","infinity"]` idle（沒有 `runheadless.sh -v` ENTRYPOINT）— container 持續存活，由你用 `just docker exec -t <stage> <cmd>` 把 driver 腳本（`/isaac-sim/python.sh <driver.py>`，讀 `ISAAC_LIVESTREAM=2` 開 stream）或一次性 `/usr/local/bin/runheadless-host-config.sh` 送進去；streaming 起來後 web-viewer 連 `:5173`。使用 `just docker run -t <stage> -d` 啟動。
 
 ### Headless：啟動 Isaac 並跑一個場景
 
@@ -108,9 +108,9 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 
 ### 每個 checkout 一個 image 與一個 compose project
 
-以前同一台 host 上這個 repo 的每個 checkout 都會解析出同一個 image tag（`<hub>/isaac:<stage>`）與同一個 compose project（`<hub>-isaac`）。結果 `just docker build` 會 prune 掉別的 checkout build 的 image，`just docker stop` / `run` 會移除別的 checkout 的 container（上游：[base#1550](https://github.com/ycpss91255-docker/base/issues/1550)、[base#1551](https://github.com/ycpss91255-docker/base/issues/1551)、[base#1552](https://github.com/ycpss91255-docker/base/issues/1552)）。在 base 修好之前：
+以前同一台 host 上這個 repo 的每個 checkout 都會解析出同一個 image tag（`<hub>/isaac:<stage>`）與同一個 compose project（`<hub>-isaac`）。結果 `just docker build` 會 prune 掉別的 checkout build 的 image，`just docker stop` / `run` 會移除別的 checkout 的 container（上游：[base#1550](https://github.com/ycpss91255-lab/base/issues/1550)、[base#1551](https://github.com/ycpss91255-lab/base/issues/1551)、[base#1552](https://github.com/ycpss91255-lab/base/issues/1552)）。在 base 修好之前：
 
-- `./script/checkout_identity.sh isolate` 會把 `[image] rule_1 = string:isaac-<dir>-<hash>` 寫進 gitignored 的 `.setup.conf.local`。image tag、compose project 與 container 名稱都跟著它走。`./script/checkout_identity.sh show` 會印出這個 checkout 解析出的名稱。
+- `./script/checkout_identity.sh isolate` 會把 `[[image.rules]] rule = "string:isaac-<dir>-<hash>"`（含 `[project] name`） 寫進 gitignored 的 `setup.local.toml`。image tag、compose project 與 container 名稱都跟著它走。`./script/checkout_identity.sh show` 會印出這個 checkout 解析出的名稱。
 - pre build / run / stop hook 會拒絕對共用名稱動作。`ISAAC_ALLOW_SHARED_IDENTITY=1` 可以略過；CI 的 build 步驟就是這樣用。
 - `just docker run` 不會重 build 已存在的 image（base#1552）。pull 新變更後，先 `just docker build -t <stage>` 再 `just docker run -t <stage>`。
 - 磁碟用量：每個會 build 的 checkout 或 worktree 都擁有自己的一組 image（`<hub>/isaac-<dir>-<hash>:<stage>`），每個 stage tag 名義上約 31 GB。它們不共用，刪掉 checkout 目錄也不會從 Docker daemon 移除。
@@ -126,7 +126,7 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
   ```
 
   filter 只精確比對 slug。不要放寬成 `isaac*`，也不要跑 `docker image prune -a`：共用的 `test-tools:<base 版本>` image（下一條）不可被此流程移除。
-- 有一個 image 仍然共用：每次 build 也會 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名稱只由 pin 住的 base 版本決定。host 上所有 pin 同一個 base 版本的 checkout 與 repo 都寫同一個 tag，所以別的 checkout 可能正在 build 時不要刪它。`just docker build --clean-tools` 會替所有人把它刪掉。它來自 base 的 `build.sh`，上游追蹤在 [base#1551](https://github.com/ycpss91255-docker/base/issues/1551)。
+- 有一個 image 仍然共用：每次 build 也會 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名稱只由 pin 住的 base 版本決定。host 上所有 pin 同一個 base 版本的 checkout 與 repo 都寫同一個 tag，所以別的 checkout 可能正在 build 時不要刪它。`just docker build --clean-tools` 會替所有人把它刪掉。它來自 base 的 `build.sh`，上游追蹤在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前啟動的 container 還留在共用 project 裡。用 `docker compose -p <hub>-isaac ps -a` 列出，按名稱停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 會停掉整個共用 project，包含別的 checkout 的 container。
 
 ## 連接 WebRTC livestream
@@ -139,7 +139,7 @@ Isaac Sim 6.2.0 用 NVCF（`omni.services.livestream.nvcf`）livestream 協定�
 
 ### 瀏覽器 viewer (omniverse_web_viewer)
 
-[`omniverse_web_viewer`](https://github.com/ycpss91255-docker/omniverse_web_viewer) repo 提供瀏覽器版 client，以 sidecar 容器形式運行。已作為 submodule 掛在本 repo 的 `web_viewer/`。
+[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo 提供瀏覽器版 client，以 sidecar 容器形式運行。已作為 submodule 掛在本 repo 的 `web_viewer/`。
 
 ```bash
 # First time: init submodules + create per-host config
@@ -184,9 +184,9 @@ post-run hook 同時也把 `network.public_ip` 當 `SIGNALING_SERVER` env 傳給
 
 ### 確定性 stream-source producer（GHCR image，isaac#223）
 
-給 CI 與瀏覽器版視覺 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-docker/omniverse_web_viewer/issues/48)，由 Tier B browser-frames smoke isaac#173 消費）用的一個可 pull、pin 版號的 producer image，不需要開一個桌面 Isaac session 就能提供*保證非全黑*的 WebRTC 來源。開機時它渲染一個確定性的空但打光的場景 — dome + distant key light 打在 12×12 棋盤格地板上，相機取景在 `eye=[15,-15,11]` — 並永久 livestream，所以瀏覽器隨時連上都看到可重現的畫面。整個場景以程式化方式生成（無外部 asset），image 自給自足。
+給 CI 與瀏覽器版視覺 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)，由 Tier B browser-frames smoke isaac#173 消費）用的一個可 pull、pin 版號的 producer image，不需要開一個桌面 Isaac session 就能提供*保證非全黑*的 WebRTC 來源。開機時它渲染一個確定性的空但打光的場景 — dome + distant key light 打在 12×12 棋盤格地板上，相機取景在 `eye=[15,-15,11]` — 並永久 livestream，所以瀏覽器隨時連上都看到可重現的畫面。整個場景以程式化方式生成（無外部 asset），image 自給自足。
 
-- **Image**：`ghcr.io/ycpss91255-docker/isaac-stream-source:<tag>`（pin 的 immutable tag — 非 `:latest`）。由 `producer` Dockerfile stage build。
+- **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin 的 immutable tag — 非 `:latest`）。由 `producer` Dockerfile stage build。
 - **Driver**：`src/script/stream_source_producer.py`，baked 在 `/opt/isaac-producer/stream_source_producer.py`，由 image `CMD` 啟動。
 - **發佈**：只走 `Publish Stream-Source Producer (GHCR)` workflow 手動觸發（`workflow_dispatch`，input `tag`，預設 `0.0.1`）。沒有 push/tag trigger，所以 merge 不會自動發佈。
 
@@ -199,7 +199,7 @@ post-run hook 同時也把 `network.public_ip` 當 `SIGNALING_SERVER` env 傳給
 docker run --rm --network=host --gpus all \
   -e PUBLIC_IP=<host-lan-ip> \
   -e ISAAC_SIGNAL_PORT=49100 \
-  ghcr.io/ycpss91255-docker/isaac-stream-source:0.0.2
+  ghcr.io/ycpss91255-lab/isaac-stream-source:0.0.2
 
 # 然後用瀏覽器 / omniverse_web_viewer 連 <host-lan-ip>（見上）。
 ```
@@ -222,7 +222,7 @@ The table is a convenience view. The authority is the image itself --
 ask it directly when it matters:
 
 ```bash
-docker inspect ghcr.io/ycpss91255-docker/isaac-stream-source:<tag> \
+docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
   --format '{{index .Config.Labels "org.opencontainers.image.base.name"}}'
 ```
 <!-- producer-versions:end -->

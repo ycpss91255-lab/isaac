@@ -64,4 +64,4 @@ Standalone scripts は kit + livestream + rclpy subscriber を起動します。
 
 ## なぜこのディレクトリ、`isaac_ws/src/docker/test/` ではないのか
 
-`isaac_ws/src/docker/test/` は docker repo(`ycpss91255-docker/isaac`)に属し、container image / wrapper をテストします。container 内で動くスクリプトはテストしません。Standalone scripts は `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`)に住み、smoke はそれと一緒に置かれていて、移動時も一緒に動きます。
+`isaac_ws/src/docker/test/` は docker repo(`ycpss91255-lab/isaac`)に属し、container image / wrapper をテストします。container 内で動くスクリプトはテストしません。Standalone scripts は `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`)に住み、smoke はそれと一緒に置かれていて、移動時も一緒に動きます。

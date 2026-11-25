@@ -1,7 +1,7 @@
 {
   "$schema": "https://lnav.org/schemas/format-v1.schema.json",
   "ycpss91255_otel_log": {
-    "title": "ycpss91255-docker OTel-aligned JSON log",
+    "title": "ycpss91255-lab OTel-aligned JSON log",
     "description": "Structured JSON log format aligned with OTel Logs Data Model (#423)",
     "json": true,
     "file-pattern": ".*\\.jsonl$",

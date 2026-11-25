@@ -4,7 +4,7 @@ name: Main CI/CD
 # core, gui, stream, headless, docs -- and a PR runs only the groups its
 # changed paths belong to (job `changes`, script/ci/changed_groups.py):
 #
-#   - a change to a shared layer (Dockerfile, compose, .setup.conf, config,
+#   - a change to a shared layer (Dockerfile, compose, setup.toml, config,
 #     the base subtree, this file) runs every group;
 #   - push to main, a release tag and a manual dispatch run every group;
 #   - docs always runs (cheap lint), so a docs-only PR never reaches the
@@ -148,7 +148,7 @@ jobs:
   core-build:
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    uses: ycpss91255-docker/base/.github/workflows/build-worker.yaml@v0.42.0
+    uses: ycpss91255-lab/base/.github/workflows/build-worker.yaml@v0.43.0-rc7
     with:
       image_name: docker
       # Isaac Sim base image is itself the runtime (15+ GB binary tree);
@@ -193,7 +193,7 @@ jobs:
   # alone, which is a human gate. Contributors with their own GPU can
   # still run the full suite in their own fork: a push in the fork
   # dispatches onto the fork owner's runner, never this host. See the
-  # ycpss91255-docker/github_runner security model for the host-side
+  # ycpss91255-lab/github_runner security model for the host-side
   # rationale (runner user is in the docker group == root-equivalent).
   core-gpu:
     needs: [changes, core-unit]
@@ -205,7 +205,7 @@ jobs:
       needs.changes.outputs.core == 'true' &&
       (github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository)
-    uses: ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0
+    uses: ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0
     with:
       run-script: ./script/ci/gpu_integration_job.sh
       timeout-minutes: 30
@@ -245,6 +245,6 @@ jobs:
   release:
     needs: gate
     if: startsWith(github.ref, 'refs/tags/')
-    uses: ycpss91255-docker/base/.github/workflows/release-worker.yaml@v0.42.0
+    uses: ycpss91255-lab/base/.github/workflows/release-worker.yaml@v0.43.0-rc7
     with:
       archive_name_prefix: docker

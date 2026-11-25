@@ -10,6 +10,11 @@
 # hostname to the host's name so local X still authenticates. Under host
 # networking (the container already shares the host's UTS namespace) or
 # when GUI is off, no hostname line is injected.
+#
+# why: The GUI-under-bridge `hostname:` injection: a bridge-network GUI
+# container pins its hostname to the host name so X11 authority matches,
+# host-network and GUI-off cases inject nothing, and a per-stage override
+# decides per stage.
 
 bats_require_minimum_version 1.5.0
 
@@ -34,6 +39,15 @@ FROM sys AS devel-base
 FROM devel-base AS devel
 FROM devel AS devel-test
 EOF
+  # Override toml_bridge_parse to use the in-container bridge directly
+  # instead of docker run (the test container has the bridge installed
+  # at /usr/local/bin/toml-bridge via Dockerfile.test-tools).
+  toml_bridge_parse() {
+    local _file="${1:?missing file}"
+    shift
+    [[ -f "${_file}" ]] || { echo "toml_bridge_parse: file not found: ${_file}" >&2; return 1; }
+    /usr/local/bin/toml-bridge "$@" < "${_file}"
+  }
 }
 
 teardown() {
@@ -89,10 +103,10 @@ FROM devel AS devel-test
 FROM devel AS probe
 DOCK
   mkdir -p "${TEMP_DIR}"
-  cat > "${TEMP_DIR}/.setup.conf" <<'CONF'
-[stage:probe]
-gui.mode = force
-network.mode = bridge
+  cat > "${TEMP_DIR}/setup.toml" <<'CONF'
+["stage:probe"]
+"gui.mode" = "force"
+"network.mode" = "bridge"
 CONF
   local _extras=()
   generate_compose_yaml "${COMPOSE_OUT}" "myrepo" \
@@ -113,10 +127,10 @@ FROM devel AS devel-test
 FROM devel AS probe
 DOCK
   mkdir -p "${TEMP_DIR}"
-  cat > "${TEMP_DIR}/.setup.conf" <<'CONF'
-[stage:probe]
-gui.mode = off
-network.mode = bridge
+  cat > "${TEMP_DIR}/setup.toml" <<'CONF'
+["stage:probe"]
+"gui.mode" = "off"
+"network.mode" = "bridge"
 CONF
   local _extras=()
   generate_compose_yaml "${COMPOSE_OUT}" "myrepo" \

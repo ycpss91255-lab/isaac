@@ -16,7 +16,7 @@ While the script is running, browse to:
 
 A clean run prints "[smoke] DONE" and exits with code 0. SIGINT exits
 early but still cleanly. The acceptance contract for issue
-ycpss91255-docker/isaac#19 is: this script boots SimulationApp with
+ycpss91255-lab/isaac#19 is: this script boots SimulationApp with
 livestream:2, the WebRTC client can connect during the spin loop, and
 python.sh exits 0.
 """
@@ -39,7 +39,7 @@ sim_app = SimulationApp(
     # SimulationApp's default experience (isaacsim.exp.base.python.kit) lacks
     # the WebRTC livestream extensions, so `livestream: 2` alone never starts
     # the streaming server. Pin to the custom kit experience shipped by
-    # ycpss91255-docker/isaac (#21 fix-B). See ADR-0007.
+    # ycpss91255-lab/isaac (#21 fix-B). See ADR-0007.
     experience="/isaac-sim/apps/isaacsim.exp.base.python.streaming.kit",
 )
 

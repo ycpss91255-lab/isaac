@@ -2,11 +2,11 @@
 
 **[English](../README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
 
-NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-docker/base`](https://github.com/ycpss91255-docker/base)（旧名 `ycpss91255-docker/template`）をベースに構築。
+NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
 イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。NVIDIA Isaac Lab 3.0（`v3.0.0`）も scene-spawn backend（`sim_utils` spawner、`UrdfConverter`、`AppLauncher`；ADR-0018）として image に baked。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
-本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD / URDF モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-research/isaac` と `ycpss91255-docker/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-docker/isaac/issues/78) に従い本リポジトリへ統合した。
+本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD / URDF モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 
 ## 前提条件
 
@@ -36,7 +36,7 @@ clone した直後の repo で、まず repo root から次の 2 つの初回手
 | 開発用の対話 shell | `just docker build`（devel） | `just docker run` |
 | WebRTC でシミュレーションを見る | `just docker build -t stream` | `just docker run -t stream -d`、続いて「WebRTC livestream への接続」 |
 
-コールド状態の初回 build には約 1 時間かかる。20.7 GB の NGC base image を pull してから Isaac Lab をインストールするためである。GitHub-hosted CI の build は 45〜84 分だった（[45 分](https://github.com/ycpss91255-docker/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-docker/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-docker/isaac/actions/runs/42491566385/job/128764928999)）。以降の build は layer cache を再利用し、他の stage もそれらの layer を共有するので、2 つ目の stage の build は数秒から数分で済む。
+コールド状態の初回 build には約 1 時間かかる。20.7 GB の NGC base image を pull してから Isaac Lab をインストールするためである。GitHub-hosted CI の build は 45〜84 分だった（[45 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)）。以降の build は layer cache を再利用し、他の stage もそれらの layer を共有するので、2 つ目の stage の build は数秒から数分で済む。
 
 Production stage（両 stage とも起動後は idle — driver スクリプトを exec で実行中の container に送り込む）：
 
@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage ツリー：`devel-base` -> `devel`（共通層：isaac コードと共通設定）-> `gui` / `stream` / `headless`。X11 を mount するのは `gui` service のみ（`.setup.conf` の `[stage:gui] gui.mode = auto`。トップレベル `[gui]` は `off` なので `devel` と他の stage は mount しない）：`just docker run -t gui`。2 つの stage が [base #215](https://github.com/ycpss91255-docker/base/issues/215) により profile-gated compose service として auto-emit される：`headless`（pure sim、`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC、`ISAAC_LIVESTREAM=2`）。両者とも起動時は `CMD ["sleep","infinity"]` で idle（`runheadless.sh -v` ENTRYPOINT は無い）— container は起動したまま、`just docker exec -t <stage> <cmd>` で driver スクリプト（`/isaac-sim/python.sh <driver.py>`、`ISAAC_LIVESTREAM=2` を読んで stream を有効化）または一回限りの `/usr/local/bin/runheadless-host-config.sh` を送り込む；streaming 起動後は web-viewer が `:5173` で接続する。`just docker run -t <stage> -d` で起動。
+> Stage ツリー：`devel-base` -> `devel`（共通層：isaac コードと共通設定）-> `gui` / `stream` / `headless`。X11 を mount するのは `gui` service のみ（`.setup.conf` の `[stage:gui] gui.mode = auto`。トップレベル `[gui]` は `off` なので `devel` と他の stage は mount しない）：`just docker run -t gui`。2 つの stage が [base #215](https://github.com/ycpss91255-lab/base/issues/215) により profile-gated compose service として auto-emit される：`headless`（pure sim、`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC、`ISAAC_LIVESTREAM=2`）。両者とも起動時は `CMD ["sleep","infinity"]` で idle（`runheadless.sh -v` ENTRYPOINT は無い）— container は起動したまま、`just docker exec -t <stage> <cmd>` で driver スクリプト（`/isaac-sim/python.sh <driver.py>`、`ISAAC_LIVESTREAM=2` を読んで stream を有効化）または一回限りの `/usr/local/bin/runheadless-host-config.sh` を送り込む；streaming 起動後は web-viewer が `:5173` で接続する。`just docker run -t <stage> -d` で起動。
 
 ### Headless：Isaac を起動してシーンを実行する
 
@@ -108,9 +108,9 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 
 ### checkout ごとに 1 つの image と 1 つの compose project
 
-以前は同じ host 上のこの repo のすべての checkout が同じ image tag（`<hub>/isaac:<stage>`）と同じ compose project（`<hub>-isaac`）に解決されていた。そのため `just docker build` が別の checkout の build した image を prune し、`just docker stop` / `run` が別の checkout の container を削除していた（上流：[base#1550](https://github.com/ycpss91255-docker/base/issues/1550)、[base#1551](https://github.com/ycpss91255-docker/base/issues/1551)、[base#1552](https://github.com/ycpss91255-docker/base/issues/1552)）。base が修正するまでは：
+以前は同じ host 上のこの repo のすべての checkout が同じ image tag（`<hub>/isaac:<stage>`）と同じ compose project（`<hub>-isaac`）に解決されていた。そのため `just docker build` が別の checkout の build した image を prune し、`just docker stop` / `run` が別の checkout の container を削除していた（上流：[base#1550](https://github.com/ycpss91255-lab/base/issues/1550)、[base#1551](https://github.com/ycpss91255-lab/base/issues/1551)、[base#1552](https://github.com/ycpss91255-lab/base/issues/1552)）。base が修正するまでは：
 
-- `./script/checkout_identity.sh isolate` が `[image] rule_1 = string:isaac-<dir>-<hash>` を gitignore 済みの `.setup.conf.local` に書き込む。image tag・compose project・container 名はすべてこれに従う。`./script/checkout_identity.sh show` でこの checkout の解決結果を表示できる。
+- `./script/checkout_identity.sh isolate` が `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) を gitignore 済みの `setup.local.toml` に書き込む。image tag・compose project・container 名はすべてこれに従う。`./script/checkout_identity.sh show` でこの checkout の解決結果を表示できる。
 - pre build / run / stop hook は共有名のままでは実行を拒否する。`ISAAC_ALLOW_SHARED_IDENTITY=1` で上書きできる（CI の build ステップが使用）。
 - `just docker run` は既存の image を再 build しない（base#1552）。変更を pull したら `just docker run -t <stage>` の前に `just docker build -t <stage>` を実行する。
 - ディスク使用量：build する checkout または worktree ごとに独自の image セット（`<hub>/isaac-<dir>-<hash>:<stage>`）を持ち、stage tag 1 つあたり名目上約 31 GB。共有されず、checkout ディレクトリを削除しても Docker daemon からは消えない。
@@ -126,7 +126,7 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
   ```
 
   filter は slug の完全一致のみ。`isaac*` に広げたり `docker image prune -a` を実行したりしない：共有の `test-tools:<base バージョン>` image（次の項目）はこの手順で削除してはならない。
-- 1 つの image はまだ共有される：毎回の build で lint/bats 用ツール image `test-tools:<base バージョン>`（現在は `test-tools:v0.42.0`）も build され、その名前は pin した base バージョンだけで決まる。同じ base バージョンを pin する host 上のすべての checkout と repo が同じ tag を書き込むため、別の checkout が build 中かもしれないときは削除しないこと。`just docker build --clean-tools` は全員の分をまとめて削除する。これは base の `build.sh` に由来し、上流では [base#1551](https://github.com/ycpss91255-docker/base/issues/1551) で追跡している。
+- 1 つの image はまだ共有される：毎回の build で lint/bats 用ツール image `test-tools:<base バージョン>`（現在は `test-tools:v0.42.0`）も build され、その名前は pin した base バージョンだけで決まる。同じ base バージョンを pin する host 上のすべての checkout と repo が同じ tag を書き込むため、別の checkout が build 中かもしれないときは削除しないこと。`just docker build --clean-tools` は全員の分をまとめて削除する。これは base の `build.sh` に由来し、上流では [base#1551](https://github.com/ycpss91255-lab/base/issues/1551) で追跡している。
 - isolate 前に起動した container は共有 project に残る。`docker compose -p <hub>-isaac ps -a` で一覧し、自分のものを名前で停止する。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` は共有 project 全体（別の checkout の container を含む）を停止する。
 
 ## WebRTC livestream への接続
@@ -139,7 +139,7 @@ Isaac Sim 6.2.0 は NVCF（`omni.services.livestream.nvcf`）livestream プロ�
 
 ### Browser-based viewer (omniverse_web_viewer)
 
-[`omniverse_web_viewer`](https://github.com/ycpss91255-docker/omniverse_web_viewer) リポジトリが、サイドカーコンテナとしてブラウザベースの client を提供。本リポジトリの `web_viewer/` にサブモジュールとして同梱。
+[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) リポジトリが、サイドカーコンテナとしてブラウザベースの client を提供。本リポジトリの `web_viewer/` にサブモジュールとして同梱。
 
 ```bash
 # 初回：サブモジュール初期化 + per-host config 作成
@@ -184,9 +184,9 @@ post-run hook はさらに `network.public_ip` を `SIGNALING_SERVER` env とし
 
 ### 決定論的 stream-source producer（GHCR image、isaac#223）
 
-CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-docker/omniverse_web_viewer/issues/48)、Tier B browser-frames smoke isaac#173 が消費）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
+CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)、Tier B browser-frames smoke isaac#173 が消費）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
 
-- **Image**：`ghcr.io/ycpss91255-docker/isaac-stream-source:<tag>`（pin した immutable tag — `:latest` ではない）。`producer` Dockerfile stage から build。
+- **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin した immutable tag — `:latest` ではない）。`producer` Dockerfile stage から build。
 - **Driver**：`src/script/stream_source_producer.py`、`/opt/isaac-producer/stream_source_producer.py` に bake され、image `CMD` が起動。
 - **公開**：`Publish Stream-Source Producer (GHCR)` workflow の手動起動のみ（`workflow_dispatch`、input `tag`、デフォルト `0.0.1`）。push/tag trigger は無いので、merge で自動公開されない。
 
@@ -199,7 +199,7 @@ CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://g
 docker run --rm --network=host --gpus all \
   -e PUBLIC_IP=<host-lan-ip> \
   -e ISAAC_SIGNAL_PORT=49100 \
-  ghcr.io/ycpss91255-docker/isaac-stream-source:0.0.2
+  ghcr.io/ycpss91255-lab/isaac-stream-source:0.0.2
 
 # その後ブラウザ / omniverse_web_viewer で <host-lan-ip> に接続（上記参照）。
 ```
@@ -222,7 +222,7 @@ The table is a convenience view. The authority is the image itself --
 ask it directly when it matters:
 
 ```bash
-docker inspect ghcr.io/ycpss91255-docker/isaac-stream-source:<tag> \
+docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
   --format '{{index .Config.Labels "org.opencontainers.image.base.name"}}'
 ```
 <!-- producer-versions:end -->

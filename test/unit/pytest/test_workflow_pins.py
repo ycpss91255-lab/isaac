@@ -20,7 +20,7 @@ pytestmark = pytest.mark.core
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
-_REUSABLE = "ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml"
+_REUSABLE = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml"
 _PINNED_TAG = "v0.4.0"
 _EXPECTED_CALLERS = {
     "main.yaml",

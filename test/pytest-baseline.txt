@@ -195,7 +195,7 @@
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
 #   test_repo_config.py (2): .dockerignore keeps isaac-sim/ out of the
-#   build context, and .setup.conf [deploy] uses gpu_runtime. Pure -- AST,
+#   build context, and setup.toml [deploy] uses gpu_runtime. Pure -- AST,
 #   file reads and a fake clock. Live count was then 388.
 #   README polish adds 1 (test_repo_config.py 2 -> 3): the Dockerfile
 #   pre-creates /isaac-sim/extsUser, so Kit stops scanning ~/work for
@@ -232,13 +232,13 @@
 #   Live count is now 440 -- the enforced floor.
 #
 #   Physics-experiment extraction (isaac#309): test_render_settings.py
-#   (13 tests) moved to ycpss91255-docker/isaac_physics_test with
+#   (13 tests) moved to ycpss91255-lab/isaac_physics_test with
 #   viz_render.py and the experiment drivers.  _capture_noise_runner.py
 #   inlines the converged-render recipe it imported from viz_render.
 #   Baseline floor adjusts 440 -> 427 (live 441 -> 428).
 #
 #   Planar-script extraction (isaac#342): the move_openbase_planar and
-#   cmd_vel_planar scripts moved to ycpss91255-docker/isaac_physics_test, so
+#   cmd_vel_planar scripts moved to ycpss91255-lab/isaac_physics_test, so
 #   their 10 parametrized guards in test_standalone_scripts.py (8 per-script
 #   structure checks + 2 gravity checks) leave with them.
 #   Baseline floor adjusts 427 -> 417 (live 428 -> 418); after the merge with main
@@ -524,7 +524,7 @@ AGGREGATE_TARGET = 126
 #   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
-BATS_BASELINE_CORE = 106
+BATS_BASELINE_CORE = 110
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 80
 BATS_BASELINE_HEADLESS = 0

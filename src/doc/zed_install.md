@@ -1,6 +1,6 @@
 # Installing the Stereolabs ZED Isaac Sim Extension
 
-`config/camera/zed.yaml` targets the **Stereolabs ZED X** sim model via the official Stereolabs Isaac Sim extension. The extension is **third-party** (community tab in the Isaac Sim extension manager) and **not bundled** with `ycpss91255-docker/isaac`, so you have to install it once before the zed dispatch path in `script/camera_setup.py` can boot.
+`config/camera/zed.yaml` targets the **Stereolabs ZED X** sim model via the official Stereolabs Isaac Sim extension. The extension is **third-party** (community tab in the Isaac Sim extension manager) and **not bundled** with `ycpss91255-lab/isaac`, so you have to install it once before the zed dispatch path in `script/camera_setup.py` can boot.
 
 If you do not need the zed path, ignore this doc and stick with `config/camera/realsense.yaml` (D455, NVIDIA-bundled asset) or `config/camera/custom.yaml` (ZED-M baseline via generic camera prims, no Stereolabs extension needed).
 
@@ -59,7 +59,7 @@ This produces a built extension under `./exts/`. On Windows, use `./build.bat` i
 
 #### c. Mount the extension into the Isaac container
 
-`ycpss91255-docker/isaac` runs Isaac Sim 5.1 inside a container. The Stereolabs extension lives outside it, so we mount the built `exts/` directory in. Edit the docker compose / `.env` for the headless stage to add a bind:
+`ycpss91255-lab/isaac` runs Isaac Sim 5.1 inside a container. The Stereolabs extension lives outside it, so we mount the built `exts/` directory in. Edit the docker compose / `.env` for the headless stage to add a bind:
 
 ```
 host:  <your-clone-path>/zed-isaac-sim/exts

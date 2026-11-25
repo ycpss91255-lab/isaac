@@ -3,7 +3,7 @@
 # (gpu_integration_job.sh, stream_smoke_job.sh). Sourced, not executed.
 #
 # Those jobs run through the org reusable workflow
-# ycpss91255-docker/.github/.github/workflows/gpu-self-hosted.yml, which
+# ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml, which
 # reclaims the workspace, checks out, and then runs ONE repo script. The
 # steps below used to be inline workflow steps; they keep their old names
 # as log groups.
@@ -61,7 +61,7 @@ gpu_job_cache_dirs() {
   # chmod a+rwX makes the workspace (repo root, cache dirs, test-report dir)
   # accessible for any uid.  The runner user keeps ownership, so host-side
   # steps (setup.sh apply, git) still work.  Harmless on a rootful daemon.
-  # See ycpss91255-docker/.github#38, isaac#314.
+  # See ycpss91255-lab/.github#38, isaac#314.
   chmod -R a+rwX "${GITHUB_WORKSPACE:-.}"
   gpu_job_endgroup
 }

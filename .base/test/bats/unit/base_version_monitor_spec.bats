@@ -12,6 +12,12 @@
 # stub dispatches on "$1:$2" and reads its fixtures from MOCK_* env vars
 # so each test can vary latest-release / existing-issues without
 # rewriting the stub body.
+#
+# why: Version-compare + issue-open logic of the pull-based base version
+# monitor: semver ordering (numeric, not lexical), a missing leading `v`,
+# and the `run` path that opens exactly one labelled tracking issue per
+# target version (dedup on an already-open one, no issue when up to date,
+# loud failure on an empty API answer).
 
 bats_require_minimum_version 1.5.0
 
@@ -170,6 +176,66 @@ esac
   assert_success
   assert_output --partial "already open"
   [ ! -s "${MOCK_CALLS}" ]
+}
+
+# _just_recipe_defined <word>... -> 0 iff `just <word>...` resolves in the
+# justfile layering a CONSUMER actually gets: <repo>/justfile is a symlink
+# to script/justfile (dist/script/justfile), and each leading word has to be
+# a namespace that file's `mod?` lines register, with the last word a recipe
+# in the namespace justfile that was walked to. `mod?` paths are
+# repo-root-relative, and in a consumer every one of them is a symlink back
+# into dist/, so dist/ is where the real file is read from.
+_just_recipe_defined() {
+  local _file="/source/dist/script/justfile"
+  local _rel _word
+  while (( $# > 1 )); do
+    _word="${1}"; shift
+    _rel="$(sed -nE "s/^mod\\??[[:space:]]+${_word}[[:space:]]+'([^']+)'.*/\\1/p" \
+      "${_file}" | head -n1)"
+    [[ -n "${_rel}" ]] || return 1
+    _file="/source/dist/${_rel}"
+    [[ -f "${_file}" ]] || return 1
+  done
+  grep -qE "^${1}([[:space:]]|:)" "${_file}"
+}
+
+# why: the command the monitor tells a human to run has to be a recipe
+@test "run: the filed issue names an upgrade command a consumer's justfile defines (#1111)" {
+  # The monitor's whole output is one issue in someone else's repo, and the
+  # only actionable line in it is the command. `just upgrade` is not a
+  # recipe in the layering a consumer gets -- that namespace is `base` --
+  # so the reminder answered its own instruction with
+  # `error: justfile does not contain recipe 'upgrade'`.
+  #
+  # Resolved against the shipped justfiles rather than compared to a string
+  # copied out of the script: the justfiles are the independent source of
+  # truth for what `just` accepts, so a later namespace rename turns this
+  # red instead of agreeing with the stale body.
+  echo "v0.41.0" > "${VERSION_FILE}"
+  export MOCK_LATEST="v0.42.0" MOCK_EXISTING=""
+  _stub_gh
+
+  run bash "${SCRIPT}" run
+  assert_success
+
+  local _line
+  _line="$(grep -m1 -E '^just[[:space:]]' "${MOCK_CALLS}")" \
+    || { echo "the filed issue body names no 'just' command"; return 1; }
+
+  # Drop `just` itself and the version argument; what is left is the
+  # namespace path plus the recipe.
+  local -a _words=() _path=()
+  local _word
+  read -r -a _words <<< "${_line}"
+  for _word in "${_words[@]:1}"; do
+    [[ "${_word}" =~ ^v?[0-9] ]] && continue
+    _path+=("${_word}")
+  done
+  (( ${#_path[@]} > 0 )) \
+    || { echo "no recipe words in: ${_line}"; return 1; }
+
+  _just_recipe_defined "${_path[@]}" \
+    || { echo "'just ${_path[*]}' is not a recipe a consumer's justfile defines"; return 1; }
 }
 
 @test "run: empty latest from API -> fails without creating an issue" {

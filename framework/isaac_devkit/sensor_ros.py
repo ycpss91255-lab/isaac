@@ -13,7 +13,7 @@ prims and is called by layer (b) when ``ros:`` config is present.
 sensor_config)`` is the public entry point: given a sensor prim that
 already exists on stage, it wires the OmniGraph ROS 2 publish chain.
 
-Future: this module will migrate to ``ycpss91255-docker/isaac_ros2``
+Future: this module will migrate to ``ycpss91255-lab/isaac_ros2``
 once that repo can operate independently.  See ADR-0024 for the
 migration plan.
 

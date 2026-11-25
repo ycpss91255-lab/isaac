@@ -77,32 +77,76 @@ _env_generated() {
   done
 }
 
-@test "checkout_identity: isolate writes a per-checkout [image] rule to .setup.conf.local" {
+@test "checkout_identity: isolate writes a per-checkout image rule to setup.local.toml" {
   run bash "${LIB}" isolate "${REPO}"
   assert_success
   local _slug
   _slug="$(bash "${LIB}" slug "${REPO}")"
-  run cat "${REPO}/.setup.conf.local"
-  assert_output --partial "[image]"
-  assert_output --partial "rule_1 = string:${_slug}"
+  run cat "${REPO}/setup.local.toml"
+  assert_output --partial "[[image.rules]]"
+  assert_output --partial "rule = \"string:${_slug}\""
+  # base rc6 no longer reads the INI layer; writing it would be a silent no-op.
+  [ ! -e "${REPO}/.setup.conf.local" ]
+}
+
+@test "checkout_identity: isolate puts the slug rule first, so the resolved name is not the shared one" {
+  # base replaces an [[array]] whole, so the local layer's first rule is the
+  # image name the checkout resolves to (committed setup.toml: string:isaac).
+  bash "${LIB}" isolate "${REPO}" >/dev/null
+  local _slug _rule
+  _slug="$(bash "${LIB}" slug "${REPO}")"
+  _rule="$(grep -m1 '^rule = ' "${REPO}/setup.local.toml")"
+  [ "${_rule}" = "rule = \"string:${_slug}\"" ]
+  [ "${_rule}" != 'rule = "string:isaac"' ]
+}
+
+@test "checkout_identity: isolate pins [project] name so run/stop leave the shared project at once" {
+  # base keeps the project name a checkout already recorded and only carries
+  # the newly derived one as PROJECT_NAME_PENDING; a configured [project]
+  # name is taken immediately, so isolating must set it for the guard.
+  bash "${LIB}" isolate "${REPO}" >/dev/null
+  local _slug
+  _slug="$(bash "${LIB}" slug "${REPO}")"
+  run grep -c '^\[project\]$' "${REPO}/setup.local.toml"
+  assert_output "1"
+  run grep -x "name = \"${_slug}\"" "${REPO}/setup.local.toml"
+  assert_success
+}
+
+@test "checkout_identity: isolate keeps an operator-written [project] name" {
+  printf '[project]\nname = "my-own-project"\n' > "${REPO}/setup.local.toml"
+  bash "${LIB}" isolate "${REPO}" >/dev/null
+  run grep -c '^\[project\]$' "${REPO}/setup.local.toml"
+  assert_output "1"
+  run cat "${REPO}/setup.local.toml"
+  assert_output --partial 'name = "my-own-project"'
+  assert_output --partial "[[image.rules]]"
 }
 
 @test "checkout_identity: isolate is idempotent and keeps other local sections" {
-  printf '[network]\nmode = host\n' > "${REPO}/.setup.conf.local"
+  printf '[network]\nmode = "host"\n' > "${REPO}/setup.local.toml"
   bash "${LIB}" isolate "${REPO}" >/dev/null
   bash "${LIB}" isolate "${REPO}" >/dev/null
-  run grep -c '^\[image\]$' "${REPO}/.setup.conf.local"
+  run grep -c '^\[\[image\.rules\]\]$' "${REPO}/setup.local.toml"
   assert_output "1"
-  run grep -c '^\[network\]$' "${REPO}/.setup.conf.local"
+  run grep -c '^\[network\]$' "${REPO}/setup.local.toml"
   assert_output "1"
 }
 
-@test "checkout_identity: isolate leaves an operator-written [image] section alone" {
-  printf '[image]\nrule_1 = string:my-own-name\n' > "${REPO}/.setup.conf.local"
+@test "checkout_identity: isolate leaves an operator-written image rule alone" {
+  printf '[[image.rules]]\nrule = "string:my-own-name"\n' > "${REPO}/setup.local.toml"
   run bash "${LIB}" isolate "${REPO}"
   assert_success
-  run cat "${REPO}/.setup.conf.local"
-  assert_output --partial "rule_1 = string:my-own-name"
+  run cat "${REPO}/setup.local.toml"
+  assert_output --partial 'rule = "string:my-own-name"'
+  refute_output --partial "string:isaac-"
+}
+
+@test "checkout_identity: isolate leaves an operator-written [image] table alone" {
+  printf '[image]\nrules = ["string:my-own-name"]\n' > "${REPO}/setup.local.toml"
+  run bash "${LIB}" isolate "${REPO}"
+  assert_success
+  run cat "${REPO}/setup.local.toml"
   refute_output --partial "string:isaac-"
 }
 

@@ -2,7 +2,7 @@
 #
 # compose_emit.sh - compose.yaml emission (the renderer).
 #
-# Generates the project compose.yaml from the resolved setup.conf: the
+# Generates the project compose.yaml from the resolved setup.toml: the
 # per-field `_emit_*_block` / `_emit_*_line` helpers, the volume/device
 # classifiers (_classify_volume_lhs, _collect_named_volumes, _yaml_dq, ...),
 # the per-stage service block (_emit_stage_service), and the top-level
@@ -10,6 +10,21 @@
 #
 # Distinct from lib/compose.sh, which is the `docker compose` INVOCATION
 # wrapper + project naming (_compose / _compose_project / _compute_project_name).
+#
+# No service here emits `container_name:`, and that absence is load-bearing
+# (ADR-00000022 s4). A container name is namespaced by the DAEMON -- one flat
+# global list -- while everything else this file emits is namespaced by the
+# compose project. Naming a container therefore pins the service to exactly
+# one instance per host whatever project it is brought up under: a second
+# stack of the same repo dies with `name ... is already in use`, and compose
+# refuses `--scale` outright ("Compose does not scale a service beyond one
+# container if the Compose file specifies a container_name"). Omitting it
+# lets compose derive `<project>-<service>-<n>`, which is unique by
+# construction -- so per-host isolation is the PROJECT NAME's job. That name
+# differs per OS user with nothing configured because its `${DOCKER_HUB_USER}`
+# prefix does: detection falls back to the OS user when there is no Docker
+# Hub login (lib/compose.sh's _resolve_project_name header carries the whole
+# chain, including the one case it cannot separate).
 # Extracted from setup.sh (ADR-00000014, epic decompose-setup-sh). Calls into
 # setup.sh-resident deps (resolvers, _setup_msg, _SETUP_SCRIPT_DIR), deploy.sh
 # (_resolve_deploy_context), and conf.sh accessors; all resolve at call-time
@@ -76,11 +91,124 @@ _warn_ports_inert() {
     "display=$(_setup_msg network ports_inert) (mode=${_mode})" "mode=${_mode}"
 }
 
-# _reset_ports_inert_warning
+# _SHM_SIZE_INERT_WARNED / _NETWORK_NAME_INERT_WARNED -- the same latch
+# for the other two "configured, then overruled by a sibling key"
+# diagnostics base#1094 measured. Declared beside the ports one so the
+# family is visible as a family: each new member is one latch, one
+# _warn_* and one line in _reset_inert_warnings, and nothing else.
+_SHM_SIZE_INERT_WARNED=0
+_NETWORK_NAME_INERT_WARNED=0
+_LIFECYCLE_RESTART_INVALID_WARNED=0
+_LIFECYCLE_INIT_INVALID_WARNED=0
+
+# _warn_shm_size_inert <shm_size> <ipc_mode>
 #
-# Re-arm the latch. Called at the top of each top-level emitter.
-_reset_ports_inert_warning() {
+# Warn once per emit that <shm_size> will be dropped under <ipc_mode>.
+# Docker honours shm_size only when the container has its own IPC
+# namespace, so an `ipc = host` service ignores it -- and `ipc = "host"`
+# is what the shipped template sets, which made the only key in
+# `[resources]` inert by default (base#1094). `ports` has had this
+# diagnostic since base#879 and this key had none.
+_warn_shm_size_inert() {
+  local _shm="${1-}" _ipc="${2-}"
+  [[ -z "${_shm}" ]] && return 0
+  [[ "${_ipc}" != "host" ]] && return 0
+  (( _SHM_SIZE_INERT_WARNED )) && return 0
+  _SHM_SIZE_INERT_WARNED=1
+  _log_warn setup resources_shm_size_inert \
+    "display=$(_setup_msg resources shm_size_inert) (ipc=${_ipc})" "ipc=${_ipc}"
+}
+
+# _warn_network_name_inert <net_name> <net_mode>
+#
+# Warn once per emit that <net_name> will not be joined under
+# <net_mode>. Two keys answer one question -- which network the service
+# is on -- and `mode` decides: the per-stage service emitter and both
+# branches of the field bundle have always required bridge before a
+# named network, so a name set beside `mode = host` is the loser. It
+# used to lose SILENTLY, and in the devel service it used to win, which
+# is how one setup.toml produced bridge networking in development and
+# host networking on the device (base#1094).
+_warn_network_name_inert() {
+  local _name="${1-}" _mode="${2-}"
+  [[ -z "${_name}" ]] && return 0
+  [[ "${_mode}" == "bridge" ]] && return 0
+  (( _NETWORK_NAME_INERT_WARNED )) && return 0
+  _NETWORK_NAME_INERT_WARNED=1
+  _log_warn setup network_name_inert \
+    "display=$(_setup_msg network network_name_inert) (mode=${_mode})" "mode=${_mode}"
+}
+
+# _warn_invalid_lifecycle_restart <value>
+#
+# Say that an invalid [lifecycle] restart was dropped (base#1651). The apply
+# guard in _emit_restart_line keeps an invalid policy out of compose, but it
+# used to do so with no output at all, so the field vanished unexplained.
+_warn_invalid_lifecycle_restart() {
+  local _value="${1-}"
+  (( _LIFECYCLE_RESTART_INVALID_WARNED )) && return 0
+  _LIFECYCLE_RESTART_INVALID_WARNED=1
+  _log_warn setup lifecycle_restart_invalid \
+    "display=$(_setup_msg lifecycle restart_invalid) (restart=${_value})" "restart=${_value}"
+}
+
+# _warn_invalid_lifecycle_init <value>
+#
+# Same message shape as _warn_invalid_lifecycle_restart, for [lifecycle] init
+# (base#1651). Latched once per emit like the restart one (base#1660).
+_warn_invalid_lifecycle_init() {
+  local _value="${1-}"
+  (( _LIFECYCLE_INIT_INVALID_WARNED )) && return 0
+  _LIFECYCLE_INIT_INVALID_WARNED=1
+  _log_warn setup lifecycle_init_invalid \
+    "display=$(_setup_msg lifecycle init_invalid) (init=${_value})" "init=${_value}"
+}
+
+# _NETWORK_NAME_JOINED -- set by any service block that emitted a
+# `networks:` membership, read by the top-level `networks:` declaration.
+#
+# The declaration cannot be derived from the GLOBAL network mode, because
+# a `[stage:<name>]` override can set `network.mode = "bridge"` while the
+# global mode is host: that stage joins the inherited name and the
+# project would then reference a network nothing declared, which compose
+# refuses outright. Observing what the service blocks actually emitted is
+# the only reading that cannot disagree with them -- the same shape
+# `_emit_volumes_block` uses for named volumes.
+_NETWORK_NAME_JOINED=0
+
+# _reset_inert_warnings
+#
+# Re-arm every inert-value latch, and the network-membership flag.
+# Called at the top of each top-level emitter. ONE function for the
+# family rather than one call per diagnostic: a new member that forgot
+# its reset would print once per process instead of once per emit, and
+# nothing would say so.
+_reset_inert_warnings() {
   _PORTS_INERT_WARNED=0
+  _SHM_SIZE_INERT_WARNED=0
+  _NETWORK_NAME_INERT_WARNED=0
+  _LIFECYCLE_RESTART_INVALID_WARNED=0
+  _LIFECYCLE_INIT_INVALID_WARNED=0
+  _NETWORK_NAME_JOINED=0
+}
+
+# _pid_mode_emits <mode>
+#
+# Does this `[network] pid` value produce a compose `pid:` line? `host`
+# and `container:<name>` are the two forms Docker accepts as a literal;
+# `private` is Docker's own default and is REJECTED as a literal, so the
+# key is omitted for it, and for empty.
+#
+# Shared by all three emission sites because they disagreed: each wrote
+# `pid:` only for exactly `host`, so `container:<name>` -- which
+# `_validate_pid_mode` accepts and the TUI offers -- reached no file at
+# all (base#1094).
+_pid_mode_emits() {
+  case "${1-}" in
+    host)         return 0 ;;
+    container:?*) return 0 ;;
+    *)            return 1 ;;
+  esac
 }
 
 _device_has_propagation() {
@@ -107,30 +235,313 @@ _emit_device_as_volume() {
     esac
   done
   echo "${_indent}  - type: bind"
-  echo "${_indent}    source: ${_src}"
+  echo "${_indent}    source: $(_compose_yaml_scalar "${_src}")"
   echo "${_indent}    target: ${_tgt}"
   [[ -n "${_read_only}" ]] && echo "${_indent}    read_only: ${_read_only}"
   echo "${_indent}    bind:"
   echo "${_indent}      propagation: ${_propagation}"
 }
 
+# _compose_is_repo_relative <path>
+#
+# Zero when <path> is an EXPLICITLY repo-relative host path: `.`, `..`, or
+# anything under `./` or `../`. The bare dots are the whole population
+# this missed first time round, and they are the spelling most likely to
+# be used for the very thing relocation breaks -- mounting the repo
+# itself. One predicate, so the rebase and its guards cannot disagree
+# about what counts.
+#
+# It is also the repo-relative ARM of `_classify_volume_lhs` below, which
+# is why it is declared here, above both readers. The two are not one
+# question -- `/srv/x` is a bind and is not repo-relative -- so they stay
+# two functions; but the half they share has a single definition, which is
+# exactly what base#1257 cost. The classifier used to carry its own
+# narrower copy, listing `./` and neither `../` nor the bare dots, so a
+# `../foo` mount was classified as a Docker named volume and declared in
+# the top-level `volumes:` block while this predicate called the same
+# string a host path.
+_compose_is_repo_relative() {
+  case "${1-}" in
+    .|..|./*|../*) return 0 ;;
+    *)             return 1 ;;
+  esac
+}
+
 # _classify_volume_lhs <mount_string>
 #
 # Classify a `host:container[:mode]` mount by its left-hand side
-# Option A / D-Strict). A LHS that looks like a path -- starts with `/`,
-# `./`, `~/`, or a `${...}` variable reference -- is a bind mount; anything
-# else is a Docker named-volume reference. Echoes `bind` or `named`.
+# (Option A / D-Strict). A LHS that looks like a path is a bind mount;
+# anything else is a Docker named-volume reference. Echoes `bind` or
+# `named`.
+#
+# A path is EITHER explicitly repo-relative -- `_compose_is_repo_relative`
+# is the one answer to that, asked rather than re-spelled here -- OR
+# absolute, OR `~/`, OR a `${...}` variable reference. Only a BARE name is
+# a named volume.
+#
+# The prefix list this used to carry held `/`, `./`, `~/` and `${` and
+# stopped there, so `../foo`, `.` and `..` fell through to `named`: the
+# mount was emitted as a reference to a managed volume and declared at the
+# top level under that literal string, and the host directory the operator
+# asked for was silently replaced by an empty volume. compose accepts all
+# of that without complaint. The design record (doc/changelog/v0.41.md)
+# enumerates the four prefixes and records exactly one DELIBERATE
+# exclusion -- a variable-named volume such as `${VAR}_state`, which
+# stays classified as a bind -- so the three relative spellings were an
+# unenumerated gap, not a decision (base#1257).
 _classify_volume_lhs() {
+  local _lhs="${1%%:*}"
+  if _compose_is_repo_relative "${_lhs}"; then
+    printf 'bind\n'
+    return 0
+  fi
   # The `~/` and `${` globs are single-quoted so they stay literal: an
   # unquoted `~/*` case pattern undergoes tilde expansion (to $HOME/*) and
   # would never match a literal `~/...` LHS; an unquoted `${`-glob is fine
   # but quoting keeps both path-prefix markers consistent and silences
   # SC2016 (the literal `${` is intentional -- a `${VAR}` LHS is a bind path).
   # shellcheck disable=SC2016,SC2088
-  case "${1%%:*}" in
-    /*|./*|'~/'*|'${'*) printf 'bind\n' ;;
-    *)                 printf 'named\n' ;;
+  case "${_lhs}" in
+    /*|'~/'*|'${'*) printf 'bind\n' ;;
+    *)              printf 'named\n' ;;
   esac
+}
+
+# _compose_reroot_path <path> <root>
+# _compose_reroot_mount <mount_string> <root>
+# _compose_reroot_named <name=path> <root>
+#
+# Rebase a REPO-RELATIVE host path onto <root>. Echo it unchanged when
+# <root> is empty, which is the co-located case -- the committed artifact
+# every downstream repo carries, byte-for-byte.
+#
+# compose resolves a relative host path against the compose file's own
+# directory, so `./config/demo` is correct exactly while the file sits in
+# the repo. A relocated set that kept it would not fail: docker CREATES a
+# missing bind source, empty and root-owned, inside the caller's output
+# directory, and the container would come up with the repo's shipped
+# configuration silently absent. Rebasing is what makes the emitted set
+# self-contained rather than merely relocated (ADR-00000036).
+#
+# Only `./` and `../` move. An absolute path is already unambiguous, a
+# `~/` path is the operator's home on whatever host runs it, a `${VAR}`
+# LHS is a per-instance overlay value (ADR-00000022) and not a path this
+# emitter may resolve, and a bare name is a Docker named volume.
+# _compose_yaml_scalar <value>
+#
+# Echo <value> as a YAML scalar: unchanged when it is a valid PLAIN
+# scalar in block context, double-quoted with `\` and `"` escaped when it
+# is not.
+#
+# A relocated path is whatever the operator's directory is called, and the
+# emitted file is YAML. ` #` in it makes the rest of the line a comment,
+# so generation succeeds and the build runs against a truncated path, and
+# `: ` makes the line a mapping and invalidates the document.
+#
+# The predicate is on what YAML actually rejects, not on an allowlist of
+# safe characters, because the values passing through here are mount
+# strings and interpolations: `./config/x:/opt/x` and
+# `${XDG_RUNTIME_DIR:-/run/user/1000}` are plain scalars and must stay
+# spelled exactly as the 17 downstream repos' committed artifacts spell
+# them. So quoting is decided by the VALUE and nothing else -- no flag
+# saying "this emit relocated something" -- which is what makes the
+# co-located output byte-identical by construction rather than by a gate
+# someone has to remember to pass.
+#
+# Unsafe in block context: empty; a `: ` or a tab or a ` #` anywhere; a
+# leading YAML indicator; a leading or trailing space; a trailing colon.
+#
+# A valid plain scalar can still be read as something other than a
+# string (base#1651): `~` / `null` resolve to null, `true` / `yes` / `on`
+# to a bool, `0755` / `1e3` / `.inf` / `1:30` to a number, `2001-12-14`
+# to a date, and compose-go refuses a list whose item is not a string.
+# So the null, bool, value (`=`) and merge (`<<`) words of YAML 1.1 and
+# the 1.2 core schema are quoted, and so is every value shaped like a
+# number or timestamp: an optional sign, an optional `.`, then a digit.
+# That is a superset on purpose -- quoting a value that would have read
+# as a string anyway changes nothing, and missing one is the bug.
+_compose_yaml_scalar() {
+  local _v="${1-}"
+  local _needs=0
+  case "${_v}" in
+    "")                      _needs=1 ;;
+    *": "*|*" #"*|*$'\t'*)   _needs=1 ;;
+    [-?:,\[\]{}#\&\*\!\|\>\'\"%@\`]*) _needs=1 ;;
+    " "*|*" "|*:)            _needs=1 ;;
+    "~"|[Nn]ull|NULL|[Tt]rue|TRUE|[Ff]alse|FALSE) _needs=1 ;;
+    [Yy]|[Yy]es|YES|[Nn]|[Nn]o|NO|[Oo]n|ON|[Oo]ff|OFF|"="|"<<") _needs=1 ;;
+  esac
+  if [[ "${_v}" =~ ^[-+]?\.?[0-9][0-9A-Za-z_.:+\ -]*$ ]] \
+    || [[ "${_v}" =~ ^[-+]?\.(inf|Inf|INF|nan|NaN|NAN)$ ]]; then
+    _needs=1
+  fi
+  if (( ! _needs )); then
+    printf '%s' "${_v}"
+    return 0
+  fi
+  _v="${_v//\\/\\\\}"
+  _v="${_v//\"/\\\"}"
+  printf '"%s"' "${_v}"
+}
+
+_compose_rebase_path() {
+  local _p="${1-}" _root="${2-}"
+  case "${_p}" in
+    .)    printf '%s' "${_root}" ;;
+    ./*)  printf '%s/%s' "${_root}" "${_p#./}" ;;
+    *)    printf '%s/%s' "${_root}" "${_p}" ;;
+  esac
+}
+
+_compose_reroot_path() {
+  local _p="${1-}" _root="${2-}"
+  if [[ -z "${_root}" ]]; then
+    printf '%s' "${_p}"
+    return 0
+  fi
+  if _compose_is_repo_relative "${_p}"; then
+    _compose_rebase_path "${_p}" "${_root}"
+  else
+    printf '%s' "${_p}"
+  fi
+}
+
+# _compose_context_is_local <source>
+#
+# Zero when a `build.additional_contexts` source is a path on this host
+# that a relative spelling would resolve against the compose file.
+#
+# The volume classifier's rule does NOT hold here. A bare left-hand side
+# of a mount is a Docker named volume, but a bare additional-context
+# source is a directory -- `source = "ctxdir"` and `source = "."` are
+# ordinary local contexts -- so a rebase that only moved `./` and `../`
+# left exactly those resolving into the caller's output directory.
+#
+# What is NOT local is recognised by SHAPE rather than listed by name,
+# because every one of these forms has more spellings than the obvious:
+#
+#   - compose interpolation, BRACED OR NOT. `$SHARED_CTX` is as much an
+#     interpolation as `${SHARED_CTX}`, and rebasing it yields
+#     `<repo>/$SHARED_CTX`, which compose expands to `<repo>//tmp/shared`.
+#   - a `<scheme>://` source: `docker-image://`, `oci-layout://`,
+#     `http(s)://`, `git://`, `ssh://`.
+#   - an scp-style git remote, `user@host:path`, for ANY ssh user --
+#     `builder@example.com:org/repo.git` is as valid as a `git@` one, so
+#     the shape is what is matched: an `@` and no `/` before the colon.
+#   - a `target:` / `service:` reference to something in this same file.
+#   - an absolute or `~/` path, already unambiguous.
+_compose_context_is_local() {
+  local _s="${1-}"
+  # An EXPLICIT relative prefix settles it before anything else is asked:
+  # `./contexts/${FLAVOUR}` is a local path whose leaf is interpolated,
+  # and only interpolation that decides the path's ROOT has to be left
+  # alone. A blanket "any dollar sign means non-local" left exactly this
+  # resolving against the output directory.
+  _compose_is_repo_relative "${_s}" && return 0
+  # A LEADING interpolation, braced or not, is the only one that can make
+  # this non-local: it decides the path's ROOT, and nothing here can know
+  # what it will expand to. One later in the string -- `contexts/${FLAVOUR}`
+  # -- leaves the root fixed and the path as local as `./contexts/...`, so
+  # a dollar sign ANYWHERE was standing in for a distinction it cannot
+  # make.
+  # shellcheck disable=SC2016,SC2088  # literal `$` and `~/` are the point
+  case "${_s}" in
+    '$'*)               return 1 ;;
+    /*|'~/'*)           return 1 ;;
+    *://*)              return 1 ;;
+    target:*|service:*) return 1 ;;
+  esac
+  if [[ "${_s}" == *:* ]]; then
+    local _pre="${_s%%:*}"
+    [[ "${_pre}" == *@* && "${_pre}" != */* ]] && return 1
+  fi
+  return 0
+}
+
+# _compose_reroot_mount <mount_string> <root>
+#
+# Rebase the HOST side of a `host:container[:mode]` mount. Only a bind is
+# touched; a Docker named volume has no host path to rebase.
+_compose_reroot_mount() {
+  local _m="${1-}" _root="${2-}"
+  if [[ -z "${_root}" ]]; then
+    printf '%s' "${_m}"
+    return 0
+  fi
+  # Decided on the population this function MOVES -- an explicitly
+  # repo-relative `./` or `../` host path -- rather than on
+  # `_classify_volume_lhs`, which answers a different question (is there a
+  # named volume to declare at the top level?) and whose `bind` verdict
+  # also covers absolute, `~/` and `${VAR}` paths this must leave alone.
+  # Since base#1257 the two agree about the repo-relative half, because
+  # the classifier asks this same predicate; they are still not
+  # interchangeable here.
+  if ! _compose_is_repo_relative "${_m%%:*}"; then
+    printf '%s' "${_m}"
+    return 0
+  fi
+  printf '%s%s' "$(_compose_reroot_path "${_m%%:*}" "${_root}")" ":${_m#*:}"
+}
+
+# _compose_reroot_named <name=path> <root>
+#
+# Rebase the SOURCE half of an `additional_contexts` entry, when
+# _compose_context_is_local says it is a path at all.
+_compose_reroot_named() {
+  local _e="${1-}" _root="${2-}"
+  if [[ -z "${_root}" ]] || [[ "${_e}" != *=* ]]; then
+    printf '%s' "${_e}"
+    return 0
+  fi
+  local _src="${_e#*=}"
+  if _compose_context_is_local "${_src}"; then
+    _src="$(_compose_rebase_path "${_src}" "${_root}")"
+  fi
+  printf '%s=%s' "${_e%%=*}" "${_src}"
+}
+
+# _compose_escape_root <path>
+#
+# Escape a path the FILESYSTEM supplied so compose reads it literally:
+# every `$` becomes `$$`.
+#
+# The repo root is a directory name, not a configured value, so a `$` in
+# it is a literal -- and compose interpolates the emitted file, so a root
+# spelled `<parent>/repo${MISSING}` becomes `<parent>/repo` with the
+# variable unset and the build targets another directory. YAML
+# quoting does not help: the interpolation happens after the parse.
+#
+# Applied to the ROOT only. The configured values rebased onto it keep
+# their interpolations, which are deliberate (ADR-00000022's per-instance
+# overlay channel is exactly that).
+_compose_escape_root() {
+  local _p="${1-}"
+  printf '%s' "${_p//\$/\$\$}"
+}
+
+# _compose_reroot_lines <newline_separated> <root> <mount|named># _compose_reroot_lines <newline_separated> <root> <mount|named>
+#
+# Rebase every entry of a newline-separated list, preserving order and
+# blank-line handling. One pass over the list, so a caller cannot rebase
+# some entries and emit others raw.
+_compose_reroot_lines() {
+  local _str="${1-}" _root="${2-}" _kind="${3:-mount}"
+  if [[ -z "${_root}" ]] || [[ -z "${_str}" ]]; then
+    printf '%s' "${_str}"
+    return 0
+  fi
+  local _crl_line _crl_out="" _crl_first=1
+  while IFS= read -r _crl_line; do
+    [[ -z "${_crl_line}" ]] && continue
+    if [[ "${_kind}" == named ]]; then
+      _crl_line="$(_compose_reroot_named "${_crl_line}" "${_root}")"
+    else
+      _crl_line="$(_compose_reroot_mount "${_crl_line}" "${_root}")"
+    fi
+    if (( _crl_first )); then _crl_out="${_crl_line}"; _crl_first=0
+    else _crl_out+=$'\n'"${_crl_line}"; fi
+  done <<< "${_str}"
+  printf '%s' "${_crl_out}"
 }
 
 # _collect_named_volumes <assoc_array_name> <newline_separated_mounts>
@@ -186,7 +597,7 @@ _emit_additional_contexts_block() {
   while IFS= read -r _ac; do
     [[ -z "${_ac}" ]] && continue
     _name="${_ac%%=*}"
-    _path="${_ac#*=}"
+    _path="$(_compose_yaml_scalar "${_ac#*=}")"
     printf '        %s: %s\n' "${_name}" "${_path}"
   done <<< "${_additional_contexts_str}"
 }
@@ -238,11 +649,14 @@ _emit_runtime_line() {
 _emit_restart_line() {
   local _restart="${1-}"
   [[ "${_restart}" == "no" ]] && return 0
-  # apply does no schema revalidation, so a hand-edited setup.conf can feed
+  # apply does no schema revalidation, so a hand-edited setup.toml can feed
   # a malformed policy here. Drop anything _validate_restart rejects rather
   # than emit an invalid `restart:` that breaks `docker compose up` with a
   # cryptic error (apply-time trust-boundary guard).
-  _validate_restart "${_restart}" || return 0
+  if ! _validate_restart "${_restart}"; then
+    _warn_invalid_lifecycle_restart "${_restart}"
+    return 0
+  fi
   case "${_restart}" in
     on-failure:*) printf '    restart: "%s"\n' "${_restart}" ;;
     *)            printf '    restart: %s\n'   "${_restart}" ;;
@@ -256,11 +670,14 @@ _emit_restart_line() {
 # standalone block re-emits it (no extends to inherit from).
 _emit_init_line() {
   local _init="${1-true}"
-  # apply does no schema revalidation, so a hand-edited setup.conf can feed
+  # apply does no schema revalidation, so a hand-edited setup.toml can feed
   # a non-boolean here. Drop anything _validate_init rejects rather than
   # emit a malformed init: field (apply-time trust-boundary guard, mirrors
   # _emit_restart_line).
-  _validate_init "${_init}" || return 0
+  if ! _validate_init "${_init}"; then
+    _warn_invalid_lifecycle_init "${_init}"
+    return 0
+  fi
   [[ "${_init}" == "false" ]] && return 0
   printf '    init: true\n'
 }
@@ -285,21 +702,34 @@ _emit_watchdog_env() {
   done <<< "${_watchdog_env_str}"
 }
 
-# env_file emitter: inject the hand-authored .env workload
-# overlay into the service so per-task env vars take effect with
-# `just run` alone (no regenerate, no SETUP_CONF_HASH drift). Path is
-# relative to compose.yaml (repo root). The devel block emits it and
-# `extends: devel` stages inherit it; the per-stage standalone block
-# (override mode, no extends) re-emits it. Plain (not required:false):
-# setup.sh scaffolds .env on apply, so it always exists before compose
-# runs. .env.generated (the resolved cache) is NOT listed here -- it
-# feeds compose interpolation via the CLI --env-file flag, not the
-# container environment (two-role split).
+# env_file emitter: the container's env layers, in precedence order.
+#
+#   .env        the defaults we generate from setup.toml (ours)
+#   .env.local  the operator's overrides (theirs, never rewritten)
+#
+# compose applies env_file entries in order and lets a later file win, so
+# a key in `.env.local` beats the shipped default -- which is the whole
+# point of the pair, and why no value that belongs to this pair may also
+# appear in the service's `environment:` list (that list outranks BOTH).
+#
+# Paths are relative to compose.yaml (repo root). The devel block emits
+# this and `extends: devel` stages inherit it; the per-stage standalone
+# block (override mode, no extends) re-emits it. Plain (not
+# required:false): apply writes `.env` and scaffolds `.env.local`, so both
+# exist before compose runs. `.env.generated` (the resolved interpolation
+# cache) is NOT listed -- it feeds compose interpolation via the CLI
+# --env-file flag and never enters a container.
+#
+# <scope> = "own" drops the shared `.env` and keeps only `.env.local`. Used
+# by a stage whose `[stage:*] environment.env_inherit = false` REPLACED the
+# top-level list: handing it `.env` would put back the very entries it
+# asked to drop. That stage re-states its own env (and the lifecycle
+# WATCHDOG_* block) inline instead.
 _emit_env_file_block() {
-  cat <<'YAML'
-    env_file:
-      - .env
-YAML
+  local _scope="${1-shared}"
+  echo "    env_file:"
+  [[ "${_scope}" != "own" ]] && echo "      - .env"
+  echo "      - .env.local"
 }
 
 # User-added [build] args: emit each as `KEY: ${KEY}` — Dockerfile's
@@ -332,21 +762,21 @@ _emit_caps_block() {
     echo "    cap_add:"
     while IFS= read -r _c; do
       [[ -z "${_c}" ]] && continue
-      echo "      - ${_c}"
+      echo "      - $(_compose_yaml_scalar "${_c}")"
     done <<< "${_cap_add}"
   fi
   if [[ -n "${_cap_drop}" ]]; then
     echo "    cap_drop:"
     while IFS= read -r _c; do
       [[ -z "${_c}" ]] && continue
-      echo "      - ${_c}"
+      echo "      - $(_compose_yaml_scalar "${_c}")"
     done <<< "${_cap_drop}"
   fi
   if [[ -n "${_sec_opt}" ]]; then
     echo "    security_opt:"
     while IFS= read -r _c; do
       [[ -z "${_c}" ]] && continue
-      echo "      - ${_c}"
+      echo "      - $(_compose_yaml_scalar "${_c}")"
     done <<< "${_sec_opt}"
   fi
 }
@@ -400,7 +830,7 @@ _emit_tmpfs_block() {
   local _tf
   while IFS= read -r _tf; do
     [[ -z "${_tf}" ]] && continue
-    echo "      - ${_tf}"
+    echo "      - $(_compose_yaml_scalar "${_tf}")"
   done <<< "${_tmpfs_str}"
 }
 
@@ -460,7 +890,7 @@ _logging_svc_kv() {
 # _emit_logging_block <svc> <global_str> <per_svc_str>
 #
 # Emit compose `logging:` mapping for service <svc>. Maps four
-# setup.conf keys (driver / max_size / max_file / compress) to the
+# setup.toml keys (driver / max_size / max_file / compress) to the
 # corresponding Docker compose option names (driver as scalar;
 # max-size / max-file / compress as `options:` sub-keys, dash-named
 # per Docker docs). The 5th key, `local_path`, is **not** a Docker
@@ -525,13 +955,17 @@ _logging_svc_local_path_mount() {
   # ~ expansion at front only (not embedded — same restriction as
   # POSIX sh). The pattern uses single-char literal match (\~) and
   # case so shellcheck SC2088 doesn't flag it; we're matching the
-  # user's *literal* `~/foo` setup.conf value and rewriting it to
+  # user's *literal* `~/foo` setup.toml value and rewriting it to
   # ${HOME}/foo.
+  # The prefix this function supplies itself, as opposed to what the
+  # operator configured. Only that half is filesystem-derived, so only
+  # that half carries literals compose must not interpolate.
+  local _llp_prefix=""
   case "${_raw}" in
     \~/*)
-      _raw="${HOME}/${_raw#\~/}" ;;
+      _raw="${HOME}/${_raw#\~/}" ; _llp_prefix="${HOME}" ;;
     \~)
-      _raw="${HOME}" ;;
+      _raw="${HOME}" ; _llp_prefix="${HOME}" ;;
   esac
   # Strip trailing slashes for predictable mount string.
   while [[ "${_raw}" == */ && "${_raw}" != "/" ]]; do
@@ -539,14 +973,24 @@ _logging_svc_local_path_mount() {
   done
   # Relative -> resolve against repo root (the compose.yaml's directory).
   if [[ "${_raw}" != /* ]]; then
-    _raw="${_setup_base%/}/${_raw}"
+    _llp_prefix="${_setup_base%/}"
+    _raw="${_llp_prefix}/${_raw}"
   fi
   # Create the dir eagerly so `docker run` doesn't auto-create it
   # root-owned. Failure is non-fatal -- if the user's running setup
   # without write perms to that dir, the eventual docker run will
   # raise a clear error.
   mkdir -p "${_raw}" 2>/dev/null || true
-  _llp_out="${_raw}:/var/log/${_name}"
+  # Emitted with ONLY the prefix escaped. A `$` in the repo's own
+  # directory name is a literal compose would interpolate away; a `$` the
+  # operator put in local_path is an interpolation they meant, and
+  # escaping the assembled string destroyed it -- on the plain apply as
+  # much as on a relocated one.
+  local _llp_emit="${_raw}"
+  if [[ -n "${_llp_prefix}" ]]; then
+    _llp_emit="$(_compose_escape_root "${_llp_prefix}")${_raw#"${_llp_prefix}"}"
+  fi
+  _llp_out="${_llp_emit}:/var/log/${_name}"
 }
 
 # _logging_svc_retention <svc> <keep_out> <days_out> <global> <per_svc>
@@ -557,7 +1001,7 @@ _logging_svc_local_path_mount() {
 # non-positive hand-edit back to the default (mirrors transcript.sh +
 # runtime/logging.sh). Emitted as CONTAINER_LOG_KEEP / CONTAINER_LOG_DAYS
 # env alongside LOG_FILE_PATH so the in-image tee's shared logrotate
-# prune honors setup.conf across the container boundary.
+# prune honors setup.toml across the container boundary.
 _logging_svc_retention() {
   local _svc="$1"
   local -n _keep_out="$2"
@@ -603,6 +1047,9 @@ _emit_stage_service() {
   # bytes never drift).
   local _name="${_ess_ctx[name]-}"
   local _setup_base="${_ess_ctx[setup_base]-}"
+  local _ctx_dir="${_ess_ctx[ctx_dir]-.}"
+  local _ctx_yaml="${_ess_ctx[ctx_yaml]-.}"
+  local _reroot="${_ess_ctx[reroot]-}"
   local _additional_contexts_str="${_ess_ctx[additional_contexts]-}"
   local _build_network="${_ess_ctx[build_network]-}"
   local _target_arch="${_ess_ctx[target_arch]-}"
@@ -615,6 +1062,7 @@ _emit_stage_service() {
   local _init="${_ess_ctx[init]-true}"
   local _restart="${_ess_ctx[restart]-}"
   local _watchdog_env_str="${_ess_ctx[watchdog_env]-}"
+  local _env_top_str="${_ess_ctx[env_top]-}"
 
   # [lifecycle] restart is DEPLOY-scoped: emitted here, on the qualifying
   # stage services, and never on devel for `extends: devel` to inherit
@@ -639,14 +1087,13 @@ _emit_stage_service() {
     extends:
       service: devel
     build:
-      context: .
+      context: ${_ctx_yaml}
       dockerfile: Dockerfile
       target: ${_emit_stage}
 YAML
     _emit_additional_contexts_block "${_additional_contexts_str}"
     cat <<YAML
     image: \${DOCKER_HUB_USER:-local}/${_name}:${_svc}
-    container_name: \${USER_NAME}-${_name}-${_svc}
     stdin_open: false
     tty: false
     profiles:
@@ -671,7 +1118,7 @@ YAML
       echo "      - CONTAINER_LOG_KEEP=${_clog_keep}"
       echo "      - CONTAINER_LOG_DAYS=${_clog_days}"
       echo "    volumes:"
-      echo "      - ${_stage_llp}"
+      echo "      - $(_compose_yaml_scalar "${_stage_llp}")"
     fi
     # Per-stage [logging.<stage>] driver / rotation override (if any).
     # Without an override compose `extends: devel` already covers
@@ -694,7 +1141,10 @@ YAML
   local _eff_pid_mode="${_ess_res[pid_mode]-}"
   local _eff_net_name="${_ess_res[net_name]-}"
   local _eff_privileged="${_ess_res[privileged]-}"
-  local _eff_volumes="${_ess_res[volumes]-}"
+  # Rebased on the way in, for the same reason the devel list is: a stage
+  # that overrides [volumes] carries its own relative entries.
+  local _eff_volumes
+  _eff_volumes="$(_compose_reroot_lines "${_ess_res[volumes]-}" "${_reroot}")"
   local _eff_environment="${_ess_res[environment]-}"
   local _eff_ports="${_ess_res[ports]-}"
   local _eff_cap_add="${_ess_res[cap_add]-}"
@@ -715,7 +1165,7 @@ YAML
 
   ${_svc}:
     build:
-      context: .
+      context: ${_ctx_yaml}
       dockerfile: Dockerfile
       target: ${_emit_stage}
 YAML
@@ -735,15 +1185,36 @@ YAML
   _emit_user_build_args "${_user_build_args_str}"
   cat <<YAML
     image: \${DOCKER_HUB_USER:-local}/${_name}:${_svc}
-    container_name: \${USER_NAME}-${_name}-${_svc}
     stdin_open: false
     tty: false
     profiles:
       - ${_svc}
 YAML
-  # Workload overlay: standalone block has no `extends: devel`
-  # to inherit from, so re-emit env_file explicitly.
-  _emit_env_file_block
+  # Env layers: the standalone block has no `extends: devel` to inherit
+  # from, so re-emit env_file explicitly.
+  #
+  # Which layers depends on how this stage's `[environment]` list resolved.
+  # _resolve_stage_list appends the stage's own entries AFTER the top-level
+  # ones, so an effective list that still starts with the top-level list is
+  # in append mode: the shared `.env` already carries that prefix and only
+  # the tail is this stage's. An effective list that does not is replace
+  # mode (`environment.env_inherit = false`), and handing that stage `.env`
+  # would put back exactly the entries it asked to drop -- so it takes
+  # `.env.local` alone and re-states its own env plus the lifecycle
+  # WATCHDOG_* block inline. That inline block is the one place a compose
+  # `environment:` entry still outranks `.env.local`, and it is reached only
+  # by a stage whose conf explicitly opted out of the shared list.
+  local _stage_env_own="${_eff_environment}" _stage_env_scope="shared"
+  if [[ -n "${_env_top_str}" ]]; then
+    if [[ "${_eff_environment}" == "${_env_top_str}" ]]; then
+      _stage_env_own=""
+    elif [[ "${_eff_environment}" == "${_env_top_str}"$'\n'* ]]; then
+      _stage_env_own="${_eff_environment#"${_env_top_str}"$'\n'}"
+    else
+      _stage_env_scope="own"
+    fi
+  fi
+  _emit_env_file_block "${_stage_env_scope}"
   # privileged: literal when stage overrides; else env-var ref
   # (same shape devel emits — .env's PRIVILEGED applies).
   if [[ -n "${_eff_privileged}" ]]; then
@@ -762,9 +1233,11 @@ YAML
   else
     echo "    ipc: \${IPC_MODE}"
   fi
-  # pid: only emitted for "host" — Docker rejects "private" as literal.
+  # pid: emitted for the two forms Docker takes as a literal (see
+  # _pid_mode_emits); "private" is its own default and is rejected as a
+  # literal, so the key is omitted for it.
   # Same apply-time guard: a bogus stage override drops to the env-var ref.
-  if [[ "${_eff_pid_mode}" == "host" ]]; then
+  if _pid_mode_emits "${_eff_pid_mode}"; then
     if [[ "${_eff_pid_mode}" != "${_pid_mode}" ]] \
        && _validate_pid_mode "${_eff_pid_mode}"; then
       echo "    pid: ${_eff_pid_mode}"
@@ -792,7 +1265,9 @@ YAML
   _emit_group_add_block "${_eff_gui}" "${_dri_groups_str}"
   # network: literal mode + optional named network. When stage didn't
   # override mode, fall back to env-var ref (matches devel).
+  _warn_network_name_inert "${_eff_net_name}" "${_eff_net_mode}"
   if [[ "${_eff_net_mode}" == "bridge" ]] && [[ -n "${_eff_net_name}" ]]; then
+    _NETWORK_NAME_JOINED=1
     cat <<YAML
     networks:
       - ${_eff_net_name}
@@ -814,7 +1289,11 @@ YAML
   _logging_svc_local_path_mount "${_svc}" _stage_llp "${_name}" "${_setup_base}" "${_logging_global_str}" "${_logging_per_svc_str}"
   local _stage_log_file=""
   [[ -n "${_stage_llp}" ]] && _stage_log_file="/var/log/${_name}/${_svc}.log"
-  if [[ "${_eff_gui}" == "true" ]] || [[ -n "${_eff_environment}" ]] || [[ -n "${_stage_log_file}" ]] || [[ -n "${_watchdog_env_str}" ]]; then
+  # The stage's OWN env entries only: whatever the shared `.env` already
+  # carries is not restated here (restating it would outrank `.env.local`).
+  local _stage_wd_env=""
+  [[ "${_stage_env_scope}" == "own" ]] && _stage_wd_env="${_watchdog_env_str}"
+  if [[ "${_eff_gui}" == "true" ]] || [[ -n "${_stage_env_own}" ]] || [[ -n "${_stage_log_file}" ]] || [[ -n "${_stage_wd_env}" ]]; then
     echo "    environment:"
     if [[ "${_eff_gui}" == "true" ]]; then
       cat <<'YAML'
@@ -824,15 +1303,37 @@ YAML
       - XAUTHORITY=/tmp/.docker.xauth
 YAML
     fi
-    if [[ -n "${_eff_environment}" ]]; then
-      local _ev _ev_dq
-      while IFS= read -r _ev; do
+    if [[ -n "${_stage_env_own}" ]]; then
+      # Expand `${KEY}` cross-references against earlier siblings first,
+      # exactly as the devel env block does. Skipping it here made the
+      # SAME setup.toml produce two different container envs: devel saw
+      # the expanded value and the stage service saw a literal `${KEY}`
+      # that compose's own substitution layer cannot resolve, because it
+      # never sees sibling env entries.
+      #
+      # Expansion runs over the FULL effective list while only the tail
+      # is emitted: in append mode the referenced sibling normally lives
+      # in the shared prefix that stays in `.env`, so expanding the tail
+      # alone would leave the reference literal again. Restating that
+      # prefix here (which would outrank `.env.local`) is still avoided.
+      local -a _stage_env_expanded=()
+      _expand_env_cross_refs "${_eff_environment}" _stage_env_expanded
+      # `(( _own_n++ ))` would return 1 on the first entry (post-increment
+      # yields 0) and kill the emitter under `set -e`.
+      local _own_n=0 _own_line
+      while IFS= read -r _own_line; do
+        [[ -z "${_own_line}" ]] && continue
+        _own_n=$(( _own_n + 1 ))
+      done <<< "${_stage_env_own}"
+      local _ev _ev_dq _ei
+      for (( _ei = ${#_stage_env_expanded[@]} - _own_n; _ei < ${#_stage_env_expanded[@]}; _ei++ )); do
+        _ev="${_stage_env_expanded[_ei]}"
         [[ -z "${_ev}" ]] && continue
         # Quote each entry as a YAML double-quoted scalar (see the devel
         # env block) so structural chars in the value can't be re-parsed.
         _yaml_dq "${_ev}" _ev_dq
         echo "      - ${_ev_dq}"
-      done <<< "${_eff_environment}"
+      done
     fi
     if [[ -n "${_stage_log_file}" ]]; then
       echo "      - LOG_FILE_PATH=${_stage_log_file}"
@@ -841,16 +1342,16 @@ YAML
       echo "      - CONTAINER_LOG_KEEP=${_clog_keep}"
       echo "      - CONTAINER_LOG_DAYS=${_clog_days}"
     fi
-    # [lifecycle] watchdog: re-emit here because a standalone stage has no
-    # `extends: devel` to inherit devel's WATCHDOG_* env from.
-    _emit_watchdog_env "${_watchdog_env_str}"
+    # [lifecycle] watchdog: only for the replace-mode stage above, which
+    # cannot read it out of the shared `.env`.
+    _emit_watchdog_env "${_stage_wd_env}"
   fi
   # ports: only under bridge mode (compose ignores it under host).
   # Each published port is emitted as an overlay-overridable
   # ${PORT_<n>:-<default>} interpolation, not a baked literal, so a
-  # multi_run .env overlay can remap the host port per instance without a
+  # multi_run runtime overlay can remap the host port per instance without a
   # regenerate (ADR-00000022 forward invariant). Unset -> compose
-  # substitutes the setup.conf default (identical single-run behaviour).
+  # substitutes the setup.toml default (identical single-run behaviour).
   # The index is 1-based (PORT_1 = first port) to match base's 1-based
   # indexed-key convention (port_1 / mount_1 / arg_1).
   _warn_ports_inert "${_eff_ports}" "${_eff_net_mode}"
@@ -880,10 +1381,11 @@ YAML
       local _m
       while IFS= read -r _m; do
         [[ -z "${_m}" ]] && continue
-        echo "      - ${_m}"
+        echo "      - $(_compose_yaml_scalar "${_m}")"
       done <<< "${_eff_volumes}"
     fi
-    [[ -n "${_stage_llp}" ]] && echo "      - ${_stage_llp}"
+    [[ -n "${_stage_llp}" ]] && \
+      echo "      - $(_compose_yaml_scalar "${_stage_llp}")"
     # device entries with propagation redirect to volumes: long-form
     if [[ -n "${_devices_str}" ]]; then
       local _sd
@@ -903,14 +1405,16 @@ YAML
         echo "    devices:"
         _has_plain_sd=true
       fi
-      echo "      - ${_sd}"
+      echo "      - $(_compose_yaml_scalar "${_sd}")"
     done <<< "${_devices_str}"
   fi
   # device_cgroup_rules + tmpfs from top-level (shared emitters).
   _emit_cgroup_rules_block "${_cgroup_rule_str}"
   _emit_tmpfs_block "${_tmpfs_str}"
   # shm_size: depends on effective ipc (only emitted under non-host ipc,
-  # mirroring devel).
+  # mirroring devel). Reported when it is dropped -- the shipped template
+  # sets ipc = "host", so this was the default (base#1094).
+  _warn_shm_size_inert "${_shm_size}" "${_eff_ipc_mode}"
   if [[ -n "${_shm_size}" ]] && [[ "${_eff_ipc_mode}" != "host" ]]; then
     echo "    shm_size: ${_shm_size}"
   fi
@@ -963,16 +1467,30 @@ generate_compose_yaml() {
   local _additional_contexts_str="${25:-}"
   local _logging_global_str="${26:-}"
   local _logging_per_svc_str="${27:-}"
-  # Matches the template .setup.conf default (like _init below), so an
+  # Matches the template setup.toml default (like _init below), so an
   # arg-less caller renders what a stock conf renders.
   local _restart="${28:-unless-stopped}"
   local _dri_groups_str="${29:-}"
   local _init="${30:-true}"
   local _watchdog_env_str="${31:-}"
+  # The repo root, decoupled from where the file is WRITTEN (ADR-00000036).
+  # Everything this emitter reads off the filesystem -- the Dockerfile the
+  # stage scan parses, the base a relative [logging] local_path resolves
+  # against -- and every repo-relative path it EMITS belongs to the repo,
+  # not to the directory the caller asked for the artifact in. Defaulting
+  # to the output file's own directory is what keeps every existing caller
+  # byte-identical: for them the two ARE the same directory.
+  local _project_root="${32:-}"
+  # Where the bytes are WRITTEN, when that is not where the file will be
+  # read (base#1270). `apply` emits its set into a staging directory and
+  # moves it into place only once every emitter has succeeded; the
+  # content still answers for <out>'s directory, so a staged file is
+  # byte-identical to one written in place. Empty means <out>.
+  local _write_path="${33:-}"
 
   # Re-arm the ports-inert latch: one emit, at most one diagnostic, but a
   # second emit in the same process still reports.
-  _reset_ports_inert_warning
+  _reset_inert_warnings
 
   # Host name for the GUI+bridge hostname pin (ADR-00000019). Resolved once here so
   # both the devel service and every per-stage block emit an identical value.
@@ -984,8 +1502,8 @@ generate_compose_yaml() {
   # Auto-emit any `FROM <base> AS <stage>` outside the baseline
   # blocklist {sys, devel-base, devel, runtime-test} (legacy
   # {base, test}) as a compose service that
-  # `extends: devel` and only overrides target / image / container_name /
-  # stdin_open / tty / profiles. generalized the v0.10.0
+  # `extends: devel` and only overrides target / image / stdin_open /
+  # tty / profiles. generalized the v0.10.0
   # `runtime`-only detection so any user-added stage gets a
   # corresponding service automatically — e.g. NVIDIA Isaac Sim's
   # `headless` + `gui` stages share devel's baseline (GPU / network /
@@ -997,9 +1515,82 @@ generate_compose_yaml() {
   # caller exits non-zero so user fixes the Dockerfile before retry.
   # Per-stage diff (different volumes / GPU / network than devel) is
   # out of scope v1; declare via Dockerfile ARG + conditional RUN.
-  local _dockerfile _setup_base
-  _setup_base="$(dirname -- "${_out}")"
+  local _dockerfile _setup_base _out_dir
+  _out_dir="$(dirname -- "${_out}")"
+  if [[ -n "${_project_root}" ]]; then
+    # Canonicalised, and only on the relocated path so every existing
+    # caller stays byte-identical. A relative root -- `--base-path .` --
+    # stays `.` otherwise, and `.` is the one spelling that is wrong in a
+    # relocated file and right in a co-located one: compose resolves it
+    # against the output directory either way, so generation would
+    # succeed and the build would then find no Dockerfile.
+    _setup_base="${_project_root}"
+    [[ -d "${_setup_base}" ]] && _setup_base="$(cd -- "${_setup_base}" && pwd -P)"
+    [[ -d "${_out_dir}" ]] && _out_dir="$(cd -- "${_out_dir}" && pwd -P)"
+  else
+    _setup_base="${_out_dir}"
+  fi
   _dockerfile="${_setup_base}/Dockerfile"
+  # `build.context` is resolved by compose against the compose file's own
+  # directory, so the committed artifact's `.` is only correct while the
+  # two directories coincide. When they do not, the context is the repo --
+  # spelled absolutely, because nothing else in the emitted file tells a
+  # reader where the repo was. One variable, so the three service shapes
+  # (devel, a stage with no overrides, a stage with overrides) cannot
+  # answer differently.
+  local _ctx_dir="."
+  # Empty while the file is written where it is read, which is what keeps
+  # the committed artifact's relative paths exactly as they are.
+  local _reroot=""
+  if [[ "${_setup_base}" != "${_out_dir}" ]]; then
+    # A short-form bind is `host:container[:mode]`, so a root carrying a
+    # colon cannot be put in one: compose rejects the whole file with
+    # "too many colons", and quoting does not help because the ambiguity
+    # is in the mount grammar rather than in the document. The co-located
+    # artifact never carries the root (`./config/x` is the whole source),
+    # so relocation is what introduces this and relocation is what
+    # refuses -- an artifact that cannot be expressed is not written and
+    # called a success.
+    # Two characters the artifact's own grammars cannot carry in a path
+    # the relocated set has to name. A COLON is the field separator of a
+    # short-form bind, so compose rejects the file with "too many
+    # colons", and quoting cannot help -- the ambiguity is in the mount
+    # grammar, not in the document. A LINE BREAK is emitted literally,
+    # which compose rejects outright, and it also splits the
+    # newline-separated lists the rebase feeds, turning one entry into two
+    # and neither into a mount.
+    if [[ "${_setup_base}" == *:* || "${_setup_base}" == *$'\n'* \
+          || "${_setup_base}" == *$'\r'* ]]; then
+      _log_err compose compose_relocated_root_unusable \
+        "display=generate_compose_yaml: the repo root ${_setup_base} contains a colon or a line break, and a relocated set has to name it inside short-form bind mounts and newline-separated lists, where both are separators. Relocate from a path without them, or generate in place." \
+        "path=${_setup_base}"
+      return 1
+    fi
+    # Escaped once, here, so every emitted spelling of the root carries
+    # the same escaping -- the build context and every rebased path.
+    _ctx_dir="$(_compose_escape_root "${_setup_base}")"
+    _reroot="${_ctx_dir}"
+  fi
+  local _ctx_yaml
+  _ctx_yaml="$(_compose_yaml_scalar "${_ctx_dir}")"
+  # Every repo-relative host path in the emitted file is rebased here,
+  # once, off the one root -- rather than at each emission site, where a
+  # site added later would be the one that was missed.
+  _additional_contexts_str="$(_compose_reroot_lines "${_additional_contexts_str}" "${_reroot}" named)"
+  # [devices] entries carrying mount propagation are emitted as long-form
+  # binds by their own emitter, out of their own input string -- a third
+  # host-path population, and one the volume rebase did not reach.
+  _devices_str="$(_compose_reroot_lines "${_devices_str}" "${_reroot}")"
+
+  # The devel service's mounts, rebased. A copy rather than an in-place
+  # rewrite of the caller's array: the nameref is the caller's own list
+  # and this function is not its owner.
+  local -a _gcy_mounts=()
+  local _gcy_m
+  for _gcy_m in "${_gcy_extras[@]+"${_gcy_extras[@]}"}"; do
+    _gcy_mounts+=("$(_compose_reroot_mount "${_gcy_m}" "${_reroot}")")
+  done
+
   local -a _emit_stages=()
   local _stage _vrc
   while IFS= read -r _stage; do
@@ -1014,7 +1605,7 @@ generate_compose_yaml() {
     esac
   done < <(_parse_dockerfile_stages "${_dockerfile}")
 
-  # Per-stage overrides — validate setup.conf [stage:*] sections.
+  # Per-stage overrides — validate setup.toml [stage:*] sections.
   #
   #   sys / base / test       → hard error (baseline collision)
   #   latest / v[0-9]*        → hard error (reserved tag namespace)
@@ -1026,7 +1617,7 @@ generate_compose_yaml() {
   # already filters them; that's an acceptable v1 silent-drop since
   # the TUI is the primary write path and validates names upfront.
   local -a _conf_stages=()
-  _parse_stage_sections "${_setup_base}/.setup.conf" _conf_stages
+  _parse_stage_sections "${_setup_base}/setup.toml" _conf_stages
   local _cs
   for _cs in "${_conf_stages[@]}"; do
     case "${_cs}" in
@@ -1071,7 +1662,7 @@ generate_compose_yaml() {
   {
     cat <<'HEADER'
 # AUTO-GENERATED BY setup.sh — DO NOT EDIT.
-# Edit setup.conf instead. Regenerate via ./build.sh --setup or ./run.sh --setup.
+# Edit setup.toml instead. Regenerate via just docker setup apply.
 HEADER
     # top-level name: so non-wrapper tools (lazydocker / docker compose
     # ps / IDE panels) resolve the same project name the wrapper pins via
@@ -1091,7 +1682,7 @@ YAML
 services:
   devel:
     build:
-      context: .
+      context: ${_ctx_yaml}
       dockerfile: Dockerfile
       target: devel
 YAML
@@ -1111,20 +1702,22 @@ YAML
     _emit_user_build_args "${_user_build_args_str}"
     cat <<YAML
     image: \${DOCKER_HUB_USER:-local}/${_name}:devel
-    container_name: \${USER_NAME}-${_name}
     privileged: \${PRIVILEGED}
     ipc: \${IPC_MODE}
 YAML
-    # pid: only emitted for "host" — Docker rejects "private" as a
-    # literal; omitting the key gives the same private-namespace default.
-    if [[ "${_pid_mode}" == "host" ]]; then
+    # pid: emitted for the two forms Docker takes as a literal (see
+    # _pid_mode_emits) -- "private" is rejected as a literal and omitting
+    # the key gives the same private-namespace default. The value itself
+    # rides ${PID_MODE} from the generated .env, which has always carried
+    # it; what was missing was the reference (base#1094).
+    if _pid_mode_emits "${_pid_mode}"; then
       echo "    pid: \${PID_MODE}"
     fi
     cat <<YAML
     stdin_open: true
     tty: true
 YAML
-    # Workload overlay: devel emits it; extends:devel stages inherit.
+    # Env layers: devel emits them; extends:devel stages inherit.
     _emit_env_file_block
     _emit_runtime_line "${_runtime}"
     # No restart: on devel -- see _emit_restart_line. The deployable
@@ -1133,7 +1726,15 @@ YAML
     # cap_add / cap_drop / security_opt + group_add (shared emitters).
     _emit_caps_block "${_cap_add_str}" "${_cap_drop_str}" "${_sec_opt_str}"
     _emit_group_add_block "${_gui}" "${_dri_groups_str}"
-    if [[ -n "${_net_name}" ]]; then
+    # mode decides, network_name applies only under bridge. This used to
+    # consult network_name alone, which made the devel service the one
+    # emitter that let the name beat the mode -- the per-stage emitter
+    # above and both branches of the field bundle have always required
+    # bridge, so one setup.toml produced bridge networking here and host
+    # networking on the device (base#1094).
+    _warn_network_name_inert "${_net_name}" "${_net_mode}"
+    if [[ "${_net_mode}" == "bridge" ]] && [[ -n "${_net_name}" ]]; then
+      _NETWORK_NAME_JOINED=1
       cat <<YAML
     networks:
       - ${_net_name}
@@ -1155,7 +1756,13 @@ YAML
     _logging_svc_local_path_mount devel _devel_llp "${_name}" "${_setup_base}" "${_logging_global_str}" "${_logging_per_svc_str}"
     local _devel_log_file=""
     [[ -n "${_devel_llp}" ]] && _devel_log_file="/var/log/${_name}/devel.log"
-    if [[ "${_gui}" == "true" ]] || [[ -n "${_env_str}" ]] || [[ -n "${_devel_log_file}" ]] || [[ -n "${_watchdog_env_str}" ]]; then
+    # environment: the X11 host-env passthrough (interpolated from the
+    # developer's own shell) and the per-service log target. The
+    # `[environment]` defaults and the [lifecycle] WATCHDOG_* block are
+    # deliberately NOT here -- they live in the generated `.env`, because
+    # compose ranks `environment:` above `env_file` and a value left here
+    # would make the `.env.local` override silently inert.
+    if [[ "${_gui}" == "true" ]] || [[ -n "${_devel_log_file}" ]]; then
       echo "    environment:"
       if [[ "${_gui}" == "true" ]]; then
         cat <<'YAML'
@@ -1165,24 +1772,6 @@ YAML
       - XAUTHORITY=/tmp/.docker.xauth
 YAML
       fi
-      if [[ -n "${_env_str}" ]]; then
-        # Expand `${KEY}` cross-references against earlier siblings so
-        # the emitted compose.yaml carries the user's intent verbatim
-        # (compose's own substitution layer does NOT see sibling env
-        # entries --).
-        local -a _env_expanded=()
-        _expand_env_cross_refs "${_env_str}" _env_expanded
-        local _ev _ev_dq
-        for _ev in "${_env_expanded[@]}"; do
-          [[ -z "${_ev}" ]] && continue
-          # Quote each entry as a YAML double-quoted scalar so a
-          # structural ": ", a leading flow indicator, or an inline " #"
-          # in the value survives the parse as one string (mirrors the
-          # ports/cgroup quoting; the asymmetric env sink).
-          _yaml_dq "${_ev}" _ev_dq
-          echo "      - ${_ev_dq}"
-        done
-      fi
       if [[ -n "${_devel_log_file}" ]]; then
         echo "      - LOG_FILE_PATH=${_devel_log_file}"
         local _clog_keep _clog_days
@@ -1190,16 +1779,13 @@ YAML
         echo "      - CONTAINER_LOG_KEEP=${_clog_keep}"
         echo "      - CONTAINER_LOG_DAYS=${_clog_days}"
       fi
-      # [lifecycle] watchdog: WATCHDOG_* env on devel; extends:devel stages
-      # inherit it (it is a uniform lifecycle property, not per-svc).
-      _emit_watchdog_env "${_watchdog_env_str}"
     fi
     # ports: only emitted when network_mode=bridge (ignored under host).
     # Each published port is emitted as an overlay-overridable
     # ${PORT_<n>:-<default>} interpolation, not a baked literal, so a
-    # multi_run .env overlay can remap the host port per instance without a
+    # multi_run runtime overlay can remap the host port per instance without a
     # regenerate (ADR-00000022 forward invariant). Unset -> compose
-    # substitutes the setup.conf default (identical single-run behaviour).
+    # substitutes the setup.toml default (identical single-run behaviour).
     # The index is 1-based (PORT_1 = first port) to match base's 1-based
     # indexed-key convention (port_1 / mount_1 / arg_1).
     _warn_ports_inert "${_ports_str}" "${_net_mode}"
@@ -1227,7 +1813,7 @@ YAML
         if _device_has_propagation "${_chk}"; then _any_prop_device=true; break; fi
       done <<< "${_devices_str}"
     fi
-    if [[ "${_gui}" == "true" ]] || (( ${#_gcy_extras[@]} > 0 )) || [[ -n "${_devel_llp}" ]] || [[ "${_any_prop_device}" == true ]]; then
+    if [[ "${_gui}" == "true" ]] || (( ${#_gcy_mounts[@]} > 0 )) || [[ -n "${_devel_llp}" ]] || [[ "${_any_prop_device}" == true ]]; then
       echo "    volumes:"
       if [[ "${_gui}" == "true" ]]; then
         cat <<'YAML'
@@ -1237,10 +1823,13 @@ YAML
 YAML
       fi
       local _m
-      for _m in "${_gcy_extras[@]}"; do
-        echo "      - ${_m}"
+      for _m in "${_gcy_mounts[@]}"; do
+        echo "      - $(_compose_yaml_scalar "${_m}")"
       done
-      [[ -n "${_devel_llp}" ]] && echo "      - ${_devel_llp}"
+      # The one host path the helper assembles itself, so the one that
+      # bypassed the serialiser every other path goes through.
+      [[ -n "${_devel_llp}" ]] && \
+        echo "      - $(_compose_yaml_scalar "${_devel_llp}")"
       # device entries with propagation redirect to volumes: long-form
       if [[ -n "${_devices_str}" ]]; then
         local _d
@@ -1260,13 +1849,15 @@ YAML
           echo "    devices:"
           _has_plain=true
         fi
-        echo "      - ${_d}"
+        echo "      - $(_compose_yaml_scalar "${_d}")"
       done <<< "${_devices_str}"
     fi
     # device_cgroup_rules + tmpfs (shared emitters).
     _emit_cgroup_rules_block "${_cgroup_rule_str}"
     _emit_tmpfs_block "${_tmpfs_str}"
-    # shm_size: only emitted when ipc != host (otherwise Docker ignores it)
+    # shm_size: only emitted when ipc != host (otherwise Docker ignores
+    # it). Reported when it is dropped (base#1094).
+    _warn_shm_size_inert "${_shm_size}" "${_ipc_mode}"
     if [[ -n "${_shm_size}" ]] && [[ "${_ipc_mode}" != "host" ]]; then
       echo "    shm_size: ${_shm_size}"
     fi
@@ -1278,8 +1869,8 @@ YAML
     #   - extends `devel` (compose merges network / ipc / privileged /
     #     cap_add / volumes / environment / deploy.resources / runtime)
     #   - overrides build.target so docker builds the right stage
-    #   - tags `image:` and `container_name:` per stage so multiple
-    #     stages coexist locally without clobbering devel's `:devel`
+    #   - tags `image:` per stage so multiple stages coexist locally
+    #     without clobbering devel's `:devel`
     #   - disables stdin_open / tty: stages are typically headless
     #     entrypoints (e.g. `headless` runs runheadless.sh, `runtime`
     #     runs CMD-driven daemons). Interactive debug uses
@@ -1298,8 +1889,8 @@ YAML
     # GUI baseline (X11) — those are emitted separately based on
     # effective gui resolution.
     local _top_volumes_str=""
-    if (( ${#_gcy_extras[@]} > 0 )); then
-      _top_volumes_str="$(printf '%s\n' "${_gcy_extras[@]}")"
+    if (( ${#_gcy_mounts[@]} > 0 )); then
+      _top_volumes_str="$(printf '%s\n' "${_gcy_mounts[@]}")"
       _top_volumes_str="${_top_volumes_str%$'\n'}"
     fi
 
@@ -1315,6 +1906,9 @@ YAML
     local -A _stage_ctx=(
       [name]="${_name}"
       [setup_base]="${_setup_base}"
+      [ctx_dir]="${_ctx_dir}"
+      [ctx_yaml]="${_ctx_yaml}"
+      [reroot]="${_reroot}"
       [additional_contexts]="${_additional_contexts_str}"
       [build_network]="${_build_network}"
       [target_arch]="${_target_arch}"
@@ -1327,6 +1921,7 @@ YAML
       [init]="${_init}"
       [restart]="${_restart}"
       [watchdog_env]="${_watchdog_env_str}"
+      [env_top]="${_env_str}"
       [logging_global]="${_logging_global_str}"
       [logging_per_svc]="${_logging_per_svc_str}"
       [net_mode]="${_net_mode}"
@@ -1404,7 +1999,15 @@ YAML
     # by devel or a stage. Emitted before networks: (top-level section order).
     # No-op (zero-diff) when only bind mounts are used.
     _emit_volumes_block _named_vols
-    if [[ -n "${_net_name}" ]]; then
+    # Declared when a service block actually joined it, not when the
+    # GLOBAL mode happens to be bridge. A `[stage:<name>]` override can
+    # set network.mode = "bridge" under a global host mode, and that
+    # stage joins the inherited name -- re-deriving the condition from
+    # the global mode here would reference a network nothing declared,
+    # which compose refuses outright. Reading the flag the service
+    # blocks set is the only answer that cannot disagree with them
+    # (base#1094).
+    if (( _NETWORK_NAME_JOINED )) && [[ -n "${_net_name}" ]]; then
       cat <<YAML
 
 networks:
@@ -1412,5 +2015,5 @@ networks:
     driver: bridge
 YAML
     fi
-  } > "${_out}"
+  } > "${_write_path:-${_out}}"
 }

@@ -140,7 +140,7 @@ def test_unknown_path_is_core_never_nothing(cg):
     [
         "Dockerfile",
         "compose.yaml",
-        ".setup.conf",
+        "setup.toml",
         ".dockerignore",
         "config/host.yaml.example",
         ".base/dist/dockerfile/Dockerfile",

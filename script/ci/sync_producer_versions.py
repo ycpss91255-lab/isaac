@@ -38,7 +38,7 @@ import urllib.request
 from pathlib import Path
 
 REGISTRY = "ghcr.io"
-OWNER = "ycpss91255-docker"
+OWNER = "ycpss91255-lab"
 PACKAGE = "isaac-stream-source"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

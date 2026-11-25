@@ -77,7 +77,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 # (apt, locale-gen, useradd) have permission. devel stage drops back to
 # USER_NAME at the end. DL3002 false-positive is acknowledged upstream
 # (hadolint/hadolint#405); inline ignore is the recommended workaround.
-# hadolint ignore=DL3002
+# hadolint ignore=DL3002,DL3066
 USER root
 
 SHELL ["/bin/bash", "-x", "-euo", "pipefail", "-c"]
@@ -112,7 +112,7 @@ RUN if getent group "${USER_GID}" >/dev/null; then \
         usermod -l "${USER_NAME}" -d "/home/${USER_NAME}" -m \
             "$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
     else \
-        useradd -m -s /bin/bash -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}"; \
+        useradd -l -m -s /bin/bash -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}"; \
     fi && \
     echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     if getent group isaac-sim >/dev/null; then \
@@ -149,10 +149,10 @@ ARG GROUP="${USER_GROUP}"
 ARG ENTRYPOINT_FILE="script/entrypoint.sh"
 ARG CONFIG_DIR="/tmp/config"
 # Layered config/ override (base #254): two sequential COPYs into
-# /tmp/config/. The first brings .base/config/ defaults; the second
+# /tmp/config/. The first brings .base/dist/config/ defaults; the second
 # overlays <repo>/config/ on top. File-level merge — files in
 # <repo>/config/ replace same-path files in /tmp/config/; files only in
-# .base/config/ stay; files only in <repo>/config/ are added. Mental
+# .base/dist/config/ stay; files only in <repo>/config/ are added. Mental
 # model is the same as setup.conf section-replace, just at file
 # granularity. Trim <repo>/config/ files that match base default to
 # start receiving template-side improvements (we did this in the
@@ -258,7 +258,7 @@ RUN dangling="$(find /isaac-sim -xtype l -name '__init__.py' -path '*pip_prebund
 #     rm -rf /var/lib/apt/lists/*
 
 COPY --chmod=0755 "./${ENTRYPOINT_FILE}" "/entrypoint.sh"
-# Layer 1: .base/config/ defaults (subtree-managed, updates with
+# Layer 1: .base/dist/config/ defaults (subtree-managed, updates with
 # .base/upgrade.sh).
 COPY --chown="${USER}":"${GROUP}" --chmod=0755 .base/dist/config "${CONFIG_DIR}"
 # Layer 2: <repo>/config/ overrides (per-repo, survives subtree pull).
@@ -395,6 +395,7 @@ FROM ${TEST_TOOLS_IMAGE} AS test-tools-stage
 
 FROM devel AS devel-test
 
+# hadolint ignore=DL3066
 USER root
 
 # Lint tools (from pre-built test-tools image; see TEST_TOOLS_IMAGE at top)
@@ -597,7 +598,7 @@ CMD ["sleep", "infinity"]
 ############################## producer ##############################
 # [isaac #223 / owv#48 / #173] Deterministic WebRTC stream-source producer.
 # Published as a pullable, pinned GHCR image
-# (ghcr.io/ycpss91255-docker/isaac-stream-source:<tag>, via
+# (ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>, via
 # .github/workflows/publish-stream-source.yaml) so the omniverse_web_viewer
 # visual e2e (owv#48) and the Tier B browser-frames smoke (isaac#173) always
 # have a real, reproducible WebRTC source without a live desktop Isaac
@@ -635,7 +636,7 @@ ARG BASE_IMAGE
 ARG GIT_SHA="unknown"
 LABEL org.opencontainers.image.base.name="${BASE_IMAGE}"
 LABEL org.opencontainers.image.revision="${GIT_SHA}"
-LABEL org.opencontainers.image.source="https://github.com/ycpss91255-docker/isaac"
+LABEL org.opencontainers.image.source="https://github.com/ycpss91255-lab/isaac"
 LABEL org.opencontainers.image.description="Deterministic WebRTC stream-source producer for downstream viewer e2e (isaac#223)"
 
 COPY --chmod=0755 src/script/stream_source_producer.py \
@@ -649,7 +650,7 @@ CMD ["/isaac-sim/python.sh", "/opt/isaac-producer/stream_source_producer.py"]
 ############################## builder + runtime split (optional) ##############################
 # Three concrete stages for repos that need a separate runtime image
 # (compiled binaries / generated artifacts to ship without dev deps).
-# Lessons lifted from ycpss91255-docker/ros1_bridge#60 PR — empirically
+# Lessons lifted from ycpss91255-lab/ros1_bridge#60 PR — empirically
 # saved ~1.1 GB/arch on that repo's runtime image.
 #
 # Three rules, all of which the previous commented-out hint was silent on:

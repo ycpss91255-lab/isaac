@@ -371,7 +371,7 @@ def _setup_zed(cfg, stage):
     """Stereolabs ZED X via the official Isaac Sim extension.
 
     The extension is third-party and not bundled with the
-    ycpss91255-docker/isaac container.  See src/doc/zed_install.md.
+    ycpss91255-lab/isaac container.  See src/doc/zed_install.md.
 
     Raises NotImplementedError -- the OmniGraph topology depends on the
     Stereolabs SDK API surface and is deferred until end-to-end verification.

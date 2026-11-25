@@ -88,7 +88,7 @@ connect_timeout_s="${SMOKE_CONNECT_TIMEOUT:-120}"
 dwell_s="${SMOKE_DWELL:-30}"
 poll_s="${SMOKE_POLL:-5}"
 log_tail_n="${SMOKE_LOG_TAIL:-60}"
-viewer_image="${SMOKE_VIEWER_IMAGE:-ghcr.io/ycpss91255-docker/omniverse_web_viewer:0.3.0}"
+viewer_image="${SMOKE_VIEWER_IMAGE:-ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0}"
 browser_image="${SMOKE_BROWSER_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble}"
 
 # shellcheck source=stream_smoke_lib.sh

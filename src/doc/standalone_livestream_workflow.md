@@ -11,7 +11,7 @@
 
 ## 前置條件
 
-### 1. `ycpss91255-docker/isaac` image 已 build
+### 1. `ycpss91255-lab/isaac` image 已 build
 
 ```bash
 cd isaac_ws/src/docker

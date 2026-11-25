@@ -3,13 +3,13 @@
 Target tree:  devel-base -> devel -> {gui, stream, headless}.  `devel` is the
 shared layer (isaac code + common config); only the `gui` stage mounts X11.
 The Dockerfile is not changed to add X11 packages: the GUI mount is a compose
-runtime setting, so the guard reads `.setup.conf` (`[gui]` and `[stage:*]`).
+runtime setting, so the guard reads `setup.toml` (`[gui]` and `["stage:*"]`).
 No docker, no GPU.
 """
 
-import configparser
 import pathlib
 import re
+import tomllib
 
 import pytest
 
@@ -17,7 +17,7 @@ pytestmark = pytest.mark.core
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _DOCKERFILE = _REPO_ROOT / "Dockerfile"
-_SETUP_CONF = _REPO_ROOT / ".setup.conf"
+_SETUP_TOML = _REPO_ROOT / "setup.toml"
 
 _LEAVES = ("gui", "stream", "headless")
 
@@ -46,10 +46,8 @@ def _header_stages():
     return names
 
 
-def _setup_conf():
-    parser = configparser.ConfigParser(interpolation=None, strict=False)
-    parser.read_string(_SETUP_CONF.read_text(encoding="utf-8"))
-    return parser
+def _setup_toml():
+    return tomllib.loads(_SETUP_TOML.read_text(encoding="utf-8"))
 
 
 def test_devel_is_the_shared_layer_above_devel_base():
@@ -69,7 +67,7 @@ def test_header_stage_list_matches_active_stages():
 
 
 def test_only_gui_stage_enables_gui_mount():
-    conf = _setup_conf()
+    conf = _setup_toml()
     assert conf["gui"]["mode"] == "off"
     assert conf["stage:gui"]["gui.mode"] == "auto"
     for stage in ("stream", "headless", "devel-test"):

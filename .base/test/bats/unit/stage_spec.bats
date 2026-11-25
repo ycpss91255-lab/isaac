@@ -1,4 +1,25 @@
 #!/usr/bin/env bats
+#
+# why: Mirrors `lib/stage.sh`. The per-stage engine: `_validate_stage_name`
+# (#215), `_parse_dockerfile_stages`, `_compute_dockerfile_hash`, `main
+# apply` auto-emit of non-baseline stages (#215), per-stage overrides #220
+# (`_parse_stage_sections` / `_load_stage_overrides` /
+# `_validate_stage_override_key` / `_resolve_stage_scalar` /
+# `_resolve_stage_list` + compose-emit integration, incl. #493 `devel-test`
+# override surface), the `_resolve_docker_flags` single per-stage
+# flag-resolution layer (#505/#526, relocated from the compose spec in P1a),
+# `_generate_runtime_dockerfile` ENV-bake (#503/#688, relocated from
+# setup_emit in P1a), and `_is_deployable_stage`, the ADR-00000023 sec.4
+# stage-eligibility predicate (`deployable = not devel and not *-test`,
+# widened in #841 to the whole template-managed baseline incl. the `sys` /
+# `devel-base` build intermediates) that both the deploy-scoped `[lifecycle]
+# restart` emission and the `setup deploy` stage guard gate on. Also carries
+# the #875 AGREEMENT spec for `_dockerfile_stage_from_line`, the one shared
+# "which line declares stage `<S>`" matcher: instead of testing each reader
+# against its own regex — the shape that let three regexes drift apart until
+# a `FROM --platform=... AS <stage>` line was a stage to one call site and
+# invisible to the others — it drives every call site off a single FROM line
+# and asserts one verdict per site.
 
 bats_require_minimum_version 1.5.0
 
@@ -306,7 +327,7 @@ EOF
   assert_output "2"
 }
 
-@test "auto-emit: each emitted stage carries target / image / container_name / profiles" {
+@test "auto-emit: each emitted stage carries target / image / profiles and no container_name" {
   cat > "${TEMP_DIR}/Dockerfile" <<'EOF'
 FROM scratch AS sys
 FROM sys AS base
@@ -325,13 +346,34 @@ EOF
   # template's [image] rules — exact value irrelevant; pattern matters)
   run grep -E '^    image: \$\{DOCKER_HUB_USER:-local\}/[a-z0-9_-]+:headless$' "${TEMP_DIR}/compose.yaml"
   assert_success
-  # container_name: ${USER_NAME} prefix (multi-user disambiguation)
-  # + ${IMAGE_NAME}-headless
-  run grep -E '^    container_name: \$\{USER_NAME\}-[a-z0-9_-]+-headless$' "${TEMP_DIR}/compose.yaml"
-  assert_success
+  # No container_name: the daemon's container-name namespace is flat and
+  # global, so a name emitted here pins the stage to one instance per host
+  # and makes compose refuse `--scale`.
+  run grep -F 'container_name:' "${TEMP_DIR}/compose.yaml"
+  assert_failure
   # profiles list contains the stage name
   run grep -F '      - headless' "${TEMP_DIR}/compose.yaml"
   assert_success
+}
+
+@test "the shipped stage-authoring comment promises no container_name override (#920)" {
+  # dist/dockerfile/Dockerfile is the template every downstream repo
+  # receives on `just upgrade`, so the stage-authoring contract written in
+  # its comments is not local prose: it is what every consumer of base
+  # reads before adding a stage. The emitter above emits no
+  # container_name, so a comment listing one as an auto-emitted override
+  # documents a field that does not exist -- org-wide, on the next
+  # upgrade, with nothing else in the tree contradicting it.
+  local _dockerfile="/source/dist/dockerfile/Dockerfile"
+  assert_spec_subject "${_dockerfile}" \
+      "the shipped template Dockerfile whose stage-authoring comment this pins"
+  # The sentence has to still BE there: deleting the paragraph would
+  # otherwise read as a fix.
+  run grep -F 'overrides only build.target' "${_dockerfile}"
+  assert_success
+  # And nothing in the shipped template may name container_name at all.
+  run grep -n 'container_name' "${_dockerfile}"
+  assert_failure
 }
 
 @test "auto-emit: no extra stages → only devel + test in compose.yaml" {
@@ -529,7 +571,7 @@ EOF
 # ════════════════════════════════════════════════════════════════════
 # Per-stage overrides
 #
-# `[stage:<name>]` sections in <repo>/.setup.conf override top-level
+# `[stage:<name>]` sections in <repo>/setup.toml override top-level
 # settings on a per-stage basis when a corresponding `FROM ... AS <name>`
 # stage exists in the Dockerfile. Allowlist gates which keys can be
 # overridden; list fields (mount_*/port_*/env_*) use append-default
@@ -539,9 +581,9 @@ EOF
 # ─── _parse_stage_sections ────────────────────────────────────────
 
 @test "_parse_stage_sections: empty file → empty output" {
-  : > "${TEMP_DIR}/.setup.conf"
+  : > "${TEMP_DIR}/setup.toml"
   local -a _stages=()
-  _parse_stage_sections "${TEMP_DIR}/.setup.conf" _stages
+  _parse_stage_sections "${TEMP_DIR}/setup.toml" _stages
   [[ "${#_stages[@]}" -eq 0 ]] || { echo "expected 0 stages, got ${#_stages[@]}: ${_stages[*]}"; return 1; }
 }
 
@@ -551,6 +593,9 @@ EOF
   [[ "${#_stages[@]}" -eq 0 ]] || { echo "expected 0 stages, got ${#_stages[@]}: ${_stages[*]}"; return 1; }
 }
 
+# This arm pins the BARE header form a legacy INI `.setup.conf` carries,
+# so the fixture lives at an INI path; the quoted TOML form has its own
+# arm below. The scanner must keep reading both.
 @test "_parse_stage_sections: extracts [stage:NAME] sections in file order" {
   cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
 [gui]
@@ -577,34 +622,64 @@ EOF
 }
 
 @test "_parse_stage_sections: ignores plain sections that are not [stage:...]" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gui]
-mode = auto
+mode = "auto"
 [network]
-mode = host
-[volumes]
-mount_1 = /etc/localtime:/etc/localtime
+mode = "host"
+[[volumes]]
+source = "/etc/localtime"
+target = "/etc/localtime"
 EOF
   local -a _stages=()
-  _parse_stage_sections "${TEMP_DIR}/.setup.conf" _stages
+  _parse_stage_sections "${TEMP_DIR}/setup.toml" _stages
   [[ "${#_stages[@]}" -eq 0 ]] || { echo "expected 0 stages, got ${#_stages[@]}: ${_stages[*]}"; return 1; }
+}
+
+# why: TOML quotes table names that contain a colon, so [stage:foo] in
+# INI becomes ["stage:foo"] in TOML. The regex must match both forms
+# or the emitter silently drops every per-stage override.
+@test "_parse_stage_sections: extracts TOML [\"stage:NAME\"] sections (ADR-37)" {
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+[gui]
+mode = "auto"
+
+["stage:headless"]
+"gui.mode" = "off"
+
+[network]
+mode = "host"
+
+["stage:gui"]
+"gui.mode" = "auto"
+
+["stage:web"]
+"network.mode" = "bridge"
+EOF
+  local -a _stages=()
+  _parse_stage_sections "${TEMP_DIR}/setup.toml" _stages
+  [[ "${#_stages[@]}" -eq 3 ]] || { echo "expected 3 stages, got ${#_stages[@]}: ${_stages[*]}"; return 1; }
+  [[ "${_stages[0]}" == "headless" ]] || { echo "expected headless first, got ${_stages[0]}"; return 1; }
+  [[ "${_stages[1]}" == "gui" ]] || { echo "expected gui second, got ${_stages[1]}"; return 1; }
+  [[ "${_stages[2]}" == "web" ]] || { echo "expected web third, got ${_stages[2]}"; return 1; }
 }
 
 # ─── _load_stage_overrides ────────────────────────────────────────
 
-@test "_load_stage_overrides: returns the keys+values under [stage:NAME]" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+# why: Stage overrides are the per-stage tuning mechanism; failing to load them means every stage gets the same config.
+@test "_load_stage_overrides: returns the keys+values under [stage:NAME] (TOML)" {
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gui]
-mode = auto
+mode = "auto"
 
-[stage:headless]
-gui.mode = off
-network.mode = bridge
-network.port_1 = 8080:80
-volumes.mount_1 = /tmp/cache:/cache
+["stage:headless"]
+"gui.mode" = "off"
+"network.mode" = "bridge"
+"network.port_1" = "8080:80"
+"volumes.mount_1" = "/tmp/cache:/cache"
 
-[stage:gui]
-gui.mode = auto
+["stage:gui"]
+"gui.mode" = "auto"
 EOF
   local -a _keys=() _values=()
   _load_stage_overrides "${TEMP_DIR}" "headless" _keys _values
@@ -615,32 +690,41 @@ EOF
   [[ "${_keys[3]}" == "volumes.mount_1" && "${_values[3]}" == "/tmp/cache:/cache" ]] || return 1
 }
 
-@test "_load_stage_overrides: .setup.conf.local replaces a [stage:NAME] section (#893)" {
-  # The local layer overrides ANY section, not a whitelist -- and a stage
-  # section is exactly the shape a second worktree needs to vary.
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:headless]
-gui.mode = off
-network.port_1 = 8080:80
+# why: A second worktree needs its own stage overrides; if the local layer
+# cannot reach stage sections, worktrees share one tuning. A
+# `[stage:NAME]` section is a TABLE of dotted override keys, so
+# ADR-00000037's key-level rule applies to it like any other: the
+# worktree moves the one key it cares about and keeps the rest, instead
+# of silently dropping every override it did not restate.
+@test "_load_stage_overrides: setup.local.toml merges a [stage:NAME] section key by key (#893)" {
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:headless"]
+"gui.mode" = "off"
+"network.port_1" = "8080:80"
 EOF
-  cat > "${TEMP_DIR}/.setup.conf.local" <<'EOF'
-[stage:headless]
-network.port_1 = 18080:80
+  cat > "${TEMP_DIR}/setup.local.toml" <<'EOF'
+["stage:headless"]
+"network.port_1" = "18080:80"
 EOF
   local -a _keys=() _values=()
   _load_stage_overrides "${TEMP_DIR}" "headless" _keys _values
-  [[ "${#_keys[@]}" -eq 1 ]] || { echo "expected 1 key, got ${_keys[*]}"; return 1; }
-  [[ "${_values[0]}" == "18080:80" ]] || { echo "got: ${_values[0]}"; return 1; }
+  local _i _port="" _gui=""
+  for (( _i = 0; _i < ${#_keys[@]}; _i++ )); do
+    [[ "${_keys[_i]}" == "network.port_1" ]] && _port="${_values[_i]}"
+    [[ "${_keys[_i]}" == "gui.mode" ]] && _gui="${_values[_i]}"
+  done
+  [[ "${_port}" == "18080:80" ]] || { echo "got port: ${_port}"; return 1; }
+  [[ "${_gui}" == "off" ]] || { echo "inherited key dropped: ${_keys[*]}"; return 1; }
 }
 
 @test "_load_stage_overrides: a [stage:NAME] the local layer omits keeps the repo's (#893)" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:headless]
-gui.mode = off
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:headless"]
+"gui.mode" = "off"
 EOF
-  cat > "${TEMP_DIR}/.setup.conf.local" <<'EOF'
-[stage:gui]
-gui.mode = force
+  cat > "${TEMP_DIR}/setup.local.toml" <<'EOF'
+["stage:gui"]
+"gui.mode" = "force"
 EOF
   local -a _keys=() _values=()
   _load_stage_overrides "${TEMP_DIR}" "headless" _keys _values
@@ -650,34 +734,36 @@ EOF
 @test "_load_stage_overrides: ignores an ambient SETUP_CONF (#893 decision 7)" {
   # An ambient value used to REPLACE the file this reads, so a leftover
   # export silently swapped every per-stage override for another file's.
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:headless]
-gui.mode = off
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:headless"]
+"gui.mode" = "off"
 EOF
-  cat > "${TEMP_DIR}/elsewhere.conf" <<'EOF'
-[stage:headless]
-gui.mode = force
+  cat > "${TEMP_DIR}/elsewhere.toml" <<'EOF'
+["stage:headless"]
+"gui.mode" = "force"
 EOF
   local -a _keys=() _values=()
-  SETUP_CONF="${TEMP_DIR}/elsewhere.conf" \
+  SETUP_CONF="${TEMP_DIR}/elsewhere.toml" \
     _load_stage_overrides "${TEMP_DIR}" "headless" _keys _values
   [[ "${_values[0]}" == "off" ]] || { echo "got: ${_values[0]-}"; return 1; }
 }
 
-@test "_load_stage_overrides: missing setup.conf → empty arrays" {
+# why: A repo with no setup.toml at all must not crash the stage-override loader.
+@test "_load_stage_overrides: missing setup.toml → empty arrays" {
   local -a _keys=() _values=()
   _load_stage_overrides "${TEMP_DIR}" "headless" _keys _values
   [[ "${#_keys[@]}" -eq 0 ]] || { echo "expected 0 keys, got ${#_keys[@]}: ${_keys[*]}"; return 1; }
   [[ "${#_values[@]}" -eq 0 ]] || return 1
 }
 
-@test "_load_stage_overrides: stage absent from setup.conf → empty arrays" {
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+# why: Requesting a stage that has no override block must degrade to empty, not to the whole file or an error.
+@test "_load_stage_overrides: stage absent from setup.toml → empty arrays" {
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gui]
-mode = auto
+mode = "auto"
 
-[stage:headless]
-gui.mode = off
+["stage:headless"]
+"gui.mode" = "off"
 EOF
   local -a _keys=() _values=()
   _load_stage_overrides "${TEMP_DIR}" "gui" _keys _values
@@ -781,7 +867,7 @@ EOF
   local -a _values=("/tmp/cache:/cache" "/data:/data")
   local _top="/etc/localtime:/etc/localtime:ro"$'\n'"\${HOME}/.ssh:/home/user/.ssh:ro"
   local _out=""
-  _resolve_stage_list _keys _values "volumes.mount_" "volumes.mount_inherit" "${_top}" _out
+  _resolve_stage_list _keys _values "volumes.mount_" "${_top}" _out
   # Top-level 2 entries + stage 2 entries = 4 lines
   local -a _lines=()
   IFS=$'\n' read -rd '' -a _lines <<< "${_out}" || true
@@ -796,7 +882,7 @@ EOF
   local -a _values=("false" "/only:/only")
   local _top="/etc/localtime:/etc/localtime:ro"
   local _out=""
-  _resolve_stage_list _keys _values "volumes.mount_" "volumes.mount_inherit" "${_top}" _out
+  _resolve_stage_list _keys _values "volumes.mount_" "${_top}" _out
   [[ "${_out}" == "/only:/only" ]] || { echo "expected only stage entry, got '${_out}'"; return 1; }
 }
 
@@ -805,7 +891,7 @@ EOF
   local -a _values=()
   local _top="/etc/localtime:/etc/localtime:ro"$'\n'"/data:/data"
   local _out=""
-  _resolve_stage_list _keys _values "volumes.mount_" "volumes.mount_inherit" "${_top}" _out
+  _resolve_stage_list _keys _values "volumes.mount_" "${_top}" _out
   [[ "${_out}" == "${_top}" ]] || { echo "expected top-level passthrough, got '${_out}'"; return 1; }
 }
 
@@ -814,7 +900,7 @@ EOF
   local -a _values=("false")
   local _top="/etc/localtime:/etc/localtime:ro"
   local _out="initial"
-  _resolve_stage_list _keys _values "volumes.mount_" "volumes.mount_inherit" "${_top}" _out
+  _resolve_stage_list _keys _values "volumes.mount_" "${_top}" _out
   [[ -z "${_out}" ]] || { echo "expected empty, got '${_out}'"; return 1; }
 }
 
@@ -825,7 +911,7 @@ EOF
   local -a _keys=("network.port_3" "network.port_1" "network.port_2")
   local -a _values=("9000:9000" "8080:80" "5000:5000")
   local _out=""
-  _resolve_stage_list _keys _values "network.port_" "network.port_inherit" "" _out
+  _resolve_stage_list _keys _values "network.port_" "" _out
   local -a _lines=()
   IFS=$'\n' read -rd '' -a _lines <<< "${_out}" || true
   [[ "${_lines[0]}" == "9000:9000" ]] || return 1
@@ -839,7 +925,7 @@ EOF
   local -a _keys=("volumes.mount_1" "volumes.mount_inherit" "volumes.mount_2")
   local -a _values=("/a:/a" "false" "/b:/b")
   local _out=""
-  _resolve_stage_list _keys _values "volumes.mount_" "volumes.mount_inherit" "" _out
+  _resolve_stage_list _keys _values "volumes.mount_" "" _out
   # inherit=false → only stage entries
   local -a _lines=()
   IFS=$'\n' read -rd '' -a _lines <<< "${_out}" || true
@@ -892,15 +978,16 @@ FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gui]
-mode = force
+mode = "force"
 
-[stage:headless]
-gui.mode = off
+["stage:headless"]
+"gui.mode" = "off"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' >/dev/null 2>&1
   "
   assert_success
@@ -908,11 +995,11 @@ EOF
   # next service header).
   run bash -c "awk '/^  headless:\$/{f=1; next} /^  [a-z][a-z0-9_-]*:\$/{f=0} f' '${TEMP_DIR}/compose.yaml'"
   assert_success
-  # CRITICAL: NO `extends:` line — standalone emit so compose does
+  # CRITICAL: NO `extends:` line -- standalone emit so compose does
   # not merge devel's X11 list back in.
   refute_output --partial "extends:"
   refute_output --partial "service: devel"
-  # Standalone block has its own image / container_name / target.
+  # Standalone block has its own image / target.
   assert_output --partial "target: headless"
   assert_output --partial ":headless"
   # No X11 anywhere in the headless block.
@@ -931,16 +1018,17 @@ FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [network]
-mode = host
+mode = "host"
 
-[stage:headless]
-network.mode = bridge
-network.port_1 = 8080:80
+["stage:headless"]
+"network.mode" = "bridge"
+"network.port_1" = "8080:80"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' >/dev/null 2>&1
   "
   assert_success
@@ -963,18 +1051,19 @@ FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [volumes]
-mount_1 =
-mount_2 = /etc/localtime:/etc/localtime:ro
-mount_3 = /data:/data
+mount_1 = ""
+mount_2 = "/etc/localtime:/etc/localtime:ro"
+mount_3 = "/data:/data"
 
-[stage:headless]
-volumes.mount_inherit = false
-volumes.mount_1 = /only:/only
+["stage:headless"]
+"volumes.mount_inherit" = "false"
+"volumes.mount_1" = "/only:/only"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' >/dev/null 2>&1
   "
   assert_success
@@ -1003,20 +1092,21 @@ FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
 [gui]
-mode = force
+mode = "force"
 
 [security]
-privileged = true
-cap_add_1 = SYS_ADMIN
-cap_add_2 = NET_ADMIN
+privileged = "true"
+cap_add_1 = "SYS_ADMIN"
+cap_add_2 = "NET_ADMIN"
 
-[stage:headless]
-gui.mode = off
+["stage:headless"]
+"gui.mode" = "off"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' >/dev/null 2>&1
   "
   assert_success
@@ -1038,15 +1128,16 @@ FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:headless]
-gui.mode = off
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:headless"]
+"gui.mode" = "off"
 
-[stage:foo]
-gui.mode = off
+["stage:foo"]
+"gui.mode" = "off"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' 2>&1 >/dev/null
   "
   assert_success
@@ -1062,32 +1153,35 @@ FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:headless]
-gui.mode = off
-image.rule_1 = prefix:bogus_
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:headless"]
+"gui.mode" = "off"
+"image.rule_1" = "prefix:bogus_"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' 2>&1 >/dev/null
   "
   assert_success
   assert_output --partial "image.rule_1"
 }
 
-@test "stage-override: [stage:sys] in setup.conf is hard-error (baseline collision)" {
+# why: Overriding a baseline stage (sys/base) silently mutates every downstream stage that inherits from it; a hard error prevents that.
+@test "stage-override: [stage:sys] in setup.toml is hard-error (baseline collision)" {
   cat > "${TEMP_DIR}/Dockerfile" <<'EOF'
 FROM scratch AS sys
 FROM sys AS base
 FROM base AS devel
 FROM devel AS headless
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:sys]
-gui.mode = off
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:sys"]
+"gui.mode" = "off"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' 2>&1 >/dev/null
   "
   assert_failure
@@ -1112,12 +1206,13 @@ FROM sys AS devel-base
 FROM devel-base AS devel
 FROM devel AS devel-test
 EOF
-  cat > "${TEMP_DIR}/.setup.conf" <<'EOF'
-[stage:devel-test]
-deploy.gpu_mode = force
+  cat > "${TEMP_DIR}/setup.toml" <<'EOF'
+["stage:devel-test"]
+"deploy.gpu_mode" = "force"
 EOF
   run bash -c "
     source /source/dist/script/docker/wrapper/setup.sh
+    toml_bridge_parse() { local f=\"\${1:?}\"; shift; [[ -f \"\${f}\" ]] || return 1; /usr/local/bin/toml-bridge \"\$@\" < \"\${f}\"; }
     main apply --base-path '${TEMP_DIR}' >/dev/null 2>&1
   "
   assert_success
@@ -1410,13 +1505,20 @@ EOF
 # <S>" matcher, and the agreement test that keeps its call sites from
 # drifting apart again.
 #
-# The four call sites (_parse_dockerfile_stages, _compute_dockerfile_hash,
-# _generate_runtime_dockerfile, _bake_config_copy) used to answer the
-# question with three different regexes, so a `FROM --platform=... AS x`
-# line was a compose service to one of them and invisible to the other
-# three. Per-function specs could not see that: each one only ever
-# exercised its own regex. Every test below drives ALL of them off the
-# same line and asserts one verdict.
+# The four call sites in this library (_parse_dockerfile_stages,
+# _compute_dockerfile_hash, _generate_runtime_dockerfile,
+# _bake_config_copy) used to answer the question with three different
+# regexes, so a `FROM --platform=... AS x` line was a compose service to
+# one of them and invisible to the other three. Per-function specs could
+# not see that: each one only ever exercised its own regex. Every test
+# below drives ALL of them off the same line and asserts one verdict.
+#
+# The CI build worker is the fifth site and the only one outside this
+# file, reached through script/ci/build_worker/stage_names.sh. It is here
+# because it repeated the same history one level up: two more regexes,
+# one in build-worker.yaml's extra_stages loop and one in
+# runtime_stages.sh, with a comment beside each asserting they agreed
+# with this matcher when they did not.
 # ════════════════════════════════════════════════════════════════════
 
 # _stage_line_verdicts <from_line> <stage> <out_array_var>
@@ -1473,12 +1575,27 @@ _stage_line_verdicts() {
     _slv_out+=("envbake=nomatch")
   fi
 
-  # 5. _bake_config_copy -- the COPY config/app splice.
-  _bake_config_copy "${_df}" "${_stage}" "${_d}/baked"
-  if grep -q '^COPY config/app ' "${_d}/baked"; then
+  # 5. _bake_config_copy -- the COPY config/<component> splice; the
+  # population is derived from config/*/, so the fixture ships one.
+  mkdir -p "${_d}/with/config/realsense"
+  _bake_config_copy "${_df}" "${_stage}" "${_d}/baked" "${_d}/with"
+  if grep -q '^COPY config/realsense ' "${_d}/baked"; then
     _slv_out+=("configcopy=match")
   else
     _slv_out+=("configcopy=nomatch")
+  fi
+
+  # 6. the CI build worker's roster reader -- the one call site that lives
+  #    outside this library. build-worker.yaml's extra_stages loop and
+  #    runtime_stages.sh both ask it which stages a Dockerfile declares, and
+  #    each used to answer with a regex of its own while a comment beside it
+  #    claimed agreement with this matcher. Neither agreed, so the
+  #    claim is a verdict here instead of a sentence there.
+  if DOCKERFILE="${_df}" bash /source/script/ci/build_worker/stage_names.sh \
+     | grep -Fx -- "${_stage}" > /dev/null; then
+    _slv_out+=("worker=match")
+  else
+    _slv_out+=("worker=nomatch")
   fi
 
   rm -rf "${_d}"
@@ -1488,56 +1605,56 @@ _stage_line_verdicts() {
   local -a _v=()
   _stage_line_verdicts 'FROM devel AS runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=match parse=match hash=match envbake=match configcopy=match"
+    "matcher=match parse=match hash=match envbake=match configcopy=match worker=match"
 }
 
 @test "all FROM-line call sites agree a --platform flagged line declares the stage (#875)" {
   # The cross-build form this repo invites (TARGETARCH, the arm64
   # matrix). Three sites used to see nothing here while _bake_config_copy
-  # matched, so the field image got the baked config/app and none of the
+  # matched, so the field image got the baked config/<component> and none of the
   # [environment] defaults.
   local -a _v=()
   _stage_line_verdicts 'FROM --platform=$BUILDPLATFORM ubuntu:24.04 AS runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=match parse=match hash=match envbake=match configcopy=match"
+    "matcher=match parse=match hash=match envbake=match configcopy=match worker=match"
 }
 
 @test "all FROM-line call sites agree on a multi-flag FROM line (#875)" {
   local -a _v=()
   _stage_line_verdicts 'FROM --platform=linux/arm64 --link ubuntu:24.04 AS runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=match parse=match hash=match envbake=match configcopy=match"
+    "matcher=match parse=match hash=match envbake=match configcopy=match worker=match"
 }
 
 @test "all FROM-line call sites agree a lowercase 'as' line declares nothing (#875)" {
   local -a _v=()
   _stage_line_verdicts 'FROM ubuntu:24.04 as runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch"
+    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch worker=nomatch"
 }
 
 @test "all FROM-line call sites agree a commented-out FROM declares nothing (#875)" {
   local -a _v=()
   _stage_line_verdicts '# FROM ubuntu:24.04 AS runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch"
+    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch worker=nomatch"
 }
 
 @test "all FROM-line call sites agree a stray bare token declares nothing (#875)" {
   # `FROM <image> <junk> AS <stage>` is not a directive docker accepts.
-  # The greedy `.*` matcher used to splice COPY config/app into it while
+  # The greedy `.*` matcher used to splice COPY config/<component> into it while
   # the other three skipped it; widening for flags must not inherit that.
   local -a _v=()
   _stage_line_verdicts 'FROM ubuntu:24.04 junk AS runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch"
+    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch worker=nomatch"
 }
 
 @test "all FROM-line call sites agree an inline '#' declares nothing (#875)" {
   local -a _v=()
   _stage_line_verdicts 'FROM ubuntu:24.04 # note AS runtime' runtime _v
   assert_equal "${_v[*]}" \
-    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch"
+    "matcher=nomatch parse=nomatch hash=nomatch envbake=nomatch configcopy=nomatch worker=nomatch"
 }
 
 @test "_dockerfile_stage_from_line reports the declared stage name (#875)" {
@@ -1606,6 +1723,18 @@ _stage_line_verdicts() {
   assert_failure
   run _is_deployable_stage base
   assert_failure
+}
+
+# why: The one predicate gates both restart: and deploy, so letting the
+# tooling stage through gives it an auto-restart policy and a field bundle
+@test "_is_deployable_stage rejects base's test-tools-stage tooling stage (#1325)" {
+  # The template's `FROM ${TEST_TOOLS_IMAGE} AS test-tools-stage` only
+  # supplies tooling to devel-test; it is no field service.
+  run _is_deployable_stage test-tools-stage
+  assert_failure
+  # A deployable stage keeps passing alongside it.
+  run _is_deployable_stage runtime
+  assert_success
 }
 
 # ────────────────────────────────────────────────────────────────────
