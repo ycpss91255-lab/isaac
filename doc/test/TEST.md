@@ -1,252 +1,593 @@
 # TEST.md
 
-**104 tests** total.
+This file is the index. The taxonomy is ISTQB-aligned (ADR-00000018):
+the **levels** are Unit -> Integration -> System -> Acceptance, plus the
+shipped build-time **Smoke** type. Per-category spec catalogs live in the
+sibling docs below.
 
-## test/bats/smoke/host_yaml_spec.bats (16)
+> **No suite total is recorded here, and that is the decision**
+> (ADR-00000028 sec. 1 and 3). An aggregate over the working tree names
+> nothing it measured, so it is wrong between every commit and its
+> resync, and the lines that carried it were the ones every branch had to
+> edit. Ask the run instead: `just test` reports what it ran, and a
+> released version's figure belongs to that release.
+>
+> The `just test` self-test suite is **Unit + Integration** -- what runs
+> in the `Self Test` CI job. System and smoke specs are catalogued here
+> too but are **not** part of it: System specs need host docker access
+> and are opt-in, and smoke specs are Dockerfile `test`-stage build-time
+> assertions, not self-tests. Acceptance is a host-driven level with no
+> bats specs by design: it drives a real scaffolded consumer + built image
+> via `script/ci/acceptance.sh` -- the `acceptance` job in CI, `just test
+> acceptance` locally -- not the mounted-`/source` sandbox
+> (see [acceptance.md](acceptance.md)).
 
-Shared host.yaml parser (`script/host_yaml.sh`), used by both the post-run hook and `runheadless-host-config.sh`: the `public_ip` resolver (#104) and the `livestream.ports` resolver (#231).
+## Test Docs by Level / Type
 
-| Test | Description |
-|------|-------------|
-| `host_yaml: clean quoted value` | A quoted IPv4 is returned verbatim. |
-| `host_yaml: strips a trailing inline comment (#104)` | `public_ip: "1.2.3.4"  # note` yields `1.2.3.4`, not the comment. |
-| `host_yaml: trims whitespace on an unquoted value` | Leading/trailing whitespace is removed. |
-| `host_yaml: accepts a hostname` | A DNS hostname passes validation. |
-| `host_yaml: absent file -> empty, rc 0` | A missing file resolves to empty (localhost-only), no error. |
-| `host_yaml: key absent -> empty, no warning` | A file without `public_ip` resolves to empty with no warning. |
-| `host_yaml: key present but empty -> empty value + warning (#104)` | Distinguishes "not configured" from "configured but unparseable" -- warns on stderr. |
-| `host_yaml: invalid value (metacharacters) -> rc 1 + error (#104)` | A value with illegal characters fails fast with an error instead of passing garbage to Kit / the viewer. |
-| `host_yaml: resolve_port reads a numeric livestream port` | `resolve_port` returns the `livestream.ports.signal` integer. |
-| `host_yaml: resolve_port resolves each of signal/media/serve/api` | All four port keys resolve independently. |
-| `host_yaml: resolve_port strips a trailing inline comment` | An inline `# override` comment is stripped from the port value. |
-| `host_yaml: resolve_port absent key -> empty, rc 0, no warning` | A missing port key resolves to empty (omit => default), no warning. |
-| `host_yaml: resolve_port present-but-empty -> empty, rc 0 (omit => default)` | A present-but-blank key (e.g. `media:`) is treated as omitted, no warning. |
-| `host_yaml: resolve_port absent file -> empty, rc 0` | A missing file resolves every port to empty. |
-| `host_yaml: resolve_port non-numeric -> rc 1 + error` | A non-numeric port fails fast with an error. |
-| `host_yaml: resolve_port out-of-range -> rc 1 + error` | A port outside 1..65535 fails fast with an error. |
+| Doc | Scope |
+|-----|-------|
+| [unit.md](unit.md) | `test/bats/unit/` -- library, wrappers, generators, templates (Unit level) |
+| [integration.md](integration.md) | `test/bats/integration/` -- init / upgrade / dispatch across components (Integration level) |
+| [system.md](system.md) | `test/bats/system/` -- opt-in `runtime-test` buildx specs, gate-fires Regression (System level, host docker) |
+| [acceptance.md](acceptance.md) | `test/bats/acceptance/` -- consumer framework + UX, UAT/OAT (Acceptance level; host-driven via `script/ci/acceptance.sh` -- the `acceptance` job and `just test acceptance`, #785, base#1409) |
+| [smoke.md](smoke.md) | `dist/test/bats/smoke/` -- shipped per-stage build-time smoke templates (Smoke type) |
 
-## test/bats/smoke/runheadless_host_config_spec.bats (12)
+## Running the suite without `just test`: prerequisites
 
-Single builder of the Isaac livestream Kit invocation (`script/runheadless-host-config.sh`); ports from container env or the post-run hook's port env file (#231/#234), `public_ip` from `/etc/host.yaml`. Exercised via `RUNHEADLESS_DRYRUN=1` (base #465/#440).
+`just test` supplies two things before the suite starts. A bare
+container run (the test-tools image started directly, or a job that skips
+the host step) does not, and `test.sh --ci` refuses at once, naming each
+of these that is missing in a single message (event
+`ci_missing_prerequisite`):
 
-| Test | Description |
-|------|-------------|
-| `runheadless: first token is the Kit launcher` | The emitted command line starts with `/isaac-sim/runheadless.sh`. |
-| `runheadless: always emits -v + quitOnSessionEnded=false` | The two unconditional Kit args are always present. |
-| `runheadless: port env -> livestream port kit-args` | `ISAAC_SIGNAL_PORT` / `ISAAC_MEDIA_PORT` / `ISAAC_API_PORT` map to `--/app/livestream/port` / `fixedHostPort` / the http port. |
-| `runheadless: no port env -> no port kit-args (default instance)` | With no port env, the port args are omitted (Kit defaults). |
-| `runheadless: ports env file -> livestream port kit-args (#234)` | The ports the post-run hook copied in as `/etc/isaac/livestream-ports.env` reach the signal / media / api Kit args on any launch path, including the manual `exec`. |
-| `runheadless: absent ports env file -> no port kit-args (#234)` | No env file leaves the port args omitted (Kit defaults), the pre-#231 behavior preserved exactly. |
-| `runheadless: caller env wins over the ports env file (#234)` | An `ISAAC_*_PORT` already set by the caller overrides the file; keys the caller did not set still come from it. |
-| `runheadless: ports env file honors only the ISAAC_*_PORT keys (#234)` | The file is parsed, not sourced -- unrelated keys (e.g. `PATH`) and comment lines cannot reach the launcher environment. |
-| `runheadless: host.yaml public_ip -> publicEndpointAddress` | A valid `public_ip` is appended as `--/app/livestream/publicEndpointAddress`. |
-| `runheadless: no host.yaml -> no publicEndpointAddress` | Absent host.yaml omits the public-endpoint arg (localhost-only). |
-| `runheadless: invalid public_ip -> rc 1 (shared parser rejects)` | Garbage in host.yaml fails fast via the shared `resolve_public_ip`. |
-| `runheadless: forwards extra args after the built kit-args` | Trailing `"$@"` (e.g. a scene USD) is appended after the constructed args. |
+- `.prev-release/tags.txt`, produced on the host by
+  `script/test/prepare-prev-release.sh`. The previous-release upgrade spec
+  reads it. It is demanded when the dispatch can run that spec: the whole
+  suite (plain or coverage), a shard or the fragile set holding it, or a
+  path that contains it.
+  A `--filter` with no path always demands it, even when the regex
+  selects none of that spec's tests, because the regex is evaluated by
+  bats and not by the check; pass a path as well to narrow the run. It
+  may be empty (no release owed).
+- `HOST_UID` and `HOST_GID`, the uid and gid the suite hands the checkout
+  back to (`-e HOST_UID=$(id -u) -e HOST_GID=$(id -g)`).
 
-## test/bats/smoke/post_run_hook_spec.bats (17)
+A third need, a readable git repository for one pin-registry test, is
+neither supplied by `just test` nor checked up front: a worktree checkout
+mounted into the container has no readable `.git`, and refusing there
+would break supported runs. Reporting it by name is tracked in base#1996.
 
-Post-run hook (`script/hooks/post/run.sh`, base #440): on `run.sh -t stream -d`, copies host.yaml into the Isaac container and starts the per-project `${USER_NAME}-${IMAGE_NAME}-owv<suffix>` web-viewer (#237, isaac#238). The WebRTC livestream ports are sourced from `host.yaml` (#231), not hardcoded. base v0.42.0 removed `--instance` / `INSTANCE_SUFFIX` (base#666); the viewer suffix is now derived from the resolved `PROJECT_NAME` (empty when it equals the default `${DOCKER_HUB_USER}-${IMAGE_NAME}` -> byte-identical to today's names, `-<remainder>` for any distinct project; owv#55). A distinct `PROJECT_NAME` is the internal isolation seam for CI/tooling (a distinct compose project + per-project viewer name, so a CI actor never reaps a co-hosted manual stack), not a return of user-facing same-repo multi-instance, which ADR-0019 removed as a feature. The Isaac stream container name is base-fixed by `compose.yaml` `container_name` (no suffix; residual co-host collision filed as base#920), so the `docker cp` target is that fixed name. Exercised via `POST_RUN_DRYRUN=1`.
+## Running one spec: `just test bats-path`
 
-| Test | Description |
-|------|-------------|
-| `post-run: non-stream target is a no-op` | A non-`stream` target produces no actions. |
-| `post-run: stream without -d is a no-op` | The stream stage without `-d/--detach` produces no actions. |
-| `post-run: stream + -d starts the viewer with stream-only UI mode` | Viewer `docker run` carries `VIEWER_UI_MODE=stream-only`; negative guards that `usd-viewer` and the dropped `VIEWER_AUTO_LAUNCH` flag never appear (#123). |
-| `post-run: omitted ports fall back to viewer defaults 49100/5173 (#231)` | With no host.yaml, the viewer gets `SIGNALING_PORT=49100` + `SERVE_PORT=5173`, no `MEDIA_PORT` (negotiated), and no per-instance `--env-file` (ADR-0019) -- today's exact behavior. |
-| `post-run: viewer signal/serve ports sourced from host.yaml (#231)` | `livestream.ports.signal`/`serve` flow to the viewer as `SIGNALING_PORT`/`SERVE_PORT`; the old literal 49100/5173 no longer appear. |
-| `post-run: media port omitted -> no MEDIA_PORT on the viewer (#231)` | Omitting `media` passes no `MEDIA_PORT` -- the viewer negotiates via SDP. |
-| `post-run: media port set -> MEDIA_PORT wired to the viewer (#231, PRD:94)` | A set `media` port is passed as `-e MEDIA_PORT`, closing the un-wired media link. |
-| `post-run: isaac ports are copied into the Isaac container as an env file (#231)` | Set `ISAAC_*_PORT` are `docker cp`'d to `/etc/isaac/livestream-ports.env` for the later runheadless exec to source. |
-| `post-run: no livestream ports -> no env file copied to the Isaac container (#231)` | With no ports set, no env file is copied -- exact current behavior (Kit defaults). |
-| `post-run: invalid livestream port aborts with rc 1 (#231)` | A non-numeric / out-of-range port fails the hook via the shared resolver. |
-| `post-run: viewer container name derives from IMAGE_NAME (per-stack)` | The viewer name is `${USER_NAME}-${IMAGE_NAME}-owv<suffix>` (here, default project, `alice-isaac-owv`): `docker rm -f alice-isaac-owv` precedes `docker run --name alice-isaac-owv` (idempotent); the default project carries an empty suffix, while a distinct `PROJECT_NAME` appends `-<remainder>` (see the distinct-PROJECT_NAME test below, isaac#238/owv#55); two isolated stacks no longer collide (#237). |
-| `post-run: host.yaml present is copied into the default Isaac container` | A present host.yaml is `docker cp`'d to the default Isaac container `${USER_NAME}-${IMAGE_NAME}-stream` at `/etc/host.yaml` (no `-<instance>` suffix). |
-| `post-run: invalid host.yaml aborts with rc 1` | Garbage in host.yaml fails the hook (validated on the host first). |
-| `post-run: identity is read from .env.generated, not .env (base A2 model)` | With `.env` absent, identity comes from `.env.generated`: container name is `alice-isaac-stream` (no leading dash) and the viewer image is `alice/...` (not `local/...`). |
-| `post-run: .env overlays .env.generated identity (user override wins)` | `.env` (sourced second) overrides `.env.generated`: a `USER_NAME=bob` overlay yields `bob-isaac-stream`. |
-| `post-run: viewer image is omniverse_web_viewer:runtime, not stale owv:runtime (#121)` | Viewer `docker run` uses `${DOCKER_HUB_USER:-local}/omniverse_web_viewer:runtime` (owv renamed serve->runtime, #123); regression guard that the old short stale `owv:runtime` is not launched. |
-| `post-run: a distinct PROJECT_NAME suffixes the viewer; the Isaac cp target stays base-fixed (owv#55, isaac#238)` | With `PROJECT_NAME=alice-isaac-demo` in `.env.generated` (a distinct project a CI actor pins), the viewer is `alice-isaac-owv-demo` (rm + `--name`) and the `docker cp` target stays the base-fixed `alice-isaac-stream`; guards that a per-project-suffixed `alice-isaac-stream-demo:` cp target never appears. base v0.42.0 removed `INSTANCE_SUFFIX` (base#666); the residual co-host collision on the fixed stream name is base#920. |
+```bash
+just test bats-path test/bats/unit/justfile_spec.bats
+just test bats-path test/bats/unit/schema_spec.bats --filter 'gpu_count'
+just test bats-path test/bats/integration/            # a directory works too
+```
 
-## test/bats/smoke/post_stop_hook_spec.bats (2)
+The TDD inner loop, and the fastest thing in this file: it skips the
+static-lint table and kcov both, so what a red-green iteration costs is a
+container start plus the spec you named. `--filter <regex>` narrows further,
+to one `@test` within the file, and the regex reaches bats intact -- a space
+or a `|` in it is not re-split or read as a pipeline by the recipe's shell.
 
-Post-stop hook (`script/hooks/post/stop.sh`, base #440): stops the out-of-compose web-viewer that `stop.sh` does not see. The viewer suffix is derived from the resolved `PROJECT_NAME` (base v0.42.0 removed `INSTANCE_SUFFIX`, base#666; isaac#238).
+The argument is required. A bare `just test bats-path` is an error naming the
+missing `spec`, not a run -- bare `just test` is the whole suite, and a typo
+must not become one.
 
-| Test | Description |
-|------|-------------|
-| `post-stop: stops the per-stack viewer (name derived from IMAGE_NAME)` | `stop.sh` removes the per-project `${USER_NAME}-${IMAGE_NAME}-owv` viewer (here `alice-isaac-owv`); the default-project case carries no `-<remainder>` suffix; two isolated stacks no longer collide (#237). |
-| `post-stop: a distinct PROJECT_NAME scopes the viewer name (owv#55, isaac#238)` | With `PROJECT_NAME=alice-isaac-demo` in `.env.generated`, the post-stop hook derives the same suffix post/run used and targets `alice-isaac-owv-demo`, symmetric with what post/run created, so one stack's stop cannot leave another's viewer behind. |
+For the same narrowing under instrumentation, see `coverage-path` below; the
+runner refuses the two flags together, so they are separate recipes rather
+than one with a switch.
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (4)
+## Running one spec under kcov: `just test coverage-path`
 
-Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-docker/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
+```bash
+just test coverage-path test/bats/unit/lib_spec.bats
+just test coverage-path test/bats/unit/lib_spec.bats --filter 'nounset'
+just test coverage-path test/bats/integration/          # a directory works too
+```
 
-| Test | Description |
-|------|-------------|
-| `stream_smoke: brings the stack up under a distinct PROJECT_NAME, no --instance (owv#55)` | With `SMOKE_PROJECT=alice-isaac-demo`, the recorded `run.sh` argv carries `-t stream -d` with NO `--instance` (base#666), and the distinct project is written into `.env.generated` -- the bring-up is placed in a non-default compose project, never the default project a manual stream stack lives in. |
-| `stream_smoke: resolves the stream container BY PROJECT, not by a global name (owv#55)` | The recorded `docker` argv carries `compose -p alice-isaac-demo ... ps -q stream` -- the container id is resolved via the project's own compose ps, so a co-hosted stack's identically-named container is never addressed. |
-| `stream_smoke: teardown is project-scoped + the per-project viewer, not the bare name or literal owv (owv#55, isaac#238)` | Teardown runs `docker compose -p alice-isaac-demo ... down` plus `docker rm -f alice-isaac-owv-demo`; effective guards (`run ...; [ status -ne 0 ]`) that neither the bare default-project `alice-isaac-stream` nor the stale literal `owv` is ever a `docker rm -f` target. |
-| `stream_smoke: project defaults to '<derived>-smoke' when SMOKE_PROJECT is unset (owv#55)` | With the override unset, the dedicated default project is `<derived>-smoke` (`alice-isaac-smoke`): it is written into `.env.generated`, teardown targets `compose -p alice-isaac-smoke ... down` + `alice-isaac-owv-smoke`, so a bare manual `run.sh -t stream -d` (project `alice-isaac`) never collides with the nightly smoke. |
+Some bugs are only visible under instrumentation: the spec is red under kcov
+and green without it. kcov wraps every bash process it traces, sets its own
+`PS4`, and perturbs a nested `set -u` shell, so a spec can depend on something
+that only the coverage run disturbs -- which is precisely the class the
+coverage matrix exists to catch, and the class that is hardest to iterate on.
+The other instrumented entries are the whole suite (serially, or as parallel
+kcov processes) and a whole shard, minutes each; this one runs the spec you
+name.
 
-## test/bats/smoke/stream_smoke_lib_spec.bats (21)
+`--filter <regex>` narrows further, to one `@test` within the file, and the
+regex reaches bats intact -- a space or a `|` in it is not re-split or read as
+a pipeline by the recipe's shell (base#1284).
 
-Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib.sh`, #233). Before #233 the smoke stopped at "Streaming server started.", so a Kit that boots, opens the signaling socket and then dies on the first real client attach passed green; the probe now attaches a client, asserts the observed stream-start sequence, and holds a dwell window. That logic is GPU-free and lives in a sourceable library so it is unit tested on every image build -- the GPU driver (`script/ci/stream_smoke.sh`) itself stays nightly-only (`stream-smoke.yaml`). The liveness probe is the overridable `smoke_alive` hook: the driver binds it to `docker ps`, these specs bind it to stubs (including one that flips to dead mid-dwell).
+**It reports no coverage figure, deliberately.** The kcov report goes to a
+throwaway directory inside the container and is removed on the way out, so
+nothing this mode runs can write `coverage/cobertura.xml` -- which the
+coverage-gate merges into the project line rate -- or `coverage/timings.tsv`,
+which becomes the next partition's weights. One spec's covered lines over the
+whole tree's denominator is not a project rate. Ask for a figure with
+`just test coverage` / `just test coverage-local` (full suite) or
+`just test coverage <n>/<total>` (one shard); ask for a RUN with this.
 
-| Test | Description |
-|------|-------------|
-| `marker_line: present marker prints its 1-based line number` | A fixed-string marker resolves to its kit log line number. |
-| `marker_line: absent marker -> rc 1, no stdout` | A missing marker fails without emitting a bogus line number. |
-| `marker_line: missing log file -> rc 1 (no crash)` | An absent kit log is a failure, not a crash. |
-| `sequence_line: in-order markers -> rc 0 + line of the LAST marker` | The ordered attach sequence resolves to its final line, which anchors the drop scan. |
-| `sequence_line: out-of-order markers -> rc 1 naming the unmet marker` | Each marker must appear AFTER the previous one; the unmet one is named on stderr. |
-| `sequence_line: truncated attach (no All Streams connected.) -> rc 1` | A half-connect (signaling headers only) is the exact case a boot-only Tier A used to pass -- it now fails. |
-| `sequence_line: no markers given -> rc 1 (misuse is not a pass)` | Misuse fails closed rather than reading as a green run. |
-| `drop_line: NVST_CCE_DISCONNECTED after the anchor -> rc 0 + line` | A client disconnect after connect counts as a stream drop. |
-| `drop_line: 'Stream Server: streamN ... stopped' after anchor -> rc 0` | An individual stream stopping after connect counts as a drop. |
-| `drop_line: a drop BEFORE the anchor is ignored (stale prior session)` | An earlier session's teardown must not fail this run's dwell. |
-| `drop_line: healthy connected log -> rc 1 (nothing dropped)` | A healthy log reports no drop. |
-| `alive: default hook is fail-closed (never a silent pass)` | A caller that forgets to bind a real liveness probe fails the smoke instead of assuming the container is up. |
-| `wait_for: sequence already complete -> rc 0 without waiting` | An already-satisfied sequence returns immediately. |
-| `wait_for: sequence never appears -> rc 1 (timeout)` | Timeout is reported distinctly from death. |
-| `wait_for: Kit dies while waiting -> rc 2 (death, not timeout)` | A dead Kit during the connect wait is attributed as a death, not a slow start. |
-| `dwell: alive + no drop for the whole window -> rc 0` | The healthy path holds the connection for the whole window. |
-| `dwell: Kit SIGKILLed mid-dwell -> rc 2 (the #233 bug)` | The core regression: a Kit that dies part-way through the dwell fails the smoke. |
-| `dwell: streams stop mid-dwell -> rc 3` | Streams stopping during the dwell fails the smoke with its own code. |
-| `dwell: a pre-anchor drop does not fail the window` | The anchor keeps stale pre-connect drop lines from failing a healthy dwell. |
-| `log_tail: prints the last N lines between markers` | Failure reporting emits a framed, bounded kit log tail. |
-| `log_tail: missing log -> rc 0 and says so (teardown stays safe)` | The failure reporter never itself fails, so teardown still runs. |
+**It does not consult the shard partition, and that is load-bearing.** The
+partition is greedy longest-processing-time bin-packing over per-spec weights
+CI restores from cache and hands every shard as one blob. A shard reads only
+those weights -- `just test coverage <n>/<total> <weights>` names CI's file
+(the `shard-weights` artifact) -- and with no weights, or an empty file, it
+falls back to `@test` counts, as CI's cache-miss shards do; it never reads a
+checkout's `test/bats/.shard-weights`. Without CI's weights the local partition
+is a genuinely different one -- during #898 a spec sat in CI's shard 1/8 and
+the local 4/8, and a local `just test coverage 1/8` never ran the failing specs
+at all (base#1410). Naming the path removes the question: the spec you name is
+the spec that runs, in both places.
 
-## test/bats/smoke/docker_env.bats (4)
+`--bats-path` (`just test` has no recipe for it; use
+`./script/test/test.sh --bats-path <spec>`) remains the FAST loop -- no
+ShellCheck, no kcov, on the `ci` service. It refuses `--coverage` and still
+does: that combination is this recipe, on the `coverage` service, which is
+where kcov lives.
 
-| Test | Description |
-|------|-------------|
-| `entrypoint.sh is installed and executable` | Entrypoint check |
-| `bash is available on PATH` | Shell sanity |
-| `fastdds.xml is baked at /isaac-sim/fastdds.xml and world-readable` | Fast DDS profile (UDPv4-only) shipped by this repo's Dockerfile, content sanity-checked for `useBuiltinTransports=false` |
-| `custom streaming kit experience baked at /isaac-sim/apps/ (issue #21 fix-B)` | The repo's custom streaming `.kit` experience file is baked into `/isaac-sim/apps/` so the stream stage launches it |
+## A full-scope coverage run on all your cores: `just test coverage-local`
 
-## test/bats/smoke/isaac_smoke.bats (7)
+```bash
+just test coverage-local        # N = nproc
+just test coverage-local 8      # N = 8
+```
 
-| Test | Description |
-|------|-------------|
-| `isaac-sim launchers exist and are executable` | `/isaac-sim/runheadless.sh` and `/isaac-sim/runapp.sh` both `0755` |
-| `isaac-sim ships Python 3.11 in /isaac-sim/kit/python/bin/python3` | Isolated Python interpreter exists and reports `3.11` |
-| `runtime user is host-aligned (not root, not isaac-sim default)` | Container user is the host-UID-aligned `USER_NAME`, not the image default `isaac-sim` (UID 1234) |
-| `runtime user is in isaac-sim group (can read /isaac-sim/* mode 0750)` | Group membership unlocks read/exec on Isaac Sim binaries |
-| `HOME is writable` | `${HOME}` is owned by the runtime user — required for cache / logs / Documents writes |
-| `bundled ROS 2 humble + jazzy libs are both readable` | `librmw_fastrtps_cpp.so` present under both `humble/lib/` and `jazzy/lib/` — image carries both distros; the headless / stream shim picks one via `ARG ROS_DISTRO` |
-| `bundled ROS 2 humble + jazzy rclpy are both readable (Python 3.11)` | `rclpy/` Python bindings present under both distros; kit-side `import rclpy` resolves to whichever the bridge extension activates |
+It runs the same specs `just test coverage` runs -- both walk one roster,
+`_coverage_pool_files`, so the set is identical by construction rather than
+by a count kept in step here -- and writes the same `coverage/` tree,
+including the `scope=full` stamp `just release coverage-badge` requires.
+What differs is how many cores it uses: N concurrent kcov processes over
+the shared time-balanced partition, merged with `kcov --merge` into one
+report. Measured on a 32-core machine: 34 minutes becomes 5.
 
-## test/bats/smoke/isaac_ros_env_wrapper.bats (10)
+**It is not line-for-line the serial run, and the difference is the
+suite's.** The merged report's instrumented set is identical and the mode
+is deterministic, but its covered set is 27 lines (0.33%) smaller,
+concentrated in three localised lookup tables. 12 of those 27 are already
+lost at `just test coverage-local 1`, where there is no partition at all,
+so it is not the merge: the suite covers slightly different lines
+depending on the order it runs in. ADR-00000008's Measurement has the
+numbers and the control that separates the two.
 
-| Test | Description |
-|------|-------------|
-| `wrapper exists and is executable` | `/usr/local/bin/isaac-ros-env-wrapper.sh` 0755 |
-| `/etc/isaac/ros-distro is baked with humble (default ARG)` | Const file written from `ARG ROS_DISTRO` at build time |
-| `wrapper exports ROS_DISTRO from /etc/isaac/ros-distro` | Wrapper reads file and exports |
-| `wrapper exports LD_LIBRARY_PATH derived from ROS_DISTRO` | Wrapper exports `/isaac-sim/exts/isaacsim.ros2.bridge/${ROS_DISTRO}/lib` |
-| `wrapper hard-overrides runtime ROS_DISTRO env` | `ROS_DISTRO=jazzy ./wrapper bash -c 'echo ROS_DISTRO'` still prints `humble` — runtime `-e` ineffective on headless / stream |
-| `wrapper passes args verbatim to wrapped command` | `./wrapper echo arg1 arg2 arg3` → `arg1 arg2 arg3` |
-| `wrapper appends publicEndpointAddress when PUBLIC_IP is set` | With `PUBLIC_IP` exported, the wrapper adds `--/app/livestream/publicEndpointAddress=<ip>` to the Kit args |
-| `wrapper does not append publicEndpointAddress when PUBLIC_IP is empty` | With no `PUBLIC_IP`, the wrapper omits the public-endpoint arg (localhost-only WebRTC) |
-| `devel stage ENV ROS_DISTRO is baked (soft)` | Devel interactive shell sees `ROS_DISTRO=humble` from Dockerfile `ENV` |
-| `devel stage ENV LD_LIBRARY_PATH points to baked humble lib` | Same — `ENV LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.bridge/${ROS_DISTRO}/lib` interpolated at build time |
+**Why processes and not `bats --jobs`.** A coverage SHARD does run its bats
+under `--jobs` inside one kcov (base#1060). The full-suite run does not, and
+the difference is measured rather than assumed. kcov's bash engine parses one
+xtrace stream per traced process and is single-threaded, so every concurrent
+bats job feeds that one parser: at shard volume it keeps up -- seven of eight
+runs reproduce the serial covered set exactly, the eighth was short 3 lines of
+6207 -- and at whole-suite volume it does not: 8617 covered lines serial,
+reproducibly, against 8532 and 8587 parallel, each a strict subset of the
+serial set and the two differing from each other. What is dropped is trace,
+not execution; the lost lines sit in subprocess-heavy specs whose tests PASS.
 
-## test/bats/smoke/init_isaac_dirs_spec.bats (6)
+The bound is therefore trace VOLUME through one parser, and N independent kcov
+processes remove it: each parses only its own slice, into its own database,
+sharing nothing until the merge. That makes this mode the remedy for the
+full-suite case base#1060 could not take, not a competitor to it
+(ADR-00000008, both amendments).
 
-| Test | Description |
-|------|-------------|
-| `script-under-test is baked into the test stage` | `init_isaac_dirs.sh` is present in the devel-test image for the spec to exercise |
-| `fresh run creates all 10 namespaced dirs` | A clean run creates the full per-instance namespaced cache directory set |
-| `second run is idempotent (no error, no double-mkdir noise)` | Re-running does not error or re-create existing dirs |
-| `migration: pre-2026-05-21 layout is auto-moved to new namespaces` | Legacy cache layout is migrated into the namespaced layout |
-| `migration skips when destination already exists (no overwrite)` | Migration does not clobber an existing destination |
-| `missing .env errors with actionable message` | Absent `.env` produces a clear, actionable error |
+**Prefer it over `just test coverage` on a machine with cores to spare.**
+The release path needs a full-scope run -- the badge generator refuses a
+partial one -- so the serial run sits on the critical path of every release.
+The shard matrix does not help there: one runner runs one job, so eight
+matrix entries on one machine run one after another.
 
-## test/bats/smoke/python_testing.bats (3)
+**A slice that produced no report FAILS the run.** Not a smaller merged
+total: merging the survivors would publish a shrunken line set under a
+whole-suite certificate, which reads as a coverage regression rather than
+as the lost slice it is. The same applies to a job count that is not a
+positive integer, and to asking for more slices than the suite has specs.
 
-| Test | Description |
-|------|-------------|
-| `pytest installed in devel-test stage` | `/isaac-sim/python.sh -m pytest --version` exits 0 — pytest importable via Isaac Sim's bundled Python |
-| `pyyaml installed in devel-test stage` | `import yaml; print(yaml.__version__)` succeeds — YAML available for Python config / fixture loading |
-| `pytest-cov installed in devel-test stage` | `pytest --help` mentions `--cov` — coverage plugin registered, enables `pytest --cov=<pkg>` invocations |
+`just test coverage <n>/<total>` remains the way to prove ONE matrix slice
+locally. The two answer different questions: that one asks what a CI shard
+does, this one asks what the project's rate is.
 
-## test/bats/smoke/assert_pytest_baseline_isolation_spec.bats (2)
+## Static lints and where they are enforced
 
-Behavioral guard for `test/assert_pytest_baseline.sh --gpu` (owv#55 second axis; first axis was isaac#239). The `--gpu` tier runs the integration suite via a foreground `script/run.sh -t test` whose EXIT trap `_app_cleanup` does a project-wide `compose down --remove-orphans`; left at the default `yunchien-isaac` project that would reap a co-hosted manual stream stack. base v0.42.0 removed `--instance` (base#666); the tier now pins a distinct `PROJECT_NAME` in `.env.generated` (default `<derived>-baseline`, override `BASELINE_PROJECT`) before the `run.sh -t test` call. `assert_pytest_baseline.sh` is baked into `/smoke_test/` next to this spec so the devel-test bats suite can reach it. Hermetic — no docker, no GPU.
+The `just test` lint phase runs the tools listed in `script/test/test.sh`'s
+`_LINT_TOOLS` table. That table is the local gate; it is **not** the CI gate,
+because no CI job runs the phase (the lint jobs narrow to one tool, and every
+bats / coverage job sets `BATS_ONLY=1` / `COVERAGE=1`, which skip it). Each
+tool therefore needs its own join to `.github/workflows/self-test.yaml`:
 
-| Test | Description |
-|------|-------------|
-| `assert_pytest_baseline --gpu isolates the GPU pytest run in its own compose project (PROJECT_NAME, owv#55)` | Runs the script against a stub `run.sh` (records argv) + a fake `.env.generated`, and asserts the `-t test` invocation NO LONGER carries `--instance` and that the distinct `BASELINE_PROJECT` was written into `.env.generated` before `run.sh` fired — placing the GPU pytest tier in a non-default, isolated compose project so `_app_cleanup`'s project-wide teardown can never reap a co-hosted manual `stream` container. |
-| `assert_pytest_baseline --gpu defaults the baseline project to <derived>-baseline when BASELINE_PROJECT is unset (owv#55)` | With the override unset, the pinned project defaults to a dedicated `<derived>-baseline` (`alice-isaac-baseline`, derived from the cache's own `PROJECT_NAME`), still distinct from the default project. |
+| Lint | Enforces | CI job | Gated? |
+|------|----------|--------|--------|
+| `shellcheck` | shell static analysis | `shellcheck` (`--shellcheck-only`) | `code_changed` |
+| `hadolint` | Dockerfile static analysis | `hadolint` (`--lint --hadolint`, in the test-tools image) | `code_changed` |
+| `issueref` | no transient `#NNN` in code comments (ADR-00000013) | `lint-static` (one group) | ungated |
+| `adr-numbering` | `doc/adr/` duplicate-free + well-formed | `lint-static` (one group) | ungated |
+| `adr-structure` | every ADR carries each required part exactly once at column 0 -- `> Serves:`, Context, Decision, Consequences, Alternatives, Status | `lint-static` (one group) | ungated |
+| `stale-setup-conf` | no legacy `config/docker/setup.conf` under `dist/` | `lint-static` (one group) | ungated |
+| `readme-sync` | localized READMEs still match `README.md` | `lint-static` (one group) | ungated |
+| `doc-counts` | the figures / catalog rows below | `doc-counts` (`--doc-counts-only`) | ungated |
+| `home-literal` | no concrete username in a home path under `dist/` or `dockerfile/` (ADR-00000024) | `lint-static` (one group) | ungated |
+| `arch-literal` | no bare architecture literal in a shipped Dockerfile under `dist/` or `dockerfile/`; architecture comes from `ARG TARGETARCH`, and a mapping onto an upstream asset spelling opts out with a stated reason | `lint-static` (one group) | ungated |
+| `moving-tag` | no workflow, Dockerfile, compose file or script in base resolves the test-tools image by `:latest`, `:main`, no tag or a tag decided at run time, outside the per-line allow-list in `script/test/drivers/moving_tag.sh` (base#1647) | `lint-static` (one group) | ungated |
+| `bash-source-guard` | no undefaulted `BASH_SOURCE` self-location read under `dist/` or `script/` | `lint-static` (one group) | ungated |
+| `early-close-reader` | no `\| head` / `\| grep -q` under `dist/` or `script/`, where an early-closing reader strands its writer and `pipefail` inverts the answer | `lint-static` (one group) | ungated |
+| `errexit-bang` | no `!` statement outside the LAST statement of any `*.bats` body in the repo, and none handing its verdict on via a `;`, an async `&` or an `\|\| true` anywhere in it, continuation lines included. An `\|\|` with a live right operand still exempts the statement -- `! A \|\| return 1` fails its test from any position -- unless a RIGHT operand -- one after such an operator, never the leading `!` that made the statement a candidate -- is itself `!`-inverted: bash exempts THAT from errexit too, so `! A \|\| ! B` aborts nothing and is judged by position and by `;` like any other statement. It is the list's FINAL operand that decides whether it can abort, and the whole class is declined rather than only the inert half, so a live chain (`! A \|\| ! B \|\| return 1`, which DOES abort from a non-final position) is reported alongside it: telling them apart needs the chain evaluated, not read, and that over-report costs one allow region. The judgement is made on the FOLDED statement: physical lines are joined while the text is INCOMPLETE -- a `\` continuation, a quote or a `(` still open, or a `\|` / `\|\|` / `&&` / `\|&` still waiting for its right operand -- and the scan then runs once from the first character, so a separator inside a `( ... )` is the argument's wherever the `(` and its `)` sit. The `\` join is a SPLICE, matching bash: `! grep -q A\` over `#b f; true` is the one word `A#b` and a live `; true`, while `! grep -q A \` over the same text is a comment. The fold answers where a statement STARTS as well as where it ends: a `!` line read in as an operator's right operand -- `echo a \|\|` over `! grep -q A f; true` -- is judged from the line the `!` opens on, over the span that begins there, so the `\|\|` in front of it stays the `echo`'s rather than being read as the `!`'s own hand-off. A statement still unfinished where its body closes is REPORTED when that span is a `!` one, or when an unterminated quote or `(` folded a line opening with `!` into it; otherwise it is unreadable but provably hid nothing this rule judges, which is stated in the driver rather than claimed away. Every row that judges a `!` line is silenced by the allow region; the two that report the FILE instead -- a body left open at EOF, an unbalanced allow marker -- are deliberately not, because the mechanism they are about must not be able to silence them. What is NOT modelled is listed in the driver header with the direction each errs in: `$'...'`, backticks, a heredoc's fixture text and a `!` that ends a compound command ending the body (#991) all OVER-report, which is the refusing direction. The ones that MISS are a `}` at column 0 inside a heredoc, a CRLF file (#990), and the `{ }` half of that same compound-command entry (#991): a brace group carries the `!` exemption out of itself, so a one-line `{ ! cmd; }` away from the body's last statement is inert in bash and unreported, because the scan needs `!` as the statement's first token and there it is `{`. Those two are not every miss the lint has, and the list does not claim to be: the `\|\|` narrowings the driver states separately miss as well -- an always-zero GROUP (`\|\| { true; }`, `\|\| ( true )`) and an operand outside the closed set of always-zero builtins that cannot fail in practice (`\|\| echo x`) are inert and go unreported, and a `;` behind either is swallowed with them (#992). A list whose FINAL operand cannot fail is inert in EVERY position, so position cannot catch it either -- `! A && ! B \|\| echo x` as a body's last statement is such a case, and a spec PINS it as a known miss so it cannot change shape unnoticed; that spec is inverted when #992 lands. The population is derived by walking the tree, not listed: `test/bats/` and the shipped `dist/test/bats/smoke/` both count | `lint-static` (one group) | ungated |
+| `derived-figures` | a figure a document repeats matches the code that defines it | `lint-static` (one group) | ungated |
+| `i18n-orphan` | no identifier-shaped token in a translation's code spans that `README.md` never names | `lint-static` (one group) | ungated |
+| `self-hosted-guard` | a job that can land on the org's self-hosted runner is guarded to same-repository events (ADR-00000026) | `lint-static` (one group) | ungated |
+| `tool-provenance` | no CI job runs a tool this repo pins unless the job also obtains that pin | `lint-static` (one group) | ungated |
+| `changelog-entry` | no `[Unreleased]` changelog entry over 700 chars (measured whitespace-collapsed over the whole entry), no entry repeating another's lead bullet, no `### <category>` heading opening twice in one release block, and every `### <category>` heading one of the seven in `script/release/changelog_categories.sh` | `lint-static` (one group) | ungated |
+| `changelog-layout` | the split changelog stays addressable: `doc/changelog/CHANGELOG.md`'s index is re-derived from the per-series files and must match byte for byte | `lint-static` (one group) | ungated |
+| `pin-coverage` | every third-party version this repo names is declared to the upstream-release watch, so nothing is pinned with nothing watching it | `lint-static` (one group) | ungated |
+| `action-ref-agreement` | every call site of the same GitHub Action agrees on one ref | `lint-static` (one group) | ungated |
+| `generated-workflow-actions` | a workflow `init.sh` / `upgrade.sh` writes into a consumer keeps its action refs in lockstep with this repo's own | `lint-static` (one group) | ungated |
+| `just-provenance` | every site that obtains the `just` runner names the one pinned version | `lint-static` (one group) | ungated |
+| `catalog-description` | every `@test` says why its case matters, in the `# why:` marker the catalogues render | `lint-static` (one group) | ungated |
+| `spec-repo-root` | a spec's `REPO_ROOT` is a fixture, never the live checkout | `lint-static` (one group) | ungated |
+| `test-name-backtick` | a `@test` name is a literal -- a backtick in one is executed by bats at collection time | `lint-static` (one group) | ungated |
+| `toml-fixture` | every fixture body a spec writes to a `*.toml` path parses as TOML -- a body the bridge refuses leaves an empty config handle, so a test asserting a schema default passes without its fixture ever being read | `lint-static` (one group) | ungated |
+| `canonical-ignore-sync` | base's own root `.dockerignore` carries a line for every entry `_canonical_dockerignore_entries` emits -- the block is headed as a copy of that function, so both sides are derived and compared rather than the copy being re-synchronised by hand. One-directional: extras are allowed, and presence is a whole line (the `grep -qxF` the shipped sync applies) | `lint-static` (one group) | ungated |
 
-## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
+`lint-static` is a matrix of GROUPS, not of lints (base#1071): each entry is a
+position (`1/4` ... `4/4`) and `test.sh --lint --group N/T` computes which lints
+fall in it from `_LINT_TOOLS`, so a lint added to that table joins a group with
+no workflow edit -- and the row here is kept true by a guard rather than by
+somebody remembering (see below). The trade is the checks list: a
+red check names a group, and the group's own output names every lint that
+failed in it, because the phase enumerates rather than stopping at the first
+(#1059). `test.sh --lint-group-members N/T` answers which group holds a lint.
 
-Host-runnable unit tests for the `isaac_devkit` framework pure surface (no Isaac Sim, no GPU). They are the M1 stage gate (ADR-0017 section 7): the `python-tests` CI job runs `test/assert_pytest_baseline.sh`, which executes this suite in a plain Python container and enforces all-green + collected >= `HOSTED_UNIT_BASELINE` (committed in `test/pytest-baseline.txt`, ratchet) + framework pure-surface coverage >= 80% (`framework/pyproject.toml` `[tool.coverage]` excludes Isaac-side function-local code via `exclude_also` regexes; live coverage 99%). They are not counted in the bats total in the header (the drift check counts `^@test` lines only). Live collected = **299** (#130 framework extraction 171 + #131 example sim 14 + #134 scaffold structure-check 23 + #135 onboarding gate 13 + #151 driver AppLauncher 8 + #150/#153 ADR-0018 +4 + #152 ADR-0018 +22 + #169/#170 ingestion +14 + #177 +5 + #167/#168 ingestion +22 + owv#55 cross-container compose-project isolation +3; baseline floor ratchets to 299, DoD floor was 115). The owv#55 isaac-side fix adds `test_xc_compose_project_isolation.py` (3): the cross-container round-trip's default `COMPOSE_PROJECT` is a dedicated `xc-isaac-roundtrip` distinct from any `${DOCKER_HUB_USER}-${IMAGE_NAME}` stream-stack project, so its project-level teardown cannot kill a co-hosted manual `stream` container. The #150/#153 (ADR-0018) net +4 is: `test_import_model.py` rewritten to the single-USD CLI contract (20 -> 14, the Asset-Structure-3.0 template/validate helpers are gone), `test_material_setup.py` +10 for the new pure `material_cfg_from_yaml` (color-only -> per-prim spawn cfg-param mapping). The #151 addition was 8 tests for `parse_livestream_applauncher` (the `ISAAC_LIVESTREAM` -> Isaac Lab `AppLauncher`-args mapping); the lifecycle-order spy in `test_isaac_driver.py` is rewritten in place (mocks `isaaclab.app.AppLauncher`, asserts the `app_launcher -> open_stage -> ensure_scene_defaults -> play_timeline -> setup -> main -> shutdown -> close` order), not added. The #152 (ADR-0018 decisions 1/3) +22 is `test_scene_builder.py` 17 -> 39: `build_scene` becomes the pure YAML -> Isaac Lab `sim_utils` cfg adapter (`to_isaaclab_cfg` -> `list[SpawnSpec]`), and the new `TestToIsaaclabCfg` + `TestRpyToQuat` classes assert the mapping without a live stage (ground/light specs from `environment`, robot/object USD specs with `prim_path` / `usd_path` / `translation` / `mobility`, rpy->quat orientation, `spawn_overrides` spread overrides-win, instance expansion, optional material diffuse hook); plus `test_resolves_prefixed_model` for `resolve_model_path` accepting a value that already carries the `model/usd/` segment (the example scene's robot entry). Ingestion (#169/#170, ADR-0020 decision 6) ratchets the floor 255 -> 269 (+14): `test_import_model.py` 14 -> 28 as the URDF preprocess (`_preprocess_urdf`) gains xacro expansion (#169) and a best-effort meters unit sanity check (#170). The 8 xacro tests `pytest.importorskip` the standalone `xacro` PyPI package; `assert_pytest_baseline.sh` now installs `xacro` in the hosted runner so they collect and run. #177 (Isaac Lab `v2.3.2` + the `2.4.31` URDF importer loaded via Isaac Lab's Kit experience) ratchets the floor 269 -> 274 (+5): `test_import_model.py` 28 -> 33, the new `TestSimulationAppKwargs` for `model_import._simulation_app_kwargs` (the pure SimulationApp boot-config that pins `/opt/IsaacLab/apps/isaaclab.python.kit` so the `2.4.31` importer loads instead of the default experience's bundled `2.4.30`; env + filesystem only, no Isaac import). Ingestion (#167/#168, ADR-0020 decisions 2/3) ratchets the floor 274 -> 296 (+22): `test_import_model.py` 33 -> 55 -- `collider_type` plumbing (#167, `TestColliderType`: default-is-`convex_hull`, the built-in tuple, validate accepts the two built-ins / rejects unsupported, `import_urdf` rejects a bad collider before any Isaac import), the import-time joint-drive gain resolution (#168, `TestJointDriveGains`: both-None is no drive, both-supplied float pair, one-sided / negative raise, `import_urdf` rejects a one-sided drive before Isaac), and the CLI plumbing (#167/#168, `TestCliPlumbing`: `--collider-type` default / flag / unsupported-rejected, `--joint-drive-stiffness`/`--joint-drive-damping` default None / parse as floats). All pure -- the `JointDriveCfg` build and the `apply_joint_drive` runtime helper are function-local `isaaclab` imports, GPU-covered. The stream-source producer (isaac#223) adds `test_stream_source_producer.py` (8): hosted import/CLI-contract for `src/script/stream_source_producer.py` -- the module imports without leaking `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (function-local Isaac imports), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env with flag override, and `--help` exits 0 on a bare host. The 6.0.1 camera-headless fix (isaac#248) adds `test_isaac_driver.py` +5 (`TestBootExtensionKitArgs`: the pure `boot_extension_kit_args` argv shaper -- single / multi / empty / None -- plus the `IsaacDriver.BOOT_EXTENSIONS` default carrying `isaacsim.ros2.bridge`; the lifecycle-order spy is strengthened in place to assert `run()` restores `sys.argv` after the boot-arg injection, no collected change). Baseline floor ratchets to **312**. The 6.0.1 livestream regression (isaac#252) adds 8 (`test_stream_source_producer.py` 8 -> 16): three pin `_kit_args` on the 6.0 `omni.kit.livestream.app/primaryStream/*` namespace (and assert the 5.x `--/app/livestream/port` is gone, and that the driver does NOT pass `--enable` -- the dependency belongs in the experience file, declared once); one covers the new `--media-port` / `ISAAC_STREAM_PORT` knob; two pin the EXPERIENCE file itself (`apps/isaacsim.exp.base.python.streaming.kit` must depend on `omni.kit.livestream.app` and define `primaryStream.streamType`), which is where the defect was; and three pin the PUBLISH PATH (`publish-stream-source.yaml` runs where Kit can boot, its build step does not push, and the push stands behind an unconditional `script/ci/producer_smoke.sh`). Only that last group would have stopped `:0.0.2`: the producer stage had no test at all, `stream_smoke.sh` covers `./script/run.sh -t stream` (a different bringup that kept working on 6.0.1), and the publish workflow built on a hosted runner where Kit never boots. Baseline floor ratchets to **320**.
+It is ungated because two of the lints it runs (`adr-numbering`,
+`readme-sync`) are breakable by a change `classify` scores as doc-only -- a
+`code_changed` gate would skip them on exactly the PR they exist to catch.
+Every lint job runs inside the test-tools image, the one the local `just test`
+lint phase uses (base#1412). `hadolint` keeps its own job, as do `shellcheck`
+and `doc-counts`, whose results `ci-rollup` reads by name.
 
-| File | Collected | Scope |
-|------|:---------:|-------|
-| `test_import_safety.py` | 8 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
-| `test_no_module_top_isaac_import.py` | 8 | AST static guard: no module-top `import omni\|pxr\|isaacsim` in any package source (catches try/except-disguised module-top imports; mirrors the ruff TID253 config). |
-| `test_camera_setup.py` | 27 | Camera surface of `isaac_devkit.sensors` (former `camera_setup.py`): `validate_camera`, unified `load_config`, role -> Camera Helper type, FOV -> aperture math. |
-| `test_sensor_setup.py` | 22 | `isaac_devkit.sensors` (former `sensor_setup.py`): YAML load, shared validation, category dispatch, per-category validation (lidar profile, IMU rigid-body rule). |
-| `test_material_setup.py` | 29 | `isaac_devkit.materials`: material YAML load / validate, variant enumeration, prim-material mapping, plus `material_cfg_from_yaml` (ADR-0018 decision 7) -- color-only variant -> per-prim spawn cfg-param mapping (`{prim: {shader, diffuse_color (r,g,b), ...}}`), JSON-serializable / GPU-free, the seam #152 attaches to `sim_utils` visual material. |
-| `test_scene_builder.py` | 39 | `isaac_devkit.scene`: YAML load / validate, model-path resolution (incl. the `model/usd/`-prefixed transition shim), multi-instance generation, sensor-config reference resolution, plus the ADR-0018 (#152) pure `to_isaaclab_cfg` adapter -- `rpy_to_quat` (XYZ-intrinsic deg -> `(w,x,y,z)`), the ordered `SpawnSpec` list (ground / default + curated light / robot + object USD), curated-field translation, `mobility` (dynamic / static / None), `spawn_overrides` spread overrides-win, instance expansion flow-through, `variant` -> `variants` kwarg, optional material diffuse hook, JSON-serializability. |
-| `test_import_model.py` | 55 | `isaac_devkit.model_import` (former `import_model.py`): single-USD CLI plumbing (ADR-0018 decision 6) -- path resolution to one `<name>.usd`, the single-USD existing-file check, output-dir creation, `package://` URDF preprocessing, the `import_urdf` URDF-missing precondition, the ADR-0020 decision 6 preprocess extensions -- xacro detection + standalone expansion (#169, `pytest.importorskip("xacro")`; well-formed plain URDF, no leftover `xacro:`/`${...}`, missing-package raise-path) and the best-effort meters unit sanity check (#170, warns on a likely-mm / large `<mesh scale>` export, silent on meters / malformed XML), the `_simulation_app_kwargs` SimulationApp boot-config that pins Isaac Lab's `2.4.31`-importer Kit experience (#177, `TestSimulationAppKwargs`), plus the ADR-0020 decisions 2/3 ingestion plumbing -- `collider_type` validation + default (#167, `TestColliderType`), the import-time joint-drive gain resolution (#168, `TestJointDriveGains`), and the `--collider-type` / `--joint-drive-stiffness` / `--joint-drive-damping` CLI flags (#167/#168, `TestCliPlumbing`). The `JointDriveCfg` build and the `apply_joint_drive` runtime helper are GPU-covered (function-local `isaaclab` imports). |
-| `test_isaac_driver.py` | 29 | `isaac_devkit.driver`: `parse_livestream_env`, `parse_livestream_applauncher`, `resolve_repo_relative_usd`, `boot_extension_kit_args` + `BOOT_EXTENSIONS` (isaac#248), construction without Kit, plus the greenfield `SCENE` shape + hosted lifecycle-order spy (ADR-0017 section 7; asserts `run()` restores `sys.argv`). |
-| `test_prim_summary.py` | 11 | Greenfield `PrimSummary` surface: `parse_urdf_expected` (pure URDF-XML expectation, fixed-joint merge), `_summarize_prim_records` (pure stage-record fold), the L1 diff-zero agreement on matching inputs. |
-| `test_ros_io.py` | 23 | Greenfield `isaac_devkit.ros_io` pure surface: `parse_ros2_io_config`, `expected_attr_paths`, `_build_graph_topology`, `RosIo.latest` non-blocking fresh-once bookkeeping against an injected reader. |
-| `test_example_driver.py` | 14 | `example/sim/example_driver.py` pure surface (#131): three-file scene merge (`load_three_file_scene`), expected robot/`base_link` prim-path strings, `cmd_vel_to_planar_velocity` controller mapping, `SCENE` attr shape, the `run()` SCENE-driven lifecycle-order spy + injected-SIGINT shutdown, and example import-safety. |
-| `test_new_workspace_scaffold.py` | 23 | `script/new-workspace.sh` structure-check (#134): runs the scaffold into a tmp dir (`--no-submodule`, offline) and asserts the A5 consumer layout -- 16 emitted-file existence checks (`.env`, 4-lang README, `src/isaac/sim/{model,config,scene,example_driver}`, `src/isaac/ros2/src/<pkg>`), the `src/docker` mount point, the two-file env model (`.env` overlay emitted / `.env.generated` not), the workload-var overlay (`ROS_DOMAIN_ID`), and that the pre-filled driver imports cleanly on the host with no Isaac modules pulled + resolves its own three-file scene + carries the rewritten consumer submodule framework path. |
-| `test_stream_source_producer.py` | 8 | Hosted import/CLI-contract for the deterministic WebRTC stream-source producer driver `src/script/stream_source_producer.py` (isaac#223 / owv#48 / isaac#173): the module imports on a non-Isaac host without pulling `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (every Isaac import function-local), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env vars (the `docker run -e` container contract) with an explicit flag overriding the env, and `python stream_source_producer.py --help` exits 0 on a bare host (argparse exits before any Isaac import). Loads the driver by file path; no docker/GPU. |
-| `test_xc_compose_project_isolation.py` | 3 | Hosted guard for the isaac-side root cause of `ycpss91255-docker/omniverse_web_viewer#55`: the cross-container round-trip's default `COMPOSE_PROJECT` is the dedicated `xc-isaac-roundtrip` (not the `${DOCKER_HUB_USER}-${IMAGE_NAME}` stream-stack project, e.g. `yunchien-isaac`), so its project-level teardown can never reach a co-hosted manual `stream` container; asserts the dedicated literal, the isolation intent (distinct from any `${user}-${image}` derivation, which would still coincide), and that the `XC_COMPOSE_PROJECT` env override still wins. Loads the integration module by file path with env cleaned -- pure, no docker/GPU. |
-| `test_onboarding_gate.py` | 13 | M5 onboarding agent-proxy gate precondition (#135): the 4-lang `example/README.{md,zh-TW,zh-CN,ja}` exists, the English README documents the three onboarding tasks (first-topic / URDF swap / in-scope sensor swap), carries the lidar/imu `NotImplementedError` out-of-scope callout, and the URDF + sensor swap surfaces (`example/sim/model/camera_bot.urdf`, `example/sim/config/sensor/custom.yaml`) are present; plus the `test/onboarding/agent_proxy_gate.sh` harness passes its structure precondition (`STRUCTURE PASS`) and its `--audit` mode fails on a tool-call log that reads `framework/isaac_devkit/*` and passes on a clean log. Hosted, no Isaac/GPU/network. |
+Adding a lint to `_LINT_TOOLS` without giving it a CI job fails the
+completeness guard in `test/bats/unit/self_test_yaml_spec.bats`. That guard,
+not this table, is what keeps the LIST honest -- four lints shipped local-only
+before it existed, and `home-literal` / `bash-source-guard` /
+`early-close-reader` each joined the matrix in the same change that introduced
+them.
 
-## test/integration/pytest/ — GPU integration (pytest, not in the bats count above)
+The same spec holds this TABLE to it, which is how the table stopped being
+hand-maintained prose: one guard compares the row set against `_LINT_TOOLS` in
+both directions, another requires every CI job name cited above to be a job
+`self-test.yaml` declares. The table drifted to 15 of 26 rows over one release
+cycle, and carried a `lint-static (i18n-orphan)` row pointing at a check that
+has not existed since the matrix became a partition of groups. Only the
+"Enforces" column is authored: it is prose a person writes, not a figure.
 
-Python integration tests boot Isaac Sim and need the GPU-enabled `test` compose service (`[stage:devel-test] deploy.gpu_mode = force` in setup.conf). Run on the GPU host: `./script/run.sh -t test -- /isaac-sim/python.sh -m pytest test/integration/pytest/<file>`. They are not counted in the bats total in the header (the drift check counts `^@test` lines only). Live collected = **31** = 29 in-container + 2 host cross-container tests from #132. Ingestion (#167/#168, ADR-0020 decisions 2/3) ratchets the GPU floor 27 -> 31 (+4 in-container, a ratchet UP): `test_collider_type_integration.py` (2 -- the concave U-shape fixture imported `convex_hull` vs `convex_decomposition`, asserting the hull yields ONE convex collider piece and the decomposition yields MULTIPLE, contrast asserted) and `test_joint_drive_integration.py` (2 -- the two-link revolute fixture given an import-time `joint_drive` and a runtime `apply_joint_drive`, asserting the joint's `UsdPhysics.DriveAPI("angular")` carries the configured stiffness/damping; the "joint physically reaches a target" check is DEFERRED to a `SimulationContext`, #151, and NOT attempted). The prior in-container 27 was 8 example-GPU strong-assertion tests (#154 RETIRES `test_l1_urdf_to_usd_diff_zero`, 9 -> 8) + 3 scaffold-smoke (#134) + 1 Isaac Lab availability smoke (#149) + 3 build_scene adapter (#152/#154) + the prior 12. The enforced `GPU_INTEGRATION_BASELINE` ratchets 25 -> 28 (#152 adds 3) -> 27 (#154 retires the L1 diff test). The MR (#150/#153, ADR-0018) drops 2 in-container tests: the color USD variant-set GPU coverage (`test_material_setup_integration.py`, 2 tests, plus `_apply_materials_runner.py`) is REMOVED because color is now a spawn-time material cfg param (decision 7), reinstated as spawn-time material GPU coverage at the spawn-adapter milestone (#152/#154); `test_model_import.py` is rewritten from the Asset-Structure-3.0 assertions to the single-USD contract (decision 6), staying 3 tests. The MR completion (#154) RETIRES `test_l1_urdf_to_usd_diff_zero` (28 -> 27): it diffed a fresh Isaac Lab URDF re-import against the committed `camera_bot.usd`, which is a curated legacy-importer asset (a `defaultPrim` was added in fb6f580 but it was NOT regenerated by the new instanceable importer), so the diff is non-zero by construction; the "fresh import is structurally correct" contract is covered by `test_model_import.py` (#150). These are intentional baseline exceptions to the ratchet (recorded in `pytest-baseline.txt` and the PR body). The M2 cross-runner gate is `./test/assert_pytest_baseline.sh --gpu`, wired into the `python-tests` CI job on the self-hosted GPU runner: it runs the in-container suite for real, then runs the host cross-container leg (`test_cross_container_roundtrip.py`, which spawns sibling `ros:humble` containers so it cannot run inside the Isaac container) and SUMS its collected/passed into the GPU-integration totals. It asserts the GPU suite actually RAN (passed > 0 -- a skipped/collected-only GPU job is NOT green), collected >= `GPU_INTEGRATION_BASELINE` (ratchet), and the cross-runner aggregate (`HOSTED_UNIT` 320 + `GPU_INTEGRATION` 31 = 351) >= the PRD `AGGREGATE_TARGET` 126. The #130 extraction repointed every integration runner / test at `isaac_devkit.*` (the camera-headless #127 runner self-resolves `framework/` from the repo root so `import isaac_devkit` works under nested-worktree mounts too, #134).
+### One lint is deliberately not in that table
 
-| Test | Description |
-|------|-------------|
-| `test_camera_ros2_headless.py::test_camera_custom_yaml_publishes_frame_headless` | M0 gate (#127): headless Isaac boots (CUDA probe + Kit-log Vulkan/CUDA markers), `custom.yaml` camera publish chain builds via `camera_setup.setup_camera`, and >= 1 `sensor_msgs/Image` arrives on `/forklift/camera/color/image_raw` with `frame_id=forklift_camera_color_optical_frame`. Pass criterion = `[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]` marker lines (Kit `_exit(0)`s, return code is meaningless). |
-| `test_scaffold_smoke.py` (3) | M2 scaffold smoke (#134): scaffold a throwaway consumer workspace via `new-workspace.sh --local-docker <repo>`, then boot the SCAFFOLDED `example_driver.py` headless and assert the DoD scaffold smoke end-to-end. `test_scaffolded_driver_boots_clean` (`[BOOT OK]` + `[EXIT CLEAN]`, nothing raised); `test_scaffolded_camera_graph_built` (`[CAMERA GRAPH OK]`, the camera OmniGraph chain); `test_scaffolded_camera_topic_appears` (a sibling rclpy probe receives >= 1 frame on `/camera_bot/camera/color/image_raw` with `frame_id=camera_bot_camera_color_optical_frame` -- the camera topic appears after scaffold -> boot). Boots the SCAFFOLDED driver (consumer-layout path rewrite) on a live Kit stage, the half the hosted structure-check cannot. Marker-line acceptance; headless; runner `_scaffold_smoke_runner.py` (underscore-prefixed, not collected). |
-| `test_example_gpu_integration.py` (8) | M2 gate (#132), re-proven on the Isaac Lab backend (#154): boots the `ExampleDriver` headless -- now spawning the scene through the framework Isaac Lab adapter (#154) -- and makes the strong L1-L4 + `cmd_vel` assertions on the live scene. `test_l4_boot_and_clean_exit_markers` (`[BOOT OK]` + `[EXIT CLEAN]`, nothing raised); `test_cuda_and_vulkan_init` (libcuda device count + Kit-log CUDA/Vulkan markers); `test_l1_base_link_valid_and_rigidbody` (`/World/Robot/base_link` IsValid + `RigidBodyAPI`, now resolving through the adapter reference + the fb6f580 `defaultPrim`); `test_l1_link_and_joint_counts` (live committed-USD = 2 links / 2 joints / root `/camera_bot`, the importer's true convention); `test_l3_camera_topic_frame_and_message` (topic + `frame_id` + >= 1 `sensor_msgs/Image`); `test_ros_io_latest_none_before_publish` (non-blocking None); `test_cmd_vel_round_trip` (in-process Twist `vx=0.42 wz=0.21` echoes through `io.latest()`); `test_l4_injected_sigint_runs_shutdown` (live SIGINT -> `shutdown()`). `test_l1_urdf_to_usd_diff_zero` is RETIRED here (#154): it diffed a fresh Isaac Lab URDF re-import against the committed `camera_bot.usd`, a curated legacy-importer asset, so the diff is non-zero by construction; the "fresh import is structurally correct" contract is covered by `test_model_import.py` (#150). Marker-line acceptance (Kit `_exit(0)`); headless; timeout = boot budget x 1.5 (600 s); retry <= 1, logged. Runner `_example_headless_runner.py` (underscore-prefixed, not collected; `_prim_summary_runner.py` is no longer referenced here -- it is still used by `test_model_import.py`). The genuine cross-container round-trip lives in `test_cross_container_roundtrip.py` (below). |
-| `test_collider_type_integration.py` (2) | Ingestion #167 (ADR-0020 decision 2): the configurable `collider_type` contrast on the synthetic concave U-shape fixture (`test/fixtures/urdf/concave_ushape.urdf` -> `mesh/ushape.stl`, a single-link single-mesh robot; NOT the real forklift). `test_convex_hull_records_convex_hull_approximation` (`import_urdf(collider_type="convex_hull")` -> the collision mesh's `UsdPhysics.MeshCollisionAPI` approximation is `"convexHull"`, the open-top notch filled into a single hull); `test_convex_decomposition_records_decomposition_approximation` (`convex_decomposition` -> approximation `"convexDecomposition"`, the concavity preserved, and a DIFFERENT token than the hull -- the contrast asserted). The decomposition's multiple convex pieces are cooked at sim time by PhysX, NOT authored as separate USD prims, so the deterministic stage-level contrast is the approximation token, not a prim count. The runner traverses the produced (instanceable) USD WITH instance proxies (`Usd.TraverseInstanceProxies()`) so the collision mesh inside the prototype is visited (a plain traversal sees zero). Subprocess-per-import (one `SimulationApp` per import) + `[COLLIDER SUMMARY]` marker; runner `_collider_import_runner.py` (underscore-prefixed, not collected). Full-resolution triangle-mesh / SDF colliders are out of scope (#167). |
-| `test_joint_drive_integration.py` (2) | Ingestion #168 (ADR-0020 decision 3): the configurable joint drive on the synthetic two-link revolute fixture (`test/fixtures/urdf/two_link_revolute.urdf`; NOT the real forklift). `test_import_time_joint_drive_configures_driveapi` (`import_urdf(joint_drive_stiffness=, joint_drive_damping=)` -> `UrdfConverterCfg.joint_drive=JointDriveCfg(PDGainsCfg, drive_type="force", target_type="position")` -> the revolute joint carries a `UsdPhysics.DriveAPI("angular")` with the configured gains); `test_runtime_apply_joint_drive_sets_driveapi` (import with NO drive, then `apply_joint_drive` -> `isaaclab.sim.schemas.modify_joint_drive_properties`, stage-only, no Articulation/no SimulationContext -> the DriveAPI is applied to the existing joint with the configured gains). Both paths store the gains on an ANGULAR (revolute) DriveAPI in per-radian units: Isaac Lab applies the deterministic per-degree -> per-radian conversion (`* math.pi/180`) on a non-prismatic joint, so a configured `stiffness=800` lands as `800*pi/180 = 13.96` on the USD DriveAPI (the gains stay fully user-controllable -- double the input doubles the stored value; only the storage unit differs). The tests assert the scaled `IN*pi/180` value. Both are STRUCTURAL "drive CONFIGURED" checks; the "joint physically reaches/holds a target" check needs STEPPED physics (a `SimulationContext`, DEFERRED #151) and is NOT attempted. `ImplicitActuatorCfg` is intentionally avoided (it needs an Articulation + a playing SimulationContext, #168 survey / #151). `apply_joint_drive` does NOT trust the delegate's return (Isaac Lab's `@apply_nested` wrapper returns `None` even on success); it re-reads the prim's DriveAPI to report real success. Subprocess-per-import + `[DRIVE SUMMARY]` marker; runner `_joint_drive_runner.py` (underscore-prefixed, not collected). |
-| `test_cross_container_roundtrip.py` (2) | M2 gate (#132, PRD Pre-Publish item 1): the genuine Isaac<->ament cross-container ROS 2 round-trip, host-orchestrated against a sibling `ros:humble` container running the `example/ros2/` ament nodes (the proven #127/#131 `docker run --rm ros:humble` + `ROS_DOMAIN_ID` / `fastdds.xml` pattern on the host network). `test_sim_to_ament_camera_received` (sim -> ament: the ament `example_app_py camera_subscriber` node receives a real sim frame, `[FRAME OK] ... frame_id=camera_bot_camera_color_optical_frame`); `test_ament_to_sim_cmd_vel_received` (ament -> sim: the ament `cmd_vel_publisher` node's Twist `vx=0.37 wz=0.19` crosses the boundary and the Isaac `RosIo.latest('/cmd_vel')` picks it up, `[XC CMD_VEL RX]`). Isaac side = `_cross_container_runner.py` (underscore-prefixed, not collected); it publishes NOTHING on `/cmd_vel` so every command observed crossed the container boundary. Because it spawns sibling containers it runs on the GPU HOST (not inside the Isaac container) -- `assert_pytest_baseline.sh --gpu` runs it as a host leg and sums it into the GPU totals. Skipped (not failed) without docker / the built `isaac:test` image; a skip does not advance the `passed > 0` gate. Marker-line acceptance; headless; retry <= 1, logged. Proven on the RTX 5090. |
-| `test_build_scene_adapter.py` (3) | MR gate (#152, ADR-0018 decisions 1/3), assertions strengthened (#154): the example scene spawns via the framework `build_scene` adapter (`to_isaaclab_cfg` -> `sim_utils` cfg -> `cfg.func()`). A module-scoped fixture runs `_build_scene_runner.py` once (one `SimulationApp`) and shares its marker stdout. `test_adapter_runner_clean_exit` (`[EXIT CLEAN]`, no `[RAISED]`, returncode 0); `test_adapter_spawns_ground_light_robot` (`[ADAPTER OK] ground=True light=True robot=True objects>=1` -- environment ground (a procedural collision cuboid, NOT the nucleus `GroundPlaneCfg`) + light + robot USD authored on the live stage -- AND, strengthened in #154, `[ADAPTER BASE_LINK] valid=True`: `/World/Robot/base_link` now resolves through the adapter reference + the fb6f580 `defaultPrim`); `test_adapter_spawns_mobility_dynamic_object` (a `mobility: dynamic` object materializes a `UsdFileCfg` with `rigid_props`/`mass_props`/`collision_props`, `cfg.func` spawns it, AND -- strengthened in #154 -- carries `rigidbody=True`, the `UsdPhysics.RigidBodyAPI` now landing on resolved referenced content). Both strengthenings were reported-not-asserted before fb6f580 added the `defaultPrim` to the committed `camera_bot.usd` / `prop_cube.usda`. Collected count unchanged (the base_link assertion is folded into the ground/light/robot test). Marker-line acceptance; headless; runner `_build_scene_runner.py` (underscore-prefixed, not collected). |
-| `test_isaaclab_available.py` (1) | MR gate (#149, ADR-0018): the baked Isaac Lab base tool is importable inside the GPU container. `test_isaaclab_importable_in_container` launches `AppLauncher` headless, imports `isaaclab.sim`, and asserts the spawner surface (`UsdFileCfg` / `GroundPlaneCfg`), the `isaaclab.sim.converters.UrdfConverterCfg` surface, and a resolved `isaaclab.__version__` (the `isaaclab` PACKAGE version, e.g. `0.54.x`, which is independent of the Isaac Lab repo tag `v2.3.2` enforced at build time via the Dockerfile clone + `pip show`). Pass criterion = `[ISAACLAB OK] version=... spawn=True urdf_converter=True` + `[EXIT CLEAN]` marker lines, the marker printed before `simulation_app.close()` (Kit `_exit(0)` swallows anything after close). Runner `_isaaclab_available_runner.py` (underscore-prefixed, not collected). Headless, no cameras. The runtime spawn / driver imports are exercised in full by MR-2..MR-6. |
+`log-event-registry` asks whether every event id a `*.sh` under `dist/` or
+`script/` emits through `_log_*` is carried by
+`dist/script/docker/lib/log-events.txt`. `_log_*` is STRICT: `lib/log.sh`
+refuses an unregistered body and prints its own refusal INSTEAD of the message,
+so the operator reads the registry's complaint rather than the diagnostic, at
+the moment something had already gone wrong. Both sides are derived from the
+tree -- the registry's own path out of the `_LOG_EVENTS_FILE` assignment that
+resolves to a file that exists, the emitted ids from every `_log_*` literal body
+plus the first argument of each call to a forwarding wrapper, itself derived
+rather than named -- and eight refusals cover the ways the scan could report a
+clean tree having read nothing.
 
-## example/ros2/ — app-side ament package tests (colcon test, not in the counts above)
+It is not in `_LINT_TOOLS`, so `--lint` and CI do not run it. That is about its
+READER, not its rule: the reader is a hand-written shell word splitter, and
+forty-one consecutive review rounds each found a reproduced parser defect --
+twenty-five of them false positives on valid shell. Round thirty-four came back
+clean and the seven rounds after it found sixteen more, so a clean round is not
+evidence the reader is finished. In the table every one of those false positives
+would have blocked a PR whose logging was correct. The driver header carries the full argument and the one condition for
+promotion: a release cycle clean against a moving tree.
 
-The app-side ROS 2 templates (#133, `example/ros2/src/`) carry their own tests, run by `colcon test` inside a hosted `ros:humble` container (`docker run --rm`, no Isaac / no GPU per the PRD compatibility matrix ament row). They are NOT counted in the bats header total (the drift check counts `^@test` lines only) and are NOT part of the framework hosted-unit pytest baseline (`test/assert_pytest_baseline.sh` collects only `test/unit/pytest/`). Run: `docker run --rm -v "$PWD/example/ros2":/ws -w /ws ros:humble bash -c 'source /opt/ros/humble/setup.bash && colcon build && colcon test && colcon test-result --all'`.
+Run it with `./script/test/test.sh --log-event-registry-only` (host-direct, no
+compose) or `just test lint --log-event-registry` (in-container). It is in
+`_UNTABLED_LINT_ENTRY_POINTS` in `test/bats/unit/ci_spec.bats` with that reason,
+which is what keeps base#1113's completeness guard honest rather than silent:
+a lint in neither the table nor the stated exemptions fails that guard.
 
-| Test | Package | Description |
-|------|---------|-------------|
-| `test_copyright.py` | `example_app_py` | `ament_copyright`: every source file carries an accepted licence header. |
-| `test_flake8.py` | `example_app_py` | `ament_flake8`: source is flake8-clean. |
-| `test_pep257.py` | `example_app_py` | `ament_pep257`: docstrings follow the ament PEP 257 convention. |
-| `test_helpers.py` | `example_app_py` | Pure-helper unit tests (no ROS context): default topics match the example, `describe_image` summary fields, `make_twist` sets only the planar components. |
-| `ament_lint_common` suite | `example_app_cpp` | `copyright` / `cpplint` / `uncrustify` / `lint_cmake` / `xmllint` / `cppcheck` (cppcheck skips when the optional tool is absent) over the C++ nodes + `CMakeLists.txt` + `package.xml`. |
+## Breaking the behaviour on purpose: `just test mutation-probe`
 
-## script/new-workspace.sh — consumer-workspace scaffold (#134)
+```bash
+just test mutation-probe --subject script/test/drivers/thing.sh \
+  --mutate 'sed -i "/^_run_thing() {/a   return 0" script/test/drivers/thing.sh'
+```
 
-`script/new-workspace.sh <name>` scaffolds the A5 consumer workspace and pre-fills the base `example/` (camera_bot: model + three-file scene + `ExampleDriver` + ament_python pkg) into `src/isaac/`, so right after scaffolding `just run` boots the example and the camera topic appears (M1/M5 literal). The `example/` is the single source; the script copies from it and rewrites the copied driver's path prologue for the consumer layout (framework at `<ws>/src/docker/framework`, sim assets relative to the driver's own dir, `SCENE` -> `src/isaac/sim/scene/scene.yaml`). The scaffold emits the hand-written `.env` workload overlay; `.env.generated` is the consumer's first `just setup` output, not emitted. `src/docker` is a git submodule pinned to a base tag (`--no-submodule` for offline/hosted-test, `--local-docker <path>` for the local GPU smoke).
+A green suite says every assertion ran. It does not say any of them would
+notice a **wrong answer**, and those two statements are further apart than
+they look. The v0.43 retrospective audited the cycle by REMOVING each PR's
+production change and re-running its tests -- which finds a test that does not
+notice absence, and cannot find a test that notices absence and would miss a
+wrong answer. A guard that only greps for a string still turns red when the
+file carrying that string is deleted, so under a revert it scores identically
+to a behavioural guard. Four assertion groups shipped in that blind spot, and
+ten more PRs' tests failed on revert only with `command not found` or
+`No such file`.
 
-Coverage of the scaffold:
+So the probe puts the production code back and breaks its **behaviour** in
+place. A test that survives that was never pinning the behaviour; a test that
+fails names itself as the one that was, which is the line to quote when
+saying what a change is covered by.
 
-- **Hosted structure-check**: `test/unit/pytest/test_new_workspace_scaffold.py` (23, in the hosted-unit baseline) — runs the script for real (`--no-submodule`) and asserts the emitted layout + the driver imports cleanly. Hosted, no Isaac/GPU/network.
-- **GPU smoke**: `test/integration/pytest/test_scaffold_smoke.py` (3, in the GPU-integration baseline) — scaffold (`--local-docker`) -> boot the scaffolded driver -> the camera topic appears. The DoD smoke end-to-end, proven on the RTX 5090.
+**Measured on the tree that shipped this recipe.** Deleting
+`dist/script/docker/wrapper/build.sh` -- the subject of
+`reclaim_wiring_spec.bats`'s "the verbs that BEGIN a flow do not reclaim" --
+leaves that spec at 32 ok / 0 not ok, because the assertion is a refutation
+and a refutation over a file that is not there is satisfied by its absence.
+The same mutation at tier scope is 4667 ok / 109 not ok, with the witnesses in
+`build_sh_spec.bats`.
 
-## script/demo-bump-propagation.sh — M8 bump-propagation demo (#134)
+**How much ran decides what a green may be called, and that is the whole
+reason this is a recipe rather than a habit.** The audit's follow-up
+(base#1108) asked the question per file: revert the production change, re-run
+THE ONE SPEC THAT PR EDITED, call the change untested if that spec is green.
+Six changes were named on that basis. Measured afterwards, five of the six had
+a failing witness in a **sibling** spec from the same PR, one was a genuine
+gap, and one did not reproduce at all -- so the defect in the five was the
+coverage accounting, not the coverage. A spec that stays green under a
+mutation has answered about itself; only a tier-wide run can say the suite
+does not pin a behaviour. The probe therefore reports:
 
-`script/demo-bump-propagation.sh` is the documented M8 demo (a runnable script + asserted evidence, not prose). Fully offline / host-only, it proves both halves of the mount-not-baked framework model (ADR-0017 section 2) with no image rebuild: **Leg 1** — a live edit to the MOUNTED framework changes what the scaffolded consumer driver imports on the next run; **Leg 2** — bumping the `src/docker` submodule pin (`git -C src/docker checkout <newer>`) swaps the whole mounted framework and delivers the fix. It also asserts structurally that the framework never enters an image layer (no `COPY ... framework` in the `Dockerfile`; PYTHONPATH + bind mount only), so no rebuild can be involved by construction. Run: `./script/demo-bump-propagation.sh` (exits 0 on PASS).
+| | a red | a green |
+|---|---|---|
+| tier scope (default) | `PINNED`, naming every witness | `NOT PINNED` -- the finding |
+| `--spec <path>` | `PINNED`; a red needs no scope | `INCONCLUSIVE`, never `NOT PINNED` |
 
-## test/onboarding/agent_proxy_gate.sh — M5 onboarding gate harness (#135)
+Run the whole tier, then ask which spec should have been the one to notice.
 
-`test/onboarding/agent_proxy_gate.sh` is the repeatable harness for the M5 onboarding agent-proxy gate (the MVP completion point). Default mode runs the **structure precondition** (mechanical, repeatable, hosted): the 4-lang `example/README.*` exists, documents the three onboarding tasks (first-topic / URDF swap / in-scope sensor swap), carries the lidar/imu `NotImplementedError` out-of-scope callout, and the URDF + sensor swap surfaces are present (`STRUCTURE PASS` on success). `--audit <log>` mode is the **enforcement** half: it scans a proxy tool-call log for any `framework/isaac_devkit/` read and fails the gate if one is found (`AUDIT PASS` on a clean log). The full runbook + the four-step procedure (structure precondition -> spawn the proxy -> audit -> the pre-1.0.0 human dry-run that stays OPEN as the real backstop) is `doc/onboarding/agent-proxy-gate.md`. Enforcement is honest: making `framework/` unreadable mid-run is not mechanically enforceable here, so the prohibition is enforced post-hoc by auditing the proxy's log; the human dry-run blocks the v1.0.0 tag.
+**It runs the scope twice, and that is the price of an attributable red.** The
+first run is the chosen scope **unmutated**: without it the probe cannot say
+anything *turned* red, and on a checkout that already has a failing test -- the
+normal state of a tree reached mid-change -- every mutation would report
+`PINNED` and name that pre-existing failure as its witness. A baseline that is
+not clean is **refused** rather than subtracted, because the method presumes the
+suite was green before the behaviour was broken, and a subtraction would let the
+probe report over failures nobody has explained.
 
-Coverage of the gate:
+**It cannot leave the tree mutated.** Every declared `--subject` is recorded
+(bytes and mode) before anything is touched and restored from that record --
+not from git, which cannot see an uncommitted edit you are in the middle of.
+The restoration is then **verified** against the record, and a failure is
+loud, names the file, keeps the record directory and exits refused; an
+`INT` / `TERM` stops the runner, restores, and exits **without reporting
+anything** -- a measurement over a suite killed partway cannot be told apart
+from a finished one's -- and an `EXIT` trap covers the rest. The tree is also
+compared before and after the mutation: a fingerprint -- content, type, mode
+and link target -- for **every tracked path** plus everything git reports as
+untracked or ignored. The dirty set alone is not enough, and neither is a
+status code: a file that was already dirty stays ` M` through a second edit,
+`chmod 600` on a clean tracked file moves nothing git records, and an ignored
+file is invisible to `git status` by definition -- which matters because the
+files this repo ignores include the generated config the suite under
+measurement reads. An ignore pattern naming a *directory*, as `coverage/` and
+`log/` do, is reported by git as that directory, so its contents are enumerated
+and the directory entry itself dropped -- git prints the directory while the
+rule stands and the individual files once it goes, and a snapshot keeping both
+spellings refused a mutation of `.gitignore` over a directory nobody touched.
+The cost, stated: a directory's own mode is not watched. The root must be the
+**top** of its work tree, because git's two listings answer relative to
+different places otherwise and a declared subject comes back as an undeclared
+edit. A mutation command that edited a path it did not declare is
+refused there, before a multi-minute suite carries that edit past the point
+anyone is watching. Nothing outside the checkout is covered, and no snapshot of
+a checkout could be: a mutation command is arbitrary shell.
 
-- **Hosted structure-check**: `test/unit/pytest/test_onboarding_gate.py` (13, in the hosted-unit baseline) — mirrors the structure precondition + asserts `--audit` fails on a framework-source leak and passes on a clean log. Hosted, no Isaac/GPU/network.
-- **Proxy run + human dry-run**: not hosted tests (they need an agent harness / a human). The first proxy run (2026-06-11) is recorded in the runbook's run log; the pre-1.0.0 human dry-run is tracked there as an OPEN checklist item.
+The restore removes the destination before writing, which is not tidiness:
+`cp` writes *through* a destination symlink, so a mutation that replaced the
+subject with a link would have the restore overwrite that link's target -- an
+undeclared file destroyed by the step whose only job is to put things back. The
+same applies one directory up, so every ancestor is checked to be a real
+directory -- both when a subject is **declared**, because a subject reached
+through a link could otherwise be mutated and then not restored, and again
+before the restore writes. The checkout **root** is checked by device and
+inode rather than by its path, because swapping it (`mv tree tree-saved;
+ln -s outside tree`) is precisely the move that keeps the path.
+
+A mutation may not **stage or commit** what it writes. The working tree is not
+the whole state a checkout carries: `git add` leaves the mutation in the index
+after the bytes are back, where the next commit ships it, and `git commit` has
+shipped it already. What git records -- the index entries and HEAD, hashed as
+themselves rather than as a difference from a HEAD the mutation can move -- is
+compared before the suite runs and again as part of the restoration verdict.
+It is refused, not undone: the probe does not rewrite an index or a history it
+did not write, so it restores the files, names `git restore --staged` and exits
+refused.
+
+A background process a mutation or a suite spawned cannot outlive it either.
+Waiting for a child's shell does not wait for what that shell backgrounded, so
+the probe reaps the whole process group the moment the leader is reaped -- at
+the fork site, where the pid is one it reaped microseconds ago rather than a
+number the kernel may since have handed to someone else.
+
+Two inputs are refused before anything is touched. A **symlink** subject: an
+in-place editor replaces a link with a regular file, and a restore that put the
+bytes back would leave a file where a link was and call it restored, so the
+refusal names the target instead -- which is where the behaviour lives anyway.
+And every inherited `BATS_*` selector is **cleared** from the runner's
+environment, because `--bats-only` with an exported `BATS_FILE` or
+`BATS_FILTER` runs a subset while the verdict would still say `scope=tier`:
+the prefix is the rule, so a sixth selector is covered the day it is added.
+
+**Five measurements it refuses to report as verdicts**, because each one's
+number is the number a sound suite prints too: a mutation that left every
+subject byte-identical (the green is the baseline, so the sed expression
+matched nothing), a run that executed no tests at all (a broken runner, not a
+finding about the tests), a run that reported some passes and then died (the
+same hole with a plausible number on it -- the runner's exit status is what
+tells them apart), a green that executed **fewer** assertions than the baseline
+(the mutation removed the assertions instead of being observed by them, which
+is what deleting a dispatch from a driver does), and the narrow green above. A
+**skip** is not an execution: bats reports one as `ok N name # skip ...`, and
+counting it would let a mutation erase the evidence against itself and still
+look measured. A **red** is held to none of these: something observed the wrong
+answer, and that stands however much else ran.
+
+An interrupt stops the current child's whole process group and waits for it,
+under a bounded grace period before escalating to `KILL` -- a child that
+ignores `TERM` would otherwise leave the probe waiting forever with the tree
+still mutated, which is worse than either a stuck suite or a mutated tree
+alone. The **mutation** is such a child too, and for the same reason: bash
+defers a trap until the foreground command finishes, so a mutation that hangs
+after editing the subject would hold the handler off indefinitely.
+
+Signalling a process group does not reach a **container**, though, and the
+suite runs in one: `docker compose run` starts a container that belongs to the
+daemon and keeps the checkout bind-mounted, so it could overwrite the restored
+files afterwards. Before restoring, the probe therefore waits until no container
+of this checkout's compose project is running -- the project name from the single
+producer that mints it, the containers from the label compose stamps. A daemon it
+cannot ask counts as **held**: "I could not find out" and "nothing is running"
+are not the same answer. (`test.sh --await-project` was tried first and is the
+wrong primitive, which is worth knowing because it reads like the right one: its
+blocker list skips a `running` container on purpose, because its question is
+whether a *previous* run has let go of the network.) The restore happens either
+way, because a tree left mutated is the worse of the two, and the probe then
+exits refused saying a container was still holding the checkout.
+
+The restoration traps stay armed across all of that -- the stop, the wait and the
+restore -- and come off only once the outcome is known, because the wait can take
+half a minute and a ctrl-c inside it used to kill the probe with the subjects
+still mutated. A signal during the wait does not restart it: that is the operator
+saying stop, and the restore is what they are waiting for.
+
+**The mutation is yours, because only you know what the behaviour is.** Five
+shapes earned their place during the audit: `return 0` at the top of a driver
+(the cheapest, and the one validated twice); deleting a step from a workflow;
+renaming a function away from its callers; inverting a branch; and a
+behaviour-**preserving** refactor, which is the one the others cannot replace.
+Every destructive mutation turns a text-matching guard red, so all four make a
+grep look behavioural. A refactor that preserves behaviour must leave the
+suite GREEN, and a red there means the test is pinned to the text. Three greps
+audited on base#1117 were anti-correlated exactly that way: green through a
+total inversion of the branch, green with the subject removed entirely, and
+red on a behaviour-preserving refactor.
+
+The verdict is published only after the tree is proven back, and never
+instead of a restoration failure: that failure is the more important news, and
+a verdict printed above it reads as the answer.
+
+Exit status: 0 `PINNED`, 1 `NOT PINNED`, 2 `INCONCLUSIVE`, 3 refused. The
+recipe is wired into no gate and no CI job: it is an on-demand loop like
+`just test coverage-path`, and whether running it is required before a change
+lands is a policy question this recipe does not answer.
+
+## The required-kill roster: `just test mutation-required`
+
+```bash
+just test mutation-required            # probe every roster row
+just test mutation-required --check    # validate the roster, run nothing
+```
+
+`just test mutation-probe` answers when someone asks. The roster asks for
+them: every shell refusal guard a config-gen slice adds is listed, with the
+mutation that disables it, in `script/test/mutation_required/<slice>.tsv`,
+and `script/test/drivers/mutation_required.sh` probes every row on every
+run (base#1461). Without it a pinning test could be deleted with every gate
+green, because the only proof the guard was pinned was a probe someone once
+ran by hand.
+
+**One row contract for every file:**
+
+```text
+<id> TAB <subject> TAB <spec> TAB <old> TAB <new>
+```
+
+`#` lines and blank lines are skipped. `<id>` is `[a-z0-9-]+`; `<subject>`
+and `<spec>` are plain relative paths (no `..`, no symlink), and `<spec>`
+lives under `test/bats/`. `<old>` and `<new>` are literal text written with
+exactly three escapes -- `\\` is a backslash, `\t` a TAB, `\n` a newline;
+any other `\x`, or a trailing `\`, refuses the row. `<old>` must occur
+exactly once in `<subject>` (join a neighbouring line with `\n` when one line
+is not unique); `<new>` may be empty, which deletes `<old>`, and must differ
+from it. The row is data: the probe applies it only through the driver's own
+`--apply`, never as shell.
+
+**Every row is validated before any baseline runs**, and every invalid row
+is reported (`mutation_required_row_invalid`, `row=<file>:<line>`,
+`reason=`): a wrong field count, an empty field, a bad id, a path that is
+absolute, walks out with `..` or goes through a symlink, a missing subject
+or spec, a spec outside `test/bats/`, a bad escape, an `<old>` that is
+absent or ambiguous, `<new>` equal to `<old>`, a duplicate id in one file or
+the same mutation in two. A roster with no row is refused as
+`mutation_required_roster_empty`, never read as a pass.
+
+**Each row then runs in a sandbox of its own**: a `git ls-files` copy of the
+working tree (uncommitted edits included, every build step fail-closed),
+committed in a fresh repository, under the compose project the sandbox's own
+`test.sh --compose-project-name` derives from its path -- an inherited
+`COMPOSE_PROJECT_NAME` is not used. `MUTATION_REQUIRED_JOBS` rows (default
+4, 1 to 99) run at once, and each probe's per-test bound is
+`PER_TEST_TIMEOUT` as set, or 120 s times `MUTATION_REQUIRED_JOBS` when it is
+unset. A row passes only on probe exit 0 with its PINNED
+line over at least one `not ok`, and a clean teardown; INCONCLUSIVE and NOT
+PINNED are `mutation_required_survived`, anything else
+`mutation_required_probe_refused`, and a container of the sandbox's project
+still running keeps the sandbox and fails the row
+(`mutation_required_sandbox_held`). Nothing is published until every row has
+finished, and a failing run publishes no pass. The first INT / TERM is
+forwarded to every row's probe, which restores and stops; the run exits
+130 / 143 with no verdict.
+
+**Where it runs.** The no-flag `just test` runs it on the host after the
+lint phase and before bats, and a red roster stops the run before bats.
+Every leg of the hosted `mutation-roster` job runs `just test
+mutation-required --shard <its shard>` (rows are dealt by their seconds in
+`seconds.txt`, heaviest first, each to the shard holding the fewest seconds
+so far, so the twenty legs together probe every row; every leg still
+validates every row), and the self-hosted `config-gen` job in
+`coverage-local.yaml` runs the whole roster; each as a step of its own, with
+no `if:` and no `continue-on-error`. The pre-PR mirror covers it through
+`just test`. `--lint`, `--ci` and the coverage modes do not run it.
+
+## Maintaining these docs
+
+Every figure and every catalogue section in this directory is derived from the
+specs themselves. Regenerate with `just test sync-docs`; validate without
+writing with `just test sync-docs-check`. See [unit.md](unit.md) for the full
+contract.
+
+**Where a description is written.** Not here. A test's description is a
+`# why:` comment block on the lines immediately above its `@test` in the spec
+file, and a spec file's blurb is a `# why:` block in its opening comment run;
+`sync-doc-counts.sh` renders both into the fenced region of each catalogue.
+Editing that region does nothing -- it is replaced wholesale on every run, so
+a row deleted here comes back byte-for-byte and a description reworded here is
+overwritten. Deleting the block in the spec is the one edit that changes the
+catalogue, and the drift gate fails on it. Renaming a test carries its
+description, because the description moved with the lines above it.
+`just test lint --catalog-description` is the rule at its source: it reads
+`^@test` over the spec trees, so no section shape can take a test out of it.
+
+**Where the check is enforced (one rule, three entry points).** All three run
+the same `script/test/check_test_md_drift.sh`; they differ only in when they
+speak and whether they can stop you:
+
+| Entry point | When | Blocking? |
+|-------------|------|-----------|
+| `just test` lint phase (`just test lint --doc-counts`) | every local full gate | **yes** -- this is the gate |
+| the `doc-counts` CI job (`test.sh --lint --doc-counts`) | every CI run, ungated (a hand-edited count is a doc-only change) | **yes** -- same driver, hard-mandatory in `ci-rollup` |
+| `just test sync-docs-check` | on demand | yes, but only if a human runs it |
+| harness repo `.claude/hooks/check_test_md_drift.sh` (PostToolUse) | seconds after the Edit that caused the drift, in an interactive session only | no -- advisory |
+
+The hook duplicates the gate deliberately: its value is latency, not
+authority. It holds no rule of its own, so it cannot drift from the gate, and
+if it is ever removed nothing is lost but the early warning. When the two
+disagree, the lint phase is authoritative -- it is the one that can fail a
+branch.
+
+**Merging a branch into these files:** both sides bump the same generated
+counters, so `doc/test/*.md` conflicts on almost every branch refresh. Do not
+resolve it by hand and do not collapse it with an ad-hoc `awk`: run
+
+```bash
+just test resolve-docs
+```
+
+which collapses the markers, regenerates from the merged spec tree, verifies,
+and stages -- and refuses loudly, staging nothing, when the two collapses
+still differ after regeneration. That can now only be hand-written prose
+OUTSIDE the generated region: everything inside it is derived from the specs
+both sides already merged, so a description one branch wrote can no longer be
+dropped by the side the collapse kept. A mechanical collapse adopts whichever
+side it kept for content the generator does not own, which is how the
+suite-wide figures this file used to carry shipped stale three times before
+the generator learned to derive them -- and part of why they are not recorded
+here at all any more (ADR-00000028 sec. 1).

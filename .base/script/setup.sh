@@ -1,1 +1,0 @@
-../dist/script/docker/wrapper/setup.sh
