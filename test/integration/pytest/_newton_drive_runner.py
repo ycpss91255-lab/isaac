@@ -6,8 +6,8 @@ OmniGraph ``IsaacArticulationController`` at a constant velocity and prints
 marker lines (Kit's ``app.close`` swallows the exit code)::
 
     [DRIVE ENGINE] active=<physx|newton>
-    [DRIVE WHEELS] delta_rad=<float>        wheel joint position change
-    [DRIVE CLOCK] hz=<float> monotonic=<bool> span_s=<float> updates=<int>
+    [DRIVE WHEELS] left=<float> right=<float> delta_rad=<float>
+    [DRIVE CLOCK] sim_hz=<float> wall_hz=<float> monotonic=<bool> span_s=<float> updates=<int>
 
 Usage (inside the GPU container)::
 
@@ -39,7 +39,11 @@ def _main() -> None:
 
     class _Driver(IsaacDriver):
         USD = robot_usd
-        BOOT_EXTENSIONS = ("isaacsim.core.nodes", "isaacsim.sensors.physics.nodes")
+        BOOT_EXTENSIONS = ("omni.graph.action", "isaacsim.core.nodes", "isaacsim.sensors.physics.nodes")
+
+        def _launcher_args(self):
+            # Joint-state readback needs no camera or livestream.
+            return {"headless": True, "livestream": 0, "enable_cameras": False}
 
         def _open_stage(self):
             import omni.kit.app
@@ -129,24 +133,29 @@ def _main() -> None:
             def wheel_pos():
                 names = list(joints.get())
                 values = list(positions.get())
-                return sum(values[names.index(j)] for j in WHEEL_JOINTS
-                           if j in names)
+                return tuple(values[names.index(j)] for j in WHEEL_JOINTS)
 
             for _ in range(5):
                 self._app.update()
-            start_pos = wheel_pos()
+            left_start, right_start = wheel_pos()
             times = []
-            wall0 = time.time()
-            while time.time() - wall0 < RUN_WALL_SECONDS:
+            wall0 = time.monotonic()
+            while time.monotonic() - wall0 < RUN_WALL_SECONDS:
                 self._app.update()
                 times.append(timeline.get_current_time())
-            wall = time.time() - wall0
-            delta = wheel_pos() - start_pos
+            wall = time.monotonic() - wall0
+            left_end, right_end = wheel_pos()
+            left = left_end - left_start
+            right = right_end - right_start
+            span_s = times[-1] - times[0]
+            sim_hz = (len(times) - 1) / span_s if span_s > 0 else 0.0
             monotonic = all(b >= a for a, b in zip(times, times[1:]))
-            print(f"[DRIVE WHEELS] delta_rad={delta:.4f}", flush=True)
             print(
-                f"[DRIVE CLOCK] hz={len(times) / wall:.2f} "
-                f"monotonic={monotonic} span_s={times[-1] - times[0]:.3f} "
+                f"[DRIVE WHEELS] left={left:.4f} right={right:.4f} "
+                f"delta_rad={abs(left) + abs(right):.4f}", flush=True)
+            print(
+                f"[DRIVE CLOCK] sim_hz={sim_hz:.2f} wall_hz={len(times) / wall:.2f} "
+                f"monotonic={monotonic} span_s={span_s:.3f} "
                 f"updates={len(times)}",
                 flush=True)
             self._should_quit = True

@@ -508,7 +508,7 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#447: test_newton_drive_integration.py (3 tests x physx/newton = 6) -- ratchet UP 40 -> 46.
-#   NOT executed locally; first proof is the CI gpu-integration job.
+#   NOT executed locally; first proof is the CI core-gpu job.
 GPU_INTEGRATION_BASELINE = 46
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =

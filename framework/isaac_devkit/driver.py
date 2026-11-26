@@ -269,9 +269,7 @@ class IsaacDriver:
         """
         from isaaclab.app import AppLauncher
 
-        launcher_args = parse_livestream_applauncher(
-            os.environ.get("ISAAC_LIVESTREAM")
-        )
+        launcher_args = self._launcher_args()
         # Enable the boot-time extensions (ros2.bridge et al.) via Kit
         # ``--enable`` args, which AppLauncher forwards from leftover
         # sys.argv to the Kit process it constructs (see BOOT_EXTENSIONS).
@@ -317,6 +315,10 @@ class IsaacDriver:
             self._app.close()
 
     # -- Subclass hooks ------------------------------------------------------
+
+    def _launcher_args(self) -> Dict[str, Any]:
+        """Select AppLauncher options before Kit starts."""
+        return parse_livestream_applauncher(os.environ.get("ISAAC_LIVESTREAM"))
 
     def setup(self, stage: Any) -> None:
         """Post-stage-open hook. Default is a no-op."""
@@ -430,8 +432,8 @@ class IsaacDriver:
           ``initialize_physics()`` never runs: no physics sim view exists
           and Newton ignores every command (PhysX is unaffected). Enabling
           the warm-start callback restores that initialisation.
-        * The main loop is unpaced (``/clock`` floated 155-320 Hz). Rate
-          limit 60 Hz + fixed time stepping pins it to 60 Hz.
+        * The main loop is unpaced (``/clock`` floated 155-320 Hz). Cap
+          wall-clock updates at 60 Hz and use fixed timeline steps.
         * The timeline loops every ~1.667 s, wrapping sim time. Looping
           is turned off and the end time set effectively infinite.
         """

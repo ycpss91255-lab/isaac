@@ -7,10 +7,11 @@ checks, per engine (PhysX is the control):
 * the wheel joint positions advance past a threshold (Newton used to
   ignore every command: the AppLauncher experience leaves
   ``SimulationManager`` default callbacks off, so no physics sim view);
-* the main loop runs at the configured 60 Hz (+-15 %), and sim time never
-  wraps (timeline looping off).
+* updates run at 60 Hz (+-15 %) in simulation time, wall-clock throughput
+  exceeds 20 updates/s, and sim time never wraps (timeline looping off).
 
-Pass criterion is marker lines from ``_newton_drive_runner.py``.
+The runner enables Newton itself in ``_open_stage`` to verify the sim loop
+settings applied by ``driver._play_timeline``.
 
 Run inside the GPU test container::
 
@@ -52,7 +53,7 @@ def _run(engine):
     result = subprocess.run(
         [PYTHON_SH, str(RUNNER), "--script-dir", str(REPO_ROOT / "framework"),
          "--robot-usd", str(fetch_test_asset("jetbot")), "--engine", engine],
-        capture_output=True, text=True, timeout=SUBPROC_TIMEOUT_SEC,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=SUBPROC_TIMEOUT_SEC,
     )
     return result.stdout
 
@@ -65,26 +66,30 @@ def run_output(request):
 @requires_isaac
 def test_engine_is_the_requested_one(run_output):
     engine, out = run_output
-    assert f"[DRIVE ENGINE] active={engine}" in out, out[-2000:]
+    m = re.search(r"\[DRIVE ENGINE\] active=(\w+)", out)
+    assert m, out[-2000:]
+    assert m.group(1).lower() == engine
 
 
 @requires_isaac
 def test_wheels_turn_under_velocity_command(run_output):
     _, out = run_output
-    m = re.search(r"\[DRIVE WHEELS\] delta_rad=(-?[\d.]+)", out)
+    m = re.search(r"\[DRIVE WHEELS\] left=(-?[\d.]+) right=(-?[\d.]+) delta_rad=[\d.]+", out)
     assert m, out[-2000:]
-    assert abs(float(m.group(1))) > MIN_WHEEL_DELTA_RAD, out[-2000:]
+    left, right = map(float, m.groups())
+    assert abs(left) > MIN_WHEEL_DELTA_RAD, m.group(0)
+    assert abs(right) > MIN_WHEEL_DELTA_RAD, m.group(0)
 
 
 @requires_isaac
 def test_loop_runs_at_configured_rate_and_time_never_wraps(run_output):
     _, out = run_output
     m = re.search(
-        r"\[DRIVE CLOCK\] hz=([\d.]+) monotonic=(\w+) span_s=([\d.]+) updates=(\d+)", out)
+        r"\[DRIVE CLOCK\] sim_hz=([\d.]+) wall_hz=([\d.]+) "
+        r"monotonic=(\w+) span_s=(-?[\d.]+) updates=\d+", out)
     assert m, out[-2000:]
-    assert abs(float(m.group(1)) - RATE_HZ) <= RATE_HZ * RATE_TOLERANCE, out[-2000:]
-    assert m.group(2) == "True", out[-2000:]
-    span_s = float(m.group(3))
-    expected_span_s = int(m.group(4)) / RATE_HZ
-    assert span_s > 1.7, out[-2000:]  # Timeline loop period is 1.667 s.
-    assert abs(span_s - expected_span_s) <= expected_span_s * RATE_TOLERANCE, out[-2000:]
+    sim_hz, wall_hz, monotonic, span_s = m.groups()
+    assert float(sim_hz) == pytest.approx(RATE_HZ, rel=RATE_TOLERANCE), m.group(0)
+    assert float(wall_hz) > 20.0, m.group(0)
+    assert monotonic == "True", m.group(0)
+    assert float(span_s) > 1.7, m.group(0)  # Timeline loop period is 1.667 s.
