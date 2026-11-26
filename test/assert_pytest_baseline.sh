@@ -210,9 +210,9 @@ PY
   # socket) -- it runs here on the self-hosted GPU host (which has docker
   # + the built isaac:test image). Its collected/passed counts are summed
   # into the GPU-integration totals below. -p no:cacheprovider keeps the
-  # mounted tree clean. Skipped (not failed) on a host missing docker /
-  # the test image -- a skip does NOT advance the passed counter, so the
-  # "passed > 0" gate still rejects a non-GPU host.
+  # mounted tree clean. A host without pytest, a missing report, or a
+  # leg with no passing test FAILS the job (isaac#460): the leg must really
+  # run, it cannot vanish behind the in-container count.
   XC_PYTEST="${XC_PYTEST_PATH:-${REPO_ROOT}/test/integration/pytest/test_cross_container_roundtrip.py}"
   XC_REPORT="${REPO_ROOT}/test/.xc-pytest-report.xml"
   rm -f "${XC_REPORT}"
@@ -235,13 +235,29 @@ print(attrs.get("tests", 0), attrs.get("failures", 0),
       attrs.get("errors", 0), attrs.get("skipped", 0))
 PY
       )
+    else
+      echo "error: host cross-container pytest produced no JUnit report " \
+        "(${XC_REPORT}); the leg did not run -- GPU job not green" \
+        "(isaac#460)" >&2
+      exit 1
     fi
   else
-    echo "warning: host python3 has no pytest; cross-container leg not run" >&2
+    echo "error: host python3 has no pytest; the cross-container leg " \
+      "cannot run -- GPU job not green (isaac#460)" >&2
+    exit 1
   fi
   xc_passed=$(( xc_total - xc_failures - xc_errors - xc_skipped ))
   echo "host cross-container: collected=${xc_total} passed=${xc_passed} " \
     "skipped=${xc_skipped} failures=${xc_failures} errors=${xc_errors}"
+
+  # The host leg must contribute at least one passing test: an all-skipped
+  # or empty leg would otherwise vanish silently behind the in-container
+  # count (isaac#460).
+  if (( xc_passed < 1 )); then
+    echo "error: host cross-container leg passed ${xc_passed} tests " \
+      "(need >= 1) -- it did not really run; GPU job not green (isaac#460)" >&2
+    exit 1
+  fi
 
   # Fold the host leg into the GPU-integration aggregate.
   total=$(( total + xc_total ))
