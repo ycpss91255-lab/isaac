@@ -1,6 +1,6 @@
 # TEST.md
 
-**202 tests** total.
+**204 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -11,10 +11,10 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 | core | 110 | 642 | 40 | 792 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
-| headless | 11 | 6 | 0 | 17 |
+| headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**202 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**204 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -92,7 +92,7 @@ Post-stop hook (`script/hooks/post/stop.sh`, base #440): stops the out-of-compos
 | `post-stop: stops the per-stack viewer (name derived from IMAGE_NAME)` | `stop.sh` removes the per-project `${USER_NAME}-${IMAGE_NAME}-owv` viewer (here `alice-isaac-owv`); the default-project case carries no `-<remainder>` suffix; two isolated stacks no longer collide (#237). |
 | `post-stop: a distinct PROJECT_NAME scopes the viewer name (owv#55, isaac#238)` | With `PROJECT_NAME=alice-isaac-demo` in `.env.generated`, the post-stop hook derives the same suffix post/run used and targets `alice-isaac-owv-demo`, symmetric with what post/run created, so one stack's stop cannot leave another's viewer behind. |
 
-## test/bats/smoke/headless_smoke_spec.bats (11)
+## test/bats/smoke/headless_smoke_spec.bats (13)
 
 Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isaac#461) and its GPU job script (`headless_smoke_job.sh`). The headless stage was only ever built, never started; base's compose gives it `restart: unless-stopped`, so a broken start command was a container restarting forever with every other check green. The smoke starts `run.sh -t headless -d` under its own compose project and requires `State.Status == running` and `RestartCount == 0` for a settle window. Run against a stub `run.sh` and a stub `docker` (hermetic, no docker, no GPU); baked into `/smoke_test/` by the devel-test stage.
 
@@ -103,6 +103,8 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless_smoke: a restarting container fails (the #461 symptom)` | status `restarting` fails and says so. |
 | `headless_smoke: a container that restarted but is running now still fails` | running with RestartCount 3 fails: a crash loop reports running between restarts. |
 | `headless_smoke: an exited container fails` | status `exited` fails. |
+| `headless_smoke: a container that is fine at first but restarts later fails (settle window)` | two healthy inspections followed by `restarting 3` fail the smoke and report `restarting`. |
+| `headless_smoke: a healthy container is re-checked across the whole settle window` | a container that stays `running 0` passes and is inspected more than once. |
 | `headless_smoke: no container for the project fails closed` | no container id resolved fails. |
 | `headless_smoke: a failing run.sh fails the smoke` | a non-zero `run.sh` fails the smoke. |
 | `headless_smoke: runs under its own compose project and tears it down, pass or fail` | `PROJECT_NAME` pinned in `.env.generated`; teardown is `COMPOSE_PROFILES='*' compose -p <proj> down`; the default project is never addressed. |
@@ -127,7 +129,6 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: a Kit 110 log with a connected peer passes on the default markers (isaac#291)` | A Kit 110 (Isaac Sim 6.0.1) log, lines verbatim from the GPU host, drives the real driver through the ready wait (`Started primary stream server` -> `App is loaded.`), the attach wait (`signaling headers` -> `Client connected to WebRTC server`) and the dwell to `PASS`. The pre-#291 defaults waited for the Kit 107 `Streaming server started.` line Isaac Sim 6.x never prints. |
 | `stream_smoke: a peer that never completes the WebRTC handshake fails the attach (isaac#291)` | The same log cut after `Processing N signaling headers` (as far as a peer that never answers the SDP offer gets, i.e. the old curl probe at best) fails with `streams did not start`. |
 | `stream_smoke: a stream container that restarted fails even though it is Running now (isaac#461)` | The liveness probe reads `{{.State.Running}} {{.RestartCount}}` and needs `true 0`; a container with RestartCount 4 that is Running now fails the smoke. |
-
 
 ## test/bats/smoke/stream_smoke_lib_spec.bats (22)
 

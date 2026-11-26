@@ -17,14 +17,15 @@
 #
 # The real script runs against a stub run.sh and a stub docker that record
 # their argv. The stub docker answers `inspect` from the HEADLESS_STATE
-# fixture ("<status> <restarts>"), so each verdict is driven by what the
-# container looks like. No real docker, no GPU.
+# fixture ("<status> <restarts>"). The settle-window tests count inspections
+# and can switch to HEADLESS_STATE_LATE after two healthy checks.
 #
 # Baked into /smoke_test/ next to the script by the devel-test stage.
 
 bats_require_minimum_version 1.5.0
 
 setup() {
+  unset HEADLESS_STATE_LATE INSPECT_COUNT_FILE
   FAKE="$(mktemp -d)"
   mkdir -p "${FAKE}/script/ci" "${FAKE}/bin"
   cp "${BATS_TEST_DIRNAME}/headless_smoke.sh" "${FAKE}/script/ci/headless_smoke.sh"
@@ -47,6 +48,8 @@ STUB
   chmod +x "${FAKE}/script/run.sh"
 
   export DOCKER_ARGS_FILE="${FAKE}/docker-args.txt"
+  export INSPECT_COUNT_FILE="${FAKE}/inspect-count"
+  echo 0 > "${INSPECT_COUNT_FILE}"
   cat > "${FAKE}/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 printf '[profiles=%s] %s\n' "${COMPOSE_PROFILES:-}" "$*" >> "${DOCKER_ARGS_FILE:?}"
@@ -54,7 +57,16 @@ case "$*" in
   *"ps -aq headless"*)
     [ "${STUB_NO_CONTAINER:-0}" = 1 ] || echo cid0 ;;
   inspect\ -f*)
-    echo "${HEADLESS_STATE:-running 0}" ;;
+    read -r count < "${INSPECT_COUNT_FILE}"
+    count=$((count + 1))
+    echo "${count}" > "${INSPECT_COUNT_FILE}"
+    if [[ -z "${HEADLESS_STATE_LATE:-}" ]]; then
+      echo "${HEADLESS_STATE:-running 0}"
+    elif (( count <= 2 )); then
+      echo "running 0"
+    else
+      echo "${HEADLESS_STATE_LATE}"
+    fi ;;
 esac
 exit 0
 STUB
@@ -104,6 +116,20 @@ teardown() {
   export HEADLESS_STATE="exited 0"
   run "${FAKE}/script/ci/headless_smoke.sh"
   [ "${status}" -ne 0 ]
+}
+
+@test "headless_smoke: a container that is fine at first but restarts later fails (settle window)" {
+  export HEADLESS_STATE_LATE="restarting 3" HEADLESS_SETTLE=4 HEADLESS_POLL=1
+  run "${FAKE}/script/ci/headless_smoke.sh"
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"restarting"* ]]
+}
+
+@test "headless_smoke: a healthy container is re-checked across the whole settle window" {
+  export HEADLESS_STATE="running 0"
+  run "${FAKE}/script/ci/headless_smoke.sh"
+  [ "${status}" -eq 0 ]
+  [ "$(< "${INSPECT_COUNT_FILE}")" -gt 1 ]
 }
 
 @test "headless_smoke: no container for the project fails closed" {
