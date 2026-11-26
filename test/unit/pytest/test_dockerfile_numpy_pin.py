@@ -38,24 +38,24 @@ def _index_of(blocks, needle):
     raise AssertionError(f"no RUN contains {needle!r}")
 
 
-def _restore_block():
+def _restore_block(blocks):
+    lab_idx = _index_of(blocks, "isaaclab.sh --install")
+    restore_idx = _index_of(blocks, "numpy==")
+    return blocks[restore_idx], restore_idx, lab_idx
+
+
+def test_numpy_restore_runs_after_isaaclab_install_and_before_xacro():
     blocks = _run_blocks()
-    lab = _index_of(blocks, "isaaclab.sh --install")
-    after = [b for b in blocks[lab:] if "numpy==" in b]
-    assert after, (
-        "no RUN at or after the Isaac Lab install pins numpy; Isaac Lab's "
-        "numpy 2.5.5 stays shadowing Isaac Sim's prebundled numpy"
+    _, restore_idx, lab_idx = _restore_block(blocks)
+    xacro_idx = _index_of(blocks, "pip install --no-cache-dir xacro")
+    assert lab_idx < restore_idx < xacro_idx, (
+        f"numpy restore (RUN {restore_idx}) must run after the Isaac Lab install "
+        f"(RUN {lab_idx}) and before the xacro install (RUN {xacro_idx})"
     )
-    return after[0], blocks.index(after[0]), lab
-
-
-def test_numpy_is_pinned_at_or_after_isaaclab_install():
-    _, restore_idx, lab_idx = _restore_block()
-    assert restore_idx >= lab_idx
 
 
 def test_pin_reads_version_from_isaac_sim_prebundle():
-    block, _, _ = _restore_block()
+    block, _, _ = _restore_block(_run_blocks())
     assert "pip_prebundle" in block and "numpy-" in block, (
         "the pinned version must come from Isaac Sim's own pip_prebundle "
         "numpy dist-info, not a hard-coded number"
@@ -64,7 +64,7 @@ def test_pin_reads_version_from_isaac_sim_prebundle():
 
 
 def test_pin_asserts_the_result_at_build_time():
-    block, _, _ = _restore_block()
+    block, _, _ = _restore_block(_run_blocks())
     assert "numpy.__version__" in block, (
         "the restore step must assert the numpy that Python imports equals "
         "the pinned version, so a silent no-op fails the build"
@@ -72,7 +72,7 @@ def test_pin_asserts_the_result_at_build_time():
 
 
 def test_restore_has_no_shell_pipe():
-    block, _, _ = _restore_block()
+    block, _, _ = _restore_block(_run_blocks())
     assert "|" not in block.replace("||", ""), (
         "a shell pipe in the numpy restore RUN triggers hadolint DL4006"
     )
