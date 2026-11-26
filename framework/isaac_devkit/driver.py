@@ -420,10 +420,34 @@ class IsaacDriver:
         UsdLux.DistantLight.Define(stage, "/World/SunLight")
 
     def _play_timeline(self) -> None:
-        """Set an effectively-infinite end time and start the timeline."""
+        """Prepare the sim loop, then start the timeline (isaac#447).
+
+        The Isaac Lab ``AppLauncher`` Kit experience differs from a plain
+        ``SimulationApp`` in three ways that matter here, all fixed before
+        ``play()``:
+
+        * It turns every ``SimulationManager`` default callback off, so
+          ``initialize_physics()`` never runs: no physics sim view exists
+          and Newton ignores every command (PhysX is unaffected). Enabling
+          the warm-start callback restores that initialisation.
+        * The main loop is unpaced (``/clock`` floated 155-320 Hz). Rate
+          limit 60 Hz + fixed time stepping pins it to 60 Hz.
+        * The timeline loops every ~1.667 s, wrapping sim time. Looping
+          is turned off and the end time set effectively infinite.
+        """
+        import carb.settings
         import omni.timeline
+        from isaacsim.core.simulation_manager import SimulationManager
+
+        SimulationManager.enable_warm_start_callback(True)
+
+        settings = carb.settings.get_settings()
+        settings.set("/app/runLoops/main/rateLimitEnabled", True)
+        settings.set("/app/runLoops/main/rateLimitFrequency", 60)
+        settings.set("/app/player/useFixedTimeStepping", True)
 
         timeline = omni.timeline.get_timeline_interface()
+        timeline.set_looping(False)
         # 1e10 seconds is effectively infinite for any drive scenario.
         timeline.set_end_time(1e10)
         timeline.play()

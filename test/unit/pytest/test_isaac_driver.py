@@ -598,3 +598,96 @@ class TestIoPlugin:
         with pytest.raises(RuntimeError, match="nope.*fake_io_plugin"):
             self._run(monkeypatch, calls)
         assert "play_timeline" not in calls
+
+
+# ---------- _play_timeline: Newton callbacks / pacing / looping (isaac#447) ----
+
+
+class TestPlayTimelineSimLoop:
+    """``_play_timeline`` must prepare the Isaac Lab AppLauncher experience.
+
+    That experience turns every ``SimulationManager`` default callback
+    off, so ``initialize_physics()`` never runs and Newton ignores every
+    command (isaac#447). It also leaves the main loop unpaced and the
+    timeline looping (``/clock`` 155-320 Hz, sim time wrapping every
+    1.667 s). Fake ``omni.timeline`` / ``carb.settings`` /
+    ``isaacsim.core.simulation_manager`` modules record the call order.
+    """
+
+    @staticmethod
+    def _install_fakes(monkeypatch, calls, settings):
+        def mod(name, **attrs):
+            m = types.ModuleType(name)
+            m.__path__ = []
+            for key, value in attrs.items():
+                setattr(m, key, value)
+            monkeypatch.setitem(sys.modules, name, m)
+            return m
+
+        class _Timeline:
+            def set_looping(self, value):
+                calls.append(("set_looping", value))
+
+            def set_end_time(self, value):
+                calls.append(("set_end_time", value))
+
+            def play(self):
+                calls.append("play")
+
+        class _Settings:
+            def set(self, key, value):
+                settings[key] = value
+                calls.append(("setting", key))
+
+        class _SimulationManager:
+            @staticmethod
+            def enable_warm_start_callback(value):
+                calls.append(("warm_start", value))
+
+        timeline = _Timeline()
+        omni = mod("omni")
+        omni_timeline = mod(
+            "omni.timeline", get_timeline_interface=lambda: timeline
+        )
+        omni.timeline = omni_timeline
+        carb = mod("carb")
+        carb_settings = mod(
+            "carb.settings", get_settings=lambda: _Settings()
+        )
+        carb.settings = carb_settings
+        isaacsim = mod("isaacsim")
+        core = mod("isaacsim.core")
+        mod(
+            "isaacsim.core.simulation_manager",
+            SimulationManager=_SimulationManager,
+        )
+        isaacsim.core = core
+
+    def _play(self, monkeypatch):
+        calls, settings = [], {}
+        self._install_fakes(monkeypatch, calls, settings)
+        driver = id_mod.IsaacDriver()
+        driver._app = types.SimpleNamespace(update=lambda: None)
+        driver._play_timeline()
+        return calls, settings
+
+    def test_warm_start_callback_enabled_before_play(self, monkeypatch):
+        calls, _ = self._play(monkeypatch)
+        assert ("warm_start", True) in calls
+        assert calls.index(("warm_start", True)) < calls.index("play")
+
+    def test_main_loop_paced_before_play(self, monkeypatch):
+        calls, settings = self._play(monkeypatch)
+        assert settings["/app/runLoops/main/rateLimitEnabled"] is True
+        assert settings["/app/runLoops/main/rateLimitFrequency"] == 60
+        assert settings["/app/player/useFixedTimeStepping"] is True
+        setting_idx = [
+            i for i, c in enumerate(calls)
+            if isinstance(c, tuple) and c[0] == "setting"
+        ]
+        assert setting_idx and max(setting_idx) < calls.index("play")
+
+    def test_timeline_does_not_loop(self, monkeypatch):
+        calls, _ = self._play(monkeypatch)
+        assert ("set_looping", False) in calls
+        assert calls.index(("set_looping", False)) < calls.index("play")

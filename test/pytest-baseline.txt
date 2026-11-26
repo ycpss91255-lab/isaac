@@ -327,7 +327,8 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-HOSTED_UNIT_BASELINE = 676
+# isaac#447: +3 hosted (test_isaac_driver.py TestPlayTimelineSimLoop); 676 -> 679.
+HOSTED_UNIT_BASELINE = 679
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -348,7 +349,8 @@ HOSTED_UNIT_BASELINE = 676
 #   all core: 627 -> 633 (core 598).
 #   The workflow naming lint (isaac#443) adds test_workflow_naming.py (42) and 1 in
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
-HOSTED_UNIT_BASELINE_CORE = 641
+#   isaac#447 adds 3 in test_isaac_driver.py (48 -> 51), all core: 641 -> 644.
+HOSTED_UNIT_BASELINE_CORE = 644
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 0
@@ -505,7 +507,9 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-GPU_INTEGRATION_BASELINE = 40
+# isaac#447: test_newton_drive_integration.py (3 tests x physx/newton = 6) -- ratchet UP 40 -> 46.
+#   NOT executed locally; first proof is the CI gpu-integration job.
+GPU_INTEGRATION_BASELINE = 46
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Recorded for traceability; after the ingestion work + the owv#55

@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **IsaacDriver 在 Newton 下指令不生效、`/clock` 不穩、timeline 會循環（isaac#447）。** `IsaacDriver.run` 走 Isaac Lab `AppLauncher`，其 Kit experience 會關掉 `SimulationManager` 的預設 callbacks，`initialize_physics()` 不會執行、沒有 physics sim view，Newton 對所有指令都不套用（PhysX 不受影響）。`_play_timeline` 現在在 `play()` 之前：呼叫 `SimulationManager.enable_warm_start_callback(True)`；設定主迴圈 60 Hz rate limit 與 fixed time stepping（`/clock` 原本在 155-320 Hz 間浮動）；關閉 timeline looping（原本每約 1.667 秒回捲一次 sim time）。新增 GPU 整合測試 `test_newton_drive_integration.py`：官方 Jetbot 送出 10 rad/s 速度指令，PhysX 與 Newton 各跑一次，輪子位移超過 1 rad、迴圈約 60 Hz、sim time 單調。Hosted baseline 676 -> 679（core 644）；GPU baseline 40 -> 46。
+
 ### Changed
 - **Workflow / job 命名規則與 lint（isaac#443，#434 PR4）。** 規則寫在 `doc/workflow-naming.md`：檔名 `<category>-<feature>.yaml`（category 為 ci / release / bot / tool）、顯示名稱 `<Category>: <Feature Words>`、job id 小寫 kebab-case、不加 job 層 `name:`、CI job id 為 `changes` / `gate` / `release` 或以組別開頭（`core-` `gui-` `stream-` `headless-` `docs-`）。`script/ci/lint_workflow_names.py` 檢查 `.github/workflows/*.yaml`，並掃文件有沒有殘留已改掉的名稱；它在 `docs-unit` job 執行，也由 `test_workflow_naming.py` 固定。改名：`stream-smoke.yaml` -> `ci-stream-smoke.yaml`、顯示名稱 `Stream Smoke (GPU)` -> `CI: Stream Smoke`（`main.yaml` 的 `uses:`、路徑規則 `ci-stream-*`、文件與測試同步）。**Required check 不受影響**：required 只有 `gate`，job 名稱變動不碰 branch protection。**例外（精確檔名）**：`main.yaml`（org 通用入口、base 的 `init.sh` 建立）；`base-version-monitor.yaml`（`init.sh` 的 `_sync_base_monitor_workflow` 在該路徑不存在時產生，改檔名會在下次 base 升級時於旁邊重新產生一份；`init.sh` 只建立不覆蓋，所以內容不會被蓋回去，但檔名會，故保留原名與內容，原因寫在文件裡）；`publish-stream-source.yaml`（isaac#432 會刪，不改）。Hosted baseline 633 -> 676（core 641）。
 ### Removed
