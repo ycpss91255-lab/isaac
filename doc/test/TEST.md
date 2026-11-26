@@ -1,6 +1,6 @@
 # TEST.md
 
-**190 tests** total.
+**194 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 110 | 650 | 48 | 808 |
+| core | 114 | 650 | 48 | 812 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 80 | 19 | 0 | 99 |
 | headless | 0 | 0 | 0 | 0 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**190 tests** total` above counts the bats specs only. `gui` and `headless` have no tests yet (their stage-specific tests arrive with #428 and the stage smokes); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**194 tests** total` above counts the bats specs only. `gui` and `headless` have no tests yet (their stage-specific tests arrive with #428 and the stage smokes); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -204,6 +204,17 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `pytest installed in devel-test stage` | `/isaac-sim/python.sh -m pytest --version` exits 0 — pytest importable via Isaac Sim's bundled Python |
 | `pyyaml installed in devel-test stage` | `import yaml; print(yaml.__version__)` succeeds — YAML available for Python config / fixture loading |
 | `pytest-cov installed in devel-test stage` | `pytest --help` mentions `--cov` — coverage plugin registered, enables `pytest --cov=<pkg>` invocations |
+
+## test/bats/smoke/assert_pytest_baseline_hostxc_spec.bats (4)
+
+Guard for isaac#460: the host-side cross-container leg of `assert_pytest_baseline.sh --gpu` must not be able to vanish silently behind the in-container count. A stub `run.sh` supplies the in-container report and a `python3` shim simulates the host pytest. Hermetic — no docker, no GPU.
+
+| Test | Description |
+|------|-------------|
+| `assert_pytest_baseline --gpu fails when host python3 has no pytest (isaac#460)` | Host pytest absent: exits non-zero with the "no pytest" error (was a warning only). |
+| `assert_pytest_baseline --gpu fails when the host leg produces no JUnit report (isaac#460)` | Host pytest ran but wrote no report: exits non-zero with "no JUnit report". |
+| `assert_pytest_baseline --gpu fails when the host leg has zero passing tests (isaac#460)` | All host tests skipped: exits non-zero (host leg needs >= 1 pass). |
+| `assert_pytest_baseline --gpu passes when the host leg runs and passes (isaac#460)` | Healthy host leg: exits 0 and prints the OK line. |
 
 ## test/bats/smoke/assert_pytest_baseline_isolation_spec.bats (2)
 
