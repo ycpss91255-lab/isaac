@@ -1,6 +1,6 @@
 # TEST.md
 
-**201 tests** total.
+**202 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -10,11 +10,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 110 | 642 | 40 | 792 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 80 | 19 | 0 | 99 |
+| stream | 81 | 19 | 0 | 100 |
 | headless | 11 | 6 | 0 | 17 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**201 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**202 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -110,7 +110,7 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
 | `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (10)
+## test/bats/smoke/stream_smoke_isolation_spec.bats (11)
 
 Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-lab/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
 
@@ -126,6 +126,8 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: no stale-project sweep unless SMOKE_REAP_PROJECT_PREFIX owns the run (isaac#291)` | Unset prefix (local runs) -> no project listing at all; a prefix that does not cover this run's own project is not trusted either. |
 | `stream_smoke: a Kit 110 log with a connected peer passes on the default markers (isaac#291)` | A Kit 110 (Isaac Sim 6.0.1) log, lines verbatim from the GPU host, drives the real driver through the ready wait (`Started primary stream server` -> `App is loaded.`), the attach wait (`signaling headers` -> `Client connected to WebRTC server`) and the dwell to `PASS`. The pre-#291 defaults waited for the Kit 107 `Streaming server started.` line Isaac Sim 6.x never prints. |
 | `stream_smoke: a peer that never completes the WebRTC handshake fails the attach (isaac#291)` | The same log cut after `Processing N signaling headers` (as far as a peer that never answers the SDP offer gets, i.e. the old curl probe at best) fails with `streams did not start`. |
+| `stream_smoke: a stream container that restarted fails even though it is Running now (isaac#461)` | The liveness probe reads `{{.State.Running}} {{.RestartCount}}` and needs `true 0`; a container with RestartCount 4 that is Running now fails the smoke. |
+
 
 ## test/bats/smoke/stream_smoke_lib_spec.bats (22)
 

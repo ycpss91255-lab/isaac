@@ -102,7 +102,15 @@ case "$*" in
   *"ps -q stream"*)
     [ "${STUB_ALIVE:-0}" = 1 ] && echo cid0 ;;
   inspect\ -f*)
-    [ "${STUB_ALIVE:-0}" = 1 ] && echo true ;;
+    # A format that asks for RestartCount gets "<Running> <RestartCount>"
+    # (isaac#461; STUB_RESTARTS sets the count); a Running-only format gets
+    # just "true".
+    if [ "${STUB_ALIVE:-0}" = 1 ]; then
+      case "$*" in
+        *RestartCount*) echo "true ${STUB_RESTARTS:-0}" ;;
+        *) echo true ;;
+      esac
+    fi ;;
   exec\ -d*runheadless*)
     if [ -n "${STUB_KIT_LOG:-}" ]; then
       mkdir -p "$(dirname "${STUB_SMOKE_LOG}")"
@@ -119,7 +127,7 @@ exit 0
 STUB
   chmod +x "${FAKE}/bin/docker"
   export PATH="${FAKE}/bin:${PATH}"
-  unset SMOKE_REAP_PROJECT_PREFIX SMOKE_CLIENT_CMD STUB_ALIVE STUB_KIT_LOG \
+  unset SMOKE_REAP_PROJECT_PREFIX SMOKE_CLIENT_CMD STUB_ALIVE STUB_RESTARTS STUB_KIT_LOG \
     STUB_PROJECTS STUB_NAMES ISAAC_STREAM_CONTAINER
 }
 
@@ -308,4 +316,16 @@ YAML
   run "${FAKE}/script/ci/stream_smoke.sh"
   [ "$status" -eq 1 ]
   [[ "${output}" == *"streams did not start"* ]]
+}
+
+@test "stream_smoke: a stream container that restarted fails even though it is Running now (isaac#461)" {
+  # A restarting container is also Running between two restarts, so the
+  # liveness probe has to look at RestartCount as well.
+  write_kit110_log "${FAKE}/kit.log" 1
+  export STUB_KIT_LOG="${FAKE}/kit.log" STUB_ALIVE=1 STUB_RESTARTS=4
+  export SMOKE_PROJECT=alice-isaac-demo SMOKE_CLIENT_CMD=true
+  export SMOKE_TIMEOUT=2 SMOKE_CONNECT_TIMEOUT=2 SMOKE_DWELL=1 SMOKE_POLL=1
+  run "${FAKE}/script/ci/stream_smoke.sh"
+  [ "$status" -ne 0 ]
+  [[ "${output}" != *"[smoke] PASS"* ]]
 }

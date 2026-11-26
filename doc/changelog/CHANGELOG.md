@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+### Fixed
+- **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 ### Added
 - **headless stage 開機檢查（isaac#461）。** headless stage 之前只被 build、從來沒有被啟動過；base 的 compose 替它加 `restart: unless-stopped`，所以啟動指令一壞就是容器一直重啟，而 hosted pytest、bats、GPU 整合與串流 smoke 全部是綠的。新增 `script/ci/headless_smoke.sh`：以獨立 compose project 執行 `./script/run.sh -t headless -d`，在 settle 視窗（預設 20 秒）內要求 `State.Status == running` 且 `RestartCount == 0`（重啟迴圈中的容器在兩次重啟之間也是 running，所以不能只看 Status），結束時一律 `compose down`。新增 `ci-headless-smoke.yaml` 與 `main.yaml` 的 `headless-smoke` job（headless 組被選中時才跑，GPU runner、與 `core-gpu` 相同的 fork 防護），`gate` 的 needs 加入它。新增 `headless_smoke_spec.bats`（11 個）與 `test_headless_smoke_wiring.py`（6 個）。Hosted baseline 676 -> 683（core 642、headless 6）；bats headless 0 -> 11。
 ### Changed
