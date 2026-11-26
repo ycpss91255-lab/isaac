@@ -80,7 +80,11 @@ def test_wheels_turn_under_velocity_command(run_output):
 def test_loop_runs_at_configured_rate_and_time_never_wraps(run_output):
     _, out = run_output
     m = re.search(
-        r"\[DRIVE CLOCK\] hz=([\d.]+) monotonic=(\w+) span_s=([\d.]+)", out)
+        r"\[DRIVE CLOCK\] hz=([\d.]+) monotonic=(\w+) span_s=([\d.]+) updates=(\d+)", out)
     assert m, out[-2000:]
     assert abs(float(m.group(1)) - RATE_HZ) <= RATE_HZ * RATE_TOLERANCE, out[-2000:]
     assert m.group(2) == "True", out[-2000:]
+    span_s = float(m.group(3))
+    expected_span_s = int(m.group(4)) / RATE_HZ
+    assert span_s > 1.7, out[-2000:]  # Timeline loop period is 1.667 s.
+    assert abs(span_s - expected_span_s) <= expected_span_s * RATE_TOLERANCE, out[-2000:]

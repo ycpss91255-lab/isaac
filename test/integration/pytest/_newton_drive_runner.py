@@ -7,7 +7,7 @@ marker lines (Kit's ``app.close`` swallows the exit code)::
 
     [DRIVE ENGINE] active=<physx|newton>
     [DRIVE WHEELS] delta_rad=<float>        wheel joint position change
-    [DRIVE CLOCK] hz=<float> monotonic=<bool> span_s=<float>
+    [DRIVE CLOCK] hz=<float> monotonic=<bool> span_s=<float> updates=<int>
 
 Usage (inside the GPU container)::
 
@@ -146,7 +146,8 @@ def _main() -> None:
             print(f"[DRIVE WHEELS] delta_rad={delta:.4f}", flush=True)
             print(
                 f"[DRIVE CLOCK] hz={len(times) / wall:.2f} "
-                f"monotonic={monotonic} span_s={times[-1] - times[0]:.3f}",
+                f"monotonic={monotonic} span_s={times[-1] - times[0]:.3f} "
+                f"updates={len(times)}",
                 flush=True)
             self._should_quit = True
 
