@@ -329,7 +329,7 @@
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#447: TestPlayTimelineSimLoop adds 3 hosted cases and TestLauncherArgs adds 6
 #   (4 default livestream values, 1 override, 1 default run). 676 -> 685.
-HOSTED_UNIT_BASELINE = 685
+HOSTED_UNIT_BASELINE = 687
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -351,7 +351,7 @@ HOSTED_UNIT_BASELINE = 685
 #   The workflow naming lint (isaac#443) adds test_workflow_naming.py (42) and 1 in
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   isaac#447 adds 9 in test_isaac_driver.py (48 -> 57), all core: 641 -> 650.
-HOSTED_UNIT_BASELINE_CORE = 650
+HOSTED_UNIT_BASELINE_CORE = 652
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 0

@@ -432,6 +432,9 @@ class IsaacDriver:
           ``initialize_physics()`` never runs: no physics sim view exists
           and Newton ignores every command (PhysX is unaffected). Enabling
           the warm-start callback restores that initialisation.
+          ``isaaclab_physx`` rebinds the package's ``SimulationManager``
+          to ``PhysxManager``, which lacks ``enable_warm_start_callback``.
+          Use the original class from the implementation module when available.
         * The main loop is unpaced (``/clock`` floated 155-320 Hz). Cap
           wall-clock updates at 60 Hz and use fixed timeline steps.
         * The timeline loops every ~1.667 s, wrapping sim time. Looping
@@ -439,9 +442,19 @@ class IsaacDriver:
         """
         import carb.settings
         import omni.timeline
-        from isaacsim.core.simulation_manager import SimulationManager
 
-        SimulationManager.enable_warm_start_callback(True)
+        package = "isaacsim.core.simulation_manager"
+        for module_name in (f"{package}.impl.simulation_manager", package):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                continue
+            manager = getattr(module, "SimulationManager", None)
+            if hasattr(manager, "enable_warm_start_callback"):
+                manager.enable_warm_start_callback(True)
+                break
+        else:
+            print("[isaac_driver] Warning: warm-start callback unavailable", flush=True)
 
         settings = carb.settings.get_settings()
         settings.set("/app/runLoops/main/rateLimitEnabled", True)

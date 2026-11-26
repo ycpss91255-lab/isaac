@@ -674,7 +674,7 @@ class TestPlayTimelineSimLoop:
     """
 
     @staticmethod
-    def _install_fakes(monkeypatch, calls, settings):
+    def _install_fakes(monkeypatch, calls, settings, *, package_rebound=False, with_impl=False):
         def mod(name, **attrs):
             m = types.ModuleType(name)
             m.__path__ = []
@@ -703,6 +703,9 @@ class TestPlayTimelineSimLoop:
             def enable_warm_start_callback(value):
                 calls.append(("warm_start", value))
 
+        class _PhysxManager:
+            pass
+
         timeline = _Timeline()
         omni = mod("omni")
         omni_timeline = mod(
@@ -716,15 +719,25 @@ class TestPlayTimelineSimLoop:
         carb.settings = carb_settings
         isaacsim = mod("isaacsim")
         core = mod("isaacsim.core")
-        mod(
+        core.simulation_manager = mod(
             "isaacsim.core.simulation_manager",
-            SimulationManager=_SimulationManager,
+            SimulationManager=_PhysxManager if package_rebound else _SimulationManager,
         )
         isaacsim.core = core
+        impl_name = "isaacsim.core.simulation_manager.impl"
+        if with_impl:
+            impl = mod(impl_name)
+            core.simulation_manager.impl = impl
+            impl.simulation_manager = mod(
+                f"{impl_name}.simulation_manager", SimulationManager=_SimulationManager
+            )
+        else:
+            monkeypatch.delitem(sys.modules, f"{impl_name}.simulation_manager", raising=False)
+            monkeypatch.delitem(sys.modules, impl_name, raising=False)
 
-    def _play(self, monkeypatch):
+    def _play(self, monkeypatch, **fake_options):
         calls, settings = [], {}
-        self._install_fakes(monkeypatch, calls, settings)
+        self._install_fakes(monkeypatch, calls, settings, **fake_options)
         driver = id_mod.IsaacDriver()
         driver._app = types.SimpleNamespace(update=lambda: None)
         driver._play_timeline()
@@ -734,6 +747,15 @@ class TestPlayTimelineSimLoop:
         calls, _ = self._play(monkeypatch)
         assert ("warm_start", True) in calls
         assert calls.index(("warm_start", True)) < calls.index("play")
+
+    def test_impl_warm_start_before_play_when_package_manager_rebound(self, monkeypatch):
+        calls, _ = self._play(monkeypatch, package_rebound=True, with_impl=True)
+        assert calls.index(("warm_start", True)) < calls.index("play")
+
+    def test_plays_without_warm_start_when_impl_missing(self, monkeypatch):
+        calls, _ = self._play(monkeypatch, package_rebound=True)
+        assert "play" in calls
+        assert all(call[0] != "warm_start" for call in calls if isinstance(call, tuple))
 
     def test_main_loop_paced_before_play(self, monkeypatch):
         calls, settings = self._play(monkeypatch)
