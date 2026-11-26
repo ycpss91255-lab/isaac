@@ -237,7 +237,9 @@ RUN apt-get update && \
 # Put numpy back to the version Isaac Sim itself ships, read from the image
 # so a Sim bump follows; the python check fails the build if the numpy that
 # actually imports is not that version. Must run as root (site-packages).
-RUN prebundled="$(find /isaac-sim/extscache -maxdepth 3 -path '*/pip_prebundle/numpy-*.dist-info' -print -quit | sed -E 's#.*/numpy-([^/]+)\.dist-info#\1#')" && \
+RUN path="$(find /isaac-sim/extscache -maxdepth 3 -path '*/pip_prebundle/numpy-*.dist-info' -print -quit)" && \
+    name="${path##*/numpy-}" && \
+    prebundled="${name%.dist-info}" && \
     test -n "${prebundled}" && \
     /isaac-sim/python.sh -m pip install --no-cache-dir "numpy==${prebundled}" && \
     /isaac-sim/python.sh -c "import numpy; assert numpy.__version__ == '${prebundled}', numpy.__version__; print('numpy', numpy.__version__)"

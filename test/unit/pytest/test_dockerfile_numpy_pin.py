@@ -69,3 +69,10 @@ def test_pin_asserts_the_result_at_build_time():
         "the restore step must assert the numpy that Python imports equals "
         "the pinned version, so a silent no-op fails the build"
     )
+
+
+def test_restore_has_no_shell_pipe():
+    block, _, _ = _restore_block()
+    assert "|" not in block.replace("||", ""), (
+        "a shell pipe in the numpy restore RUN triggers hadolint DL4006"
+    )
