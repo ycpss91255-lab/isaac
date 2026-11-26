@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+### Added
+- **headless stage 開機檢查（isaac#461）。** headless stage 之前只被 build、從來沒有被啟動過；base 的 compose 替它加 `restart: unless-stopped`，所以啟動指令一壞就是容器一直重啟，而 hosted pytest、bats、GPU 整合與串流 smoke 全部是綠的。新增 `script/ci/headless_smoke.sh`：以獨立 compose project 執行 `./script/run.sh -t headless -d`，在 settle 視窗（預設 20 秒）內要求 `State.Status == running` 且 `RestartCount == 0`（重啟迴圈中的容器在兩次重啟之間也是 running，所以不能只看 Status），結束時一律 `compose down`。新增 `ci-headless-smoke.yaml` 與 `main.yaml` 的 `headless-smoke` job（headless 組被選中時才跑，GPU runner、與 `core-gpu` 相同的 fork 防護），`gate` 的 needs 加入它。新增 `headless_smoke_spec.bats`（11 個）與 `test_headless_smoke_wiring.py`（6 個）。Hosted baseline 676 -> 683（core 642、headless 6）；bats headless 0 -> 11。
 ### Changed
 - **Workflow / job 命名規則與 lint（isaac#443，#434 PR4）。** 規則寫在 `doc/workflow-naming.md`：檔名 `<category>-<feature>.yaml`（category 為 ci / release / bot / tool）、顯示名稱 `<Category>: <Feature Words>`、job id 小寫 kebab-case、不加 job 層 `name:`、CI job id 為 `changes` / `gate` / `release` 或以組別開頭（`core-` `gui-` `stream-` `headless-` `docs-`）。`script/ci/lint_workflow_names.py` 檢查 `.github/workflows/*.yaml`，並掃文件有沒有殘留已改掉的名稱；它在 `docs-unit` job 執行，也由 `test_workflow_naming.py` 固定。改名：`stream-smoke.yaml` -> `ci-stream-smoke.yaml`、顯示名稱 `Stream Smoke (GPU)` -> `CI: Stream Smoke`（`main.yaml` 的 `uses:`、路徑規則 `ci-stream-*`、文件與測試同步）。**Required check 不受影響**：required 只有 `gate`，job 名稱變動不碰 branch protection。**例外（精確檔名）**：`main.yaml`（org 通用入口、base 的 `init.sh` 建立）；`base-version-monitor.yaml`（`init.sh` 的 `_sync_base_monitor_workflow` 在該路徑不存在時產生，改檔名會在下次 base 升級時於旁邊重新產生一份；`init.sh` 只建立不覆蓋，所以內容不會被蓋回去，但檔名會，故保留原名與內容，原因寫在文件裡）；`publish-stream-source.yaml`（isaac#432 會刪，不改）。Hosted baseline 633 -> 676（core 641）。
 ### Removed

@@ -1,6 +1,6 @@
 # TEST.md
 
-**190 tests** total.
+**201 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 110 | 641 | 40 | 791 |
+| core | 110 | 642 | 40 | 792 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 80 | 19 | 0 | 99 |
-| headless | 0 | 0 | 0 | 0 |
+| headless | 11 | 6 | 0 | 17 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**190 tests** total` above counts the bats specs only. `gui` and `headless` have no tests yet (their stage-specific tests arrive with #428 and the stage smokes); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**201 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -91,6 +91,24 @@ Post-stop hook (`script/hooks/post/stop.sh`, base #440): stops the out-of-compos
 |------|-------------|
 | `post-stop: stops the per-stack viewer (name derived from IMAGE_NAME)` | `stop.sh` removes the per-project `${USER_NAME}-${IMAGE_NAME}-owv` viewer (here `alice-isaac-owv`); the default-project case carries no `-<remainder>` suffix; two isolated stacks no longer collide (#237). |
 | `post-stop: a distinct PROJECT_NAME scopes the viewer name (owv#55, isaac#238)` | With `PROJECT_NAME=alice-isaac-demo` in `.env.generated`, the post-stop hook derives the same suffix post/run used and targets `alice-isaac-owv-demo`, symmetric with what post/run created, so one stack's stop cannot leave another's viewer behind. |
+
+## test/bats/smoke/headless_smoke_spec.bats (11)
+
+Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isaac#461) and its GPU job script (`headless_smoke_job.sh`). The headless stage was only ever built, never started; base's compose gives it `restart: unless-stopped`, so a broken start command was a container restarting forever with every other check green. The smoke starts `run.sh -t headless -d` under its own compose project and requires `State.Status == running` and `RestartCount == 0` for a settle window. Run against a stub `run.sh` and a stub `docker` (hermetic, no docker, no GPU); baked into `/smoke_test/` by the devel-test stage.
+
+| Test | Description |
+|------|-------------|
+| `headless_smoke: a running container with no restarts passes` | running + RestartCount 0 exits 0. |
+| `headless_smoke: starts the headless stage detached, never another stage` | `run.sh` gets `-t headless -d`, never `stream`. |
+| `headless_smoke: a restarting container fails (the #461 symptom)` | status `restarting` fails and says so. |
+| `headless_smoke: a container that restarted but is running now still fails` | running with RestartCount 3 fails: a crash loop reports running between restarts. |
+| `headless_smoke: an exited container fails` | status `exited` fails. |
+| `headless_smoke: no container for the project fails closed` | no container id resolved fails. |
+| `headless_smoke: a failing run.sh fails the smoke` | a non-zero `run.sh` fails the smoke. |
+| `headless_smoke: runs under its own compose project and tears it down, pass or fail` | `PROJECT_NAME` pinned in `.env.generated`; teardown is `COMPOSE_PROFILES='*' compose -p <proj> down`; the default project is never addressed. |
+| `headless_smoke: the project defaults to '<derived>-headless-smoke'` | default project name. |
+| `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
+| `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
 ## test/bats/smoke/stream_smoke_isolation_spec.bats (10)
 

@@ -28,6 +28,7 @@ SCOPED = {
     "core-gpu": "core",
     "core-build": "build",
     "stream-smoke": "stream",
+    "headless-smoke": "headless",
 }
 
 

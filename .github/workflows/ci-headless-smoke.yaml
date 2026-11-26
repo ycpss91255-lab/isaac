@@ -1,0 +1,32 @@
+name: "CI: Headless Smoke"
+
+# Boot check for the headless stage (isaac#461): start it with
+# `run.sh -t headless -d` on the self-hosted GPU runner and require
+# State.Status == running with RestartCount == 0 for a settle window. The
+# stage was only ever built, never started, and base's compose gives it
+# `restart: unless-stopped`, so a broken start command showed up as a
+# container restarting forever while every other check stayed green.
+#
+# Runs as the headless group's job from main.yaml's `headless-smoke` (when
+# headless files or a shared layer change, and on push to main / a release
+# tag). It can also be started by hand (workflow_dispatch).
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# No `concurrency:` here, same reason as ci-stream-smoke.yaml: a cancelled
+# pending run would turn main.yaml's `gate` red for a commit that did nothing
+# wrong. One Isaac at a time on the GPU is guaranteed by the single
+# self-hosted GPU runner.
+
+jobs:
+  headless-smoke:
+    uses: ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0
+    with:
+      run-script: ./script/ci/headless_smoke_job.sh
+      # Build (cached) + settle window + teardown.
+      timeout-minutes: 20
