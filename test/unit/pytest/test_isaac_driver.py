@@ -487,6 +487,65 @@ class TestKitExtraArgs:
         assert sys.argv == ["prog"]
 
 
+class TestLauncherArgs:
+    """Exercise the launcher argument hook with a hosted AppLauncher."""
+
+    class _Driver(id_mod.IsaacDriver):
+        def _open_stage(self):
+            return object()
+
+        def _ensure_scene_defaults(self, stage):
+            pass
+
+        def _play_timeline(self):
+            pass
+
+    def _run_capturing_launcher_args(self, monkeypatch, driver):
+        seen = []
+        pkg, app_mod = TestLifecycleOrderSpy._fake_isaaclab_app([])
+
+        class _Launcher(app_mod.AppLauncher):
+            def __init__(self, args):
+                seen.append(args)
+                super().__init__(args)
+
+        app_mod.AppLauncher = _Launcher
+        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
+        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
+        monkeypatch.setattr(id_mod.signal, "signal", lambda *_args: None)
+
+        driver.run()
+        assert len(seen) == 1
+        return seen[0]
+
+    @pytest.mark.parametrize("value", [None, "0", "1", "2"])
+    def test_default_launcher_args_equals_parse_livestream_applauncher(
+        self, monkeypatch, value
+    ):
+        if value is None:
+            monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
+        else:
+            monkeypatch.setenv("ISAAC_LIVESTREAM", value)
+
+        assert id_mod.IsaacDriver()._launcher_args() == (
+            id_mod.parse_livestream_applauncher(value)
+        )
+
+    def test_run_passes_launcher_args_to_app_launcher(self, monkeypatch):
+        class _OverrideDriver(self._Driver):
+            def _launcher_args(self):
+                return {"sentinel": True}
+
+        args = self._run_capturing_launcher_args(monkeypatch, _OverrideDriver())
+        assert args == {"sentinel": True}
+
+    def test_run_default_uses_env_livestream(self, monkeypatch):
+        monkeypatch.setenv("ISAAC_LIVESTREAM", "1")
+        args = self._run_capturing_launcher_args(monkeypatch, self._Driver())
+        assert args == id_mod.parse_livestream_applauncher("1")
+
+
 class TestIoPlugin:
     """``ISAAC_IO_PLUGIN=module:function`` is imported and called once with
     ``(stage, robot_prim, config)`` after the stage is built and before the

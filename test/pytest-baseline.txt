@@ -327,8 +327,9 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-# isaac#447: +3 hosted (test_isaac_driver.py TestPlayTimelineSimLoop); 676 -> 679.
-HOSTED_UNIT_BASELINE = 679
+# isaac#447: TestPlayTimelineSimLoop adds 3 hosted cases and TestLauncherArgs adds 6
+#   (4 default livestream values, 1 override, 1 default run). 676 -> 685.
+HOSTED_UNIT_BASELINE = 685
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -349,8 +350,8 @@ HOSTED_UNIT_BASELINE = 679
 #   all core: 627 -> 633 (core 598).
 #   The workflow naming lint (isaac#443) adds test_workflow_naming.py (42) and 1 in
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
-#   isaac#447 adds 3 in test_isaac_driver.py (48 -> 51), all core: 641 -> 644.
-HOSTED_UNIT_BASELINE_CORE = 644
+#   isaac#447 adds 9 in test_isaac_driver.py (48 -> 57), all core: 641 -> 650.
+HOSTED_UNIT_BASELINE_CORE = 650
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 0
@@ -507,14 +508,13 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-# isaac#447: test_newton_drive_integration.py (3 tests x physx/newton = 6) -- ratchet UP 40 -> 46.
+# isaac#447: test_newton_drive_integration.py (4 tests x physx/newton = 8) -- ratchet UP 40 -> 48.
 #   NOT executed locally; first proof is the CI core-gpu job.
-GPU_INTEGRATION_BASELINE = 46
+GPU_INTEGRATION_BASELINE = 48
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
-#   126). Recorded for traceability; after the ingestion work + the owv#55
-#   cross-container compose-project isolation + the isaac#223 producer the
-#   live aggregate is 357 (326 hosted-unit + 31 GPU-integration), well past the
+#   126). Recorded for traceability; the isaac#447 floors sum to
+#   733 (685 hosted-unit + 48 GPU-integration), well past the
 #   PRD's 126 floor. The aggregate is asserted at M2 where the GPU runner
 #   runs (see assert_pytest_baseline.sh --gpu); a SKIPPED GPU job does not
 #   count toward it.

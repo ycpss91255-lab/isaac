@@ -6,6 +6,7 @@ OmniGraph ``IsaacArticulationController`` at a constant velocity and prints
 marker lines (Kit's ``app.close`` swallows the exit code)::
 
     [DRIVE ENGINE] active=<physx|newton>
+    [DRIVE SETTINGS] rate_limit_enabled=<bool> rate_limit_hz=<float> fixed_step=<bool> looping=<bool|None>
     [DRIVE WHEELS] left=<float> right=<float> delta_rad=<float>
     [DRIVE CLOCK] sim_hz=<float> wall_hz=<float> monotonic=<bool> span_s=<float> updates=<int>
 
@@ -115,6 +116,7 @@ def _main() -> None:
             )
 
         def main(self):
+            import carb.settings
             import omni.graph.core as og
             import omni.timeline
 
@@ -126,6 +128,17 @@ def _main() -> None:
             print(f"[DRIVE ENGINE] active={active}", flush=True)
 
             timeline = omni.timeline.get_timeline_interface()
+            settings = carb.settings.get_settings()
+            rate_limit_enabled = settings.get("/app/runLoops/main/rateLimitEnabled")
+            rate_limit_hz = settings.get("/app/runLoops/main/rateLimitFrequency")
+            fixed_step = settings.get("/app/player/useFixedTimeStepping")
+            is_looping = getattr(timeline, "is_looping", None)
+            looping = is_looping() if callable(is_looping) else None
+            print(
+                f"[DRIVE SETTINGS] rate_limit_enabled={rate_limit_enabled} "
+                f"rate_limit_hz={rate_limit_hz} fixed_step={fixed_step} looping={looping}",
+                flush=True)
+
             joints = og.Controller.attribute("/DriveGraph/read.outputs:jointNames")
             positions = og.Controller.attribute(
                 "/DriveGraph/read.outputs:jointPositions")

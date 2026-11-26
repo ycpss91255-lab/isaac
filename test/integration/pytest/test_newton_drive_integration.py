@@ -4,6 +4,8 @@ Boots ``IsaacDriver`` (Isaac Lab ``AppLauncher``) with the official Jetbot
 (``test/test_assets.py``), drives both wheels at a constant velocity and
 checks, per engine (PhysX is the control):
 
+* the live settings enable the 60 Hz rate limit and fixed time stepping,
+  and the timeline reports looping disabled;
 * the wheel joint positions advance past a threshold (Newton used to
   ignore every command: the AppLauncher experience leaves
   ``SimulationManager`` default callbacks off, so no physics sim view);
@@ -69,6 +71,20 @@ def test_engine_is_the_requested_one(run_output):
     m = re.search(r"\[DRIVE ENGINE\] active=(\w+)", out)
     assert m, out[-2000:]
     assert m.group(1).lower() == engine
+
+
+@requires_isaac
+def test_drive_settings(run_output):
+    _, out = run_output
+    m = re.search(
+        r"^\[DRIVE SETTINGS\] rate_limit_enabled=(\w+) rate_limit_hz=(\S+) "
+        r"fixed_step=(\w+) looping=(\w+)$", out, re.MULTILINE)
+    assert m, out[-2000:]
+    rate_limit_enabled, rate_limit_hz, fixed_step, looping = m.groups()
+    assert rate_limit_enabled == "True", m.group(0)
+    assert float(rate_limit_hz) == pytest.approx(RATE_HZ), m.group(0)
+    assert fixed_step == "True", m.group(0)
+    assert looping == "False", m.group(0)
 
 
 @requires_isaac
