@@ -119,12 +119,14 @@ check_plan() {
   check_plan devel --no-gpu
 }
 
-@test "uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory" {
+@test "uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory, kit/data and kit/cache" {
   # Replay the actual CPU probe against a fixture with the official image layout.
   # Only account lookups and paths specific to the image need substituting.
   export FIXTURE="${BATS_TEST_TMPDIR}/image"
   local ext="${FIXTURE}/isaac-sim/exts/isaacsim.asset.importer.mjcf"
-  mkdir -p "${ext}/data/mjcf" "${ext}.ui/data" "${FIXTURE}/home/uidcheck"
+  local kit="${FIXTURE}/isaac-sim/kit"
+  local -a probe_dirs=("${ext}/data" "${ext}/data/mjcf" "${ext}.ui/data" "${kit}/data" "${kit}/cache")
+  mkdir -p "${probe_dirs[@]}" "${FIXTURE}/home/uidcheck"
   echo 1234 > "${FIXTURE}/base-gid"
   cat > "${BATS_TEST_TMPDIR}/docker" <<'STUB'
 #!/usr/bin/env bash
@@ -157,7 +159,7 @@ STUB
   local pair dir trace
   for pair in 1000-1000 1234-1234 50000-50000 50000-1234; do
     trace="${FIXTURE}/trace-${pair}"
-    for dir in "${ext}/data" "${ext}/data/mjcf" "${ext}.ui/data"; do
+    for dir in "${probe_dirs[@]}"; do
       # Bash xtrace expands loop variables, so checks for HOME or a sibling
       # directory cannot satisfy the assertion for this write parent.
       awk -v dir="${dir}" '
@@ -169,10 +171,10 @@ STUB
             }
         } }
         END { exit !(writable && removed) }
-      ' "${trace}" || { echo "Missing MJCF write probe for ${pair} in ${dir}"; return 1; }
+      ' "${trace}" || { echo "Missing write probe for ${pair} in ${dir}"; return 1; }
     done
   done
-  [ -z "$(find "${ext}/data" "${ext}.ui/data" -type f -print -quit)" ]
+  [ -z "$(find "${probe_dirs[@]}" -type f -print -quit)" ]
 }
 
 @test "core-gpu: a failing GPU UID matrix fails the integration job" {
