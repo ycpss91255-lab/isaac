@@ -83,6 +83,8 @@ def test_dispatch_rejects_an_unknown_group(cg):
         "README.zh-TW.md",
         "doc/README.zh-TW.md",
         "doc/README.ja.md",
+        "doc/arch/overview.html",
+        "src/doc/adr/figure.png",
     ],
 )
 def test_docs_only_pr_touches_only_docs(cg, path):
