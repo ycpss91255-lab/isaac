@@ -59,14 +59,14 @@ This produces a built extension under `./exts/`. On Windows, use `./build.bat` i
 
 #### c. Mount the extension into the Isaac container
 
-`ycpss91255-lab/isaac` runs Isaac Sim 5.1 inside a container. The Stereolabs extension lives outside it, so we mount the built `exts/` directory in. Edit the docker compose / `.env` for the headless stage to add a bind:
+`ycpss91255-lab/isaac` runs Isaac Sim 5.1 inside a container. The Stereolabs extension lives outside it, so we mount the built `exts/` directory in. Edit the docker compose / `.env` for the stream stage to add a bind:
 
 ```
 host:  <your-clone-path>/zed-isaac-sim/exts
 in container:  /isaac-sim/extra_exts/zed
 ```
 
-Then restart the headless container:
+Then restart the stream container:
 
 ```bash
 cd isaac_ws/src/docker
@@ -115,8 +115,8 @@ After the four steps above, the dispatch in `script/camera_setup.py` should boot
 ```bash
 cd isaac_ws/src/docker
 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py \
-    --config /home/yunchien/work/src/config/camera/zed.yaml
+    /home/<user>/work/src/script/<your_driver>.py \
+    --config /home/<user>/work/src/config/camera/zed.yaml
 ```
 
 The driver log should show `camera graph created at /World/CameraGraphs/forklift_camera_zed`. Topics on a sibling ros:humble container should include `<topic_prefix>/left/image_rect_color`, `<topic_prefix>/depth/depth_registered`, etc.
