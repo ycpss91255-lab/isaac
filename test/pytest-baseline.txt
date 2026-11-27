@@ -286,7 +286,8 @@
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
 # isaac#430 (this PR) removes ROS settings and adds 5 core tests net of retirements: 647 -> 652.
-HOSTED_UNIT_BASELINE = 652
+# isaac#381: test_readme_cleanup_text.py adds 4 docs cases (652 -> 656, docs 20 -> 24).
+HOSTED_UNIT_BASELINE = 656
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -312,11 +313,12 @@ HOSTED_UNIT_BASELINE = 652
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#430 adds 5 core cases (core 602 -> 607).
+#   isaac#381 adds 4 docs cases (docs 20 -> 24).
 HOSTED_UNIT_BASELINE_CORE = 607
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 20
+HOSTED_UNIT_BASELINE_DOCS = 24
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
