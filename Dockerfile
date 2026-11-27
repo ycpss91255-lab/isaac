@@ -502,12 +502,17 @@ COPY script/ci/stream_smoke_lib.sh /smoke_test/stream_smoke_lib.sh
 # run.sh / docker -- behavioral, no docker, no GPU. The GPU path stays
 # host-side and runs only in the stream group's CI job (ci-stream-smoke.yaml).
 COPY --chmod=0755 script/ci/stream_smoke.sh /smoke_test/stream_smoke.sh
+# [isaac#461] The headless boot check, baked next to headless_smoke_spec.bats
+# so its running + RestartCount == 0 verdict is checked on every build against
+# stub run.sh / docker (no docker, no GPU).
+COPY --chmod=0755 script/ci/headless_smoke.sh /smoke_test/headless_smoke.sh
 # The self-hosted GPU job scripts the org reusable workflow runs
 # (gpu-self-hosted.yml), baked next to gpu_job_scripts_spec.bats so their
 # step order and env scoping are checked on every build against stubs --
 # no docker, no GPU.
 COPY --chmod=0755 script/ci/gpu_job_lib.sh script/ci/gpu_integration_job.sh \
-     script/ci/stream_smoke_job.sh /smoke_test/
+     script/ci/stream_smoke_job.sh script/ci/headless_smoke_job.sh \
+     /smoke_test/
 # [base #440] Scripts under test by the migrated specs: the livestream
 # wrapper + the post run/stop hooks. The hooks are named run.sh / stop.sh
 # inside their post dir, so they are baked under distinct flat names that

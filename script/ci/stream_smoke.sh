@@ -290,7 +290,9 @@ reap_stale_smoke_projects() {
 # container name, so address it by the resolved id, never a global name).
 smoke_alive() {
   [ -n "${cid}" ] || return 1
-  [ "$(docker inspect -f '{{.State.Running}}' "${cid}" 2>/dev/null)" = "true" ]
+  # RestartCount must stay 0: a restarting container is also Running between
+  # two restarts (isaac#461).
+  [ "$(docker inspect -f '{{.State.Running}} {{.RestartCount}}' "${cid}" 2>/dev/null)" = "true 0" ]
 }
 
 fail() {
