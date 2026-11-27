@@ -19,7 +19,7 @@
 #
 # We pin via a surgical sed of the PROJECT_NAME= line in .env.generated -- the
 # same post-apply sed the CI WS_PATH pin uses -- rather than `setup.sh apply`
-# with a .setup.conf.local override, because a second apply here would re-run
+# with a setup.local.toml override, because a second apply here would re-run
 # detection and clobber the CI WS_PATH pin the prior apply step wrote.
 #
 # This spec runs assert_pytest_baseline.sh --gpu against a STUB run.sh that

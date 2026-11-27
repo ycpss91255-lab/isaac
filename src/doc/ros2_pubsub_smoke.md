@@ -25,12 +25,12 @@
 - Docker daemon 跑得起來，`docker ps` OK
 - 沒有別的 process 占用 ROS_DOMAIN_ID=0（多人共用 server 時需要協調）
 
-確認 docker repo `setup.conf [environment]` 已含三 key（M1 已加，後續不需動）：
+確認 docker repo `setup.toml [environment]` 已含三 key（M1 已加，後續不需動）：
 
-```
-env_3 = ROS_DOMAIN_ID=0
-env_4 = RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-env_7 = FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml
+```toml
+env_3 = "ROS_DOMAIN_ID=0"
+env_4 = "RMW_IMPLEMENTATION=rmw_fastrtps_cpp"
+env_7 = "FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml"
 ```
 
 ---
