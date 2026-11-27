@@ -13,13 +13,11 @@
 # limitations under the License.
 
 """
-cmd_vel publisher node: the app-side driver of the example chassis.
+cmd_vel publisher node: velocity commands for a mobile robot.
 
 Publishes a geometry_msgs/Twist on /cmd_vel at a fixed rate. This is the
 outbound half of the ROS 2 bidirectional topology (ADR-0017 section 6):
-the Isaac driver subscribes to /cmd_vel through an OmniGraph Subscribe
-node and drives the camera_bot chassis, so commands published here move
-the robot in the sim.
+a mobile robot controller can subscribe to /cmd_vel in the Isaac scene.
 
 Replace make_twist / the timer body with your own control logic. The
 linear and angular velocities are launch parameters so you can change the
@@ -37,8 +35,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 
-# The topic the base-repo example subscribes to (example/sim/scene/
-# scene.yaml: ros2_io.subscriptions - topic /cmd_vel).
+# Conventional ROS 2 topic for velocity commands.
 DEFAULT_CMD_VEL_TOPIC = "/cmd_vel"
 
 
