@@ -128,5 +128,10 @@ def test_headless_runs_need_no_port_overrides(readme):
 
 def test_section_omits_personal_identifiers(readme):
     section = _section(readme)
-    forbidden = ("yunchien", "ycpss91255-docker", "/home/", "core.yulin", "test_1")
-    assert all(token not in section.casefold() for token in forbidden)
+    patterns = (
+        r"/(?:home|Users)/\w+",
+        r"[\w.+-]+@[\w-]+\.[\w.-]+",
+        r"\b\w+@[\w.-]+\b",
+    )
+    for pattern in patterns:
+        assert not re.search(pattern, section)
