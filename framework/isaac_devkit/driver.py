@@ -86,7 +86,7 @@ def parse_livestream_env(env_value: Optional[str]) -> Dict[str, Any]:
       WebRTC publisher.
     - ``"1"`` -> native streaming. Kit's legacy streaming protocol.
     - ``"2"`` -> WebRTC streaming, raytraced lighting. Pairs with the
-      ``headless-stream`` Docker stage and ADR-0007's custom Kit
+      ``stream`` Docker stage and ADR-0007's custom Kit
       experience (`isaacsim.exp.base.python.streaming.kit`).
 
     Raising on unknown values rather than silently defaulting catches

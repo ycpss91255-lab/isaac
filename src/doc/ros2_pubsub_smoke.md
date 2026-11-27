@@ -56,7 +56,7 @@ just docker run -t headless -d    # 背景啟 isaac kit + WebRTC 8211
 WebRTC client 內：
 
 1. 上方選單 **Window → Script Editor** 開 Script Editor
-2. **File → Open** 選 `/home/yunchien/work/src/script/ros2_test_pub.py`
+2. **File → Open** 選 `/home/<user>/work/src/script/ros2_test_pub.py`
 3. **Ctrl+Enter** 跑（或選單 **Run**）
 
 Script Editor 主控台應出現：
@@ -110,7 +110,7 @@ data: hello 60
 
 回 Script Editor：
 
-1. **File → Open** 選 `/home/yunchien/work/src/script/ros2_test_sub.py`
+1. **File → Open** 選 `/home/<user>/work/src/script/ros2_test_sub.py`
 2. **Ctrl+Enter**
 
 Script Editor 主控台會出現：

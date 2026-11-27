@@ -50,8 +50,6 @@
 #   robot entry) and adds 1 test for it (test_resolves_prefixed_model):
 #   38 -> 39. Live count is now 255 -- the enforced floor.
 #
-#   owv#55 added three hosted guards for compose project isolation (296 -> 299).
-#
 #   isaac#223 (GHCR stream-source producer image): adds 8 hosted unit tests
 #   (test/unit/pytest/test_stream_source_producer.py: the producer driver
 #   src/script/stream_source_producer.py imports without leaking
@@ -62,13 +60,13 @@
 #   Pure -- loads the driver by file path, no docker/GPU. Live count is now
 #   307 -- the enforced floor.
 #
-#   isaac#248 (6.0.1 camera-headless fix): the base IsaacDriver enables the
+#   isaac#248 (6.0.1 camera-headless fix): the base IsaacDriver enabled the
 #   ros2 bridge at BOOT (BOOT_EXTENSIONS) via a new pure helper
 #   boot_extension_kit_args, because runtime enable_extension under the
 #   Isaac Lab AppLauncher headless-rendering experience closes the app on
 #   6.0.1. test_isaac_driver.py adds 5 hosted tests
 #   (TestBootExtensionKitArgs: single / multi / empty / None argv shaping +
-#   the BOOT_EXTENSIONS default carries ros2.bridge); the lifecycle-order
+#   the then-default ROS bridge, removed in #276); the lifecycle-order
 #   spy is strengthened in place (no collected change) to assert run()
 #   restores sys.argv after the boot-arg injection. All pure (no Isaac
 #   import). Live count is now 312 -- the enforced floor.
@@ -141,7 +139,7 @@
 #   repo-relative OpenBase USD path, a wall-clock PeriodicTimer that does
 #   not burst after a stall, run_and_exit turning an exception into exit
 #   code 1) and, for each of the four README-listed standalone scripts, no
-#   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
+#   removed omni.isaac.dynamic_control, no hard-coded /home/<user>, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
 #   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
@@ -208,9 +206,6 @@
 #
 #   Default scene driver (isaac#336 part 3): adds 9 hosted tests
 #   (test_default_driver.py). Live count is now 455.
-#
-#   Cross-container round-trip on the Jetbot asset (isaac#325): adds 4 hosted
-#   asset migration checks (455 -> 459).
 #
 #   The build-scene adapter GPU test moving onto official assets (#325) adds 3
 #   (test_test_assets.py 9 -> 12: the pinned NVIDIA cube entry + a structural
@@ -288,9 +283,13 @@
 # isaac#453: merge queue wiring adds 2 workflow and 2 scope-selection cases (711 -> 715, core 618 -> 622).
 # isaac#405: +1 hosted core test for the Dependabot comment guard: 715 -> 716 (core 622 -> 623).
 # isaac#479: test_isaac_driver.py 48 -> 57 (SimulationApp launch, streaming-mode
-#   equivalence, 6 _play_timeline cases): 716 -> 725.
-# isaac#276 removes 35 net core cases (ROS I/O and host-leg guards): 725 -> 690.
-HOSTED_UNIT_BASELINE = 690
+#   equivalence, 6 _play_timeline cases); live 725.
+# isaac#363: test_model_readme_layout.py adds 11 docs cases (725 -> 736, docs 68 -> 79).
+# isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
+# isaac#487 brought main to 756 hosted cases. The merge retains its 14 name-scan
+#   and CI cases and one standalone smoke path check.
+# isaac#276 removes 36 net core cases from main: 756 -> 720.
+HOSTED_UNIT_BASELINE = 720
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -302,7 +301,8 @@ HOSTED_UNIT_BASELINE = 690
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py
-#   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py
+#   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py,
+#               test_readme_cleanup_text.py, test_model_readme_layout.py, test_stage_names_docs.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
 #   (9) and test_main_workflow_scope.py (15), all core: 565 -> 627 (core 592).
@@ -316,16 +316,21 @@ HOSTED_UNIT_BASELINE = 690
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
+#   isaac#414 adds 20 docs cases (docs 24 -> 44).
 #   isaac#338 adds 16 core cases (core 602 -> 618).
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#405 adds 1 core case (core 622 -> 623).
 #   isaac#479 adds 9 driver cases (core 623 -> 632).
-#   isaac#276 removes 35 net core cases (core 632 -> 597).
-HOSTED_UNIT_BASELINE_CORE = 597
+#   isaac#487 brought main to 648 core cases. Removing ROS I/O and its
+#   host-leg guards in isaac#276 lowers the merged core floor by 36.
+HOSTED_UNIT_BASELINE_CORE = 612
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 68
+#   isaac#289 adds 24 docs cases (docs 44 -> 68).
+#   isaac#363 adds 11 docs cases (docs 68 -> 79).
+#   isaac#86 adds 4 docs cases (docs 79 -> 83).
+HOSTED_UNIT_BASELINE_DOCS = 83
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
@@ -334,14 +339,14 @@ HOSTED_UNIT_BASELINE_DOCS = 68
 #   M2 with #132. The in-container suite exercises USD robot structure, camera
 #   prim creation and driver shutdown. The gate requires at least one pass.
 #
-#   Baseline history: #134 added three scaffold smoke tests. At #132 the two
-#   host round-trip tests and 24 in-container cases gave a combined floor of 26.
+#   Baseline history: #134 added three scaffold smoke tests. Before #276,
+#   the GPU floor also included a ROS host leg.
 #
 #   MR (#149, ADR-0018): bake Isaac Lab 2.3 as the spawn-backend base
 #   tool. Adds the Isaac Lab availability smoke
 #   (test_isaaclab_available.py: 1 in-container test -- AppLauncher
 #   headless boot, import isaaclab.sim, check spawner classes and package version). In-container GPU
-#   suite collects 25; aggregate GPU-integration = 25 + 2 (host xc) = 27.
+#   suite collected 25 at that point.
 #
 #   MR (#153, ADR-0018 decision 7): color is a spawn-time material cfg
 #   param, not a USD variant set. The variant-set GPU coverage
@@ -349,7 +354,7 @@ HOSTED_UNIT_BASELINE_DOCS = 68
 #   _apply_materials_runner.py helper) is REMOVED; spawn-time material
 #   application gets GPU coverage later in the spawn-adapter work
 #   (#152/#154). In-container GPU suite collects 25 - 2 = 23; aggregate
-#   GPU-integration = 23 + 2 (host xc) = 25. This is a -2 baseline drop;
+#   GPU-integration floor was then 25. This is a -2 baseline drop;
 #   it is intentional (the variant-set path no longer exists) and the
 #   removed coverage is reinstated at the spawn-adapter milestone -- an
 #   explicit exception to the ratchet, recorded here and in the PR body.
@@ -410,7 +415,8 @@ AGGREGATE_TARGET = 126
 #   are counted statically from the spec files (test_test_groups.py), so a
 #   spec deleted from one group cannot be hidden by another group's growth.
 #   stream = host_yaml, runheadless_host_config, post_run_hook, post_stop_hook,
-#   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
+#   stream_smoke_isolation, stream_smoke_lib. headless_smoke is headless;
+#   the remaining specs are core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag

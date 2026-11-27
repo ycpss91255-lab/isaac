@@ -1,6 +1,6 @@
 # TEST.md
 
-**218 tests** total (bats). Hosted pytest collects **690 tests**.
+**218 tests** total (bats). Hosted pytest collects **720 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,11 +8,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 115 | 597 | 31 | 743 |
+| core | 115 | 612 | 31 | 758 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 68 | 0 | 68 |
+| docs | 0 | 83 | 0 | 83 |
 
 The `**218 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
@@ -236,7 +236,7 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 
 ## test/bats/smoke/assert_pytest_baseline_isolation_spec.bats (2)
 
-Behavioral guard for `test/assert_pytest_baseline.sh --gpu` (owv#55 second axis; first axis was isaac#239). The `--gpu` tier runs the integration suite via a foreground `script/run.sh -t test` whose EXIT trap `_app_cleanup` does a project-wide `compose down --remove-orphans`; left at the default `yunchien-isaac` project that would reap a co-hosted manual stream stack. base v0.42.0 removed `--instance` (base#666); the tier now pins a distinct `PROJECT_NAME` in `.env.generated` (default `<derived>-baseline`, override `BASELINE_PROJECT`) before the `run.sh -t test` call. `assert_pytest_baseline.sh` is baked into `/smoke_test/` next to this spec so the devel-test bats suite can reach it. Hermetic — no docker, no GPU.
+Behavioral guard for `test/assert_pytest_baseline.sh --gpu` (owv#55 second axis; first axis was isaac#239). The `--gpu` tier runs the integration suite via a foreground `script/run.sh -t test` whose EXIT trap `_app_cleanup` does a project-wide `compose down --remove-orphans`; left at the default `<user>-isaac` project that would reap a co-hosted manual stream stack. base v0.42.0 removed `--instance` (base#666); the tier now pins a distinct `PROJECT_NAME` in `.env.generated` (default `<derived>-baseline`, override `BASELINE_PROJECT`) before the `run.sh -t test` call. `assert_pytest_baseline.sh` is baked into `/smoke_test/` next to this spec so the devel-test bats suite can reach it. Hermetic — no docker, no GPU.
 
 | Test | Description |
 |------|-------------|
@@ -375,12 +375,14 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **690 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **720 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
 | `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and sample references and no references to the unavailable `just run scene` recipe in all four READMEs (isaac#338). |
+| `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream` and the standalone livestream SOP and ZED installation guide for retired stage names, the `isaac-headless` container name and stale headless prose. Requires the SOP to include both `run -t stream -d` (start the idle container) and `exec -t stream /isaac-sim/runheadless.sh` (start Kit inside it). |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |
+| `test_check_forbidden_names.py` | 14 | `core`. Checks case-insensitive matches, redaction in filenames and matched lines, tracked-file scope, the skip reason when the secret is unavailable, Git errors, and the current checkout. Verifies that CI passes the secret to the standalone scan and hosted core tests, and checks the core runner’s image, skip gate, and per-test reporting (isaac#487). |
 | `test_import_safety.py` | 15 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
 | `test_no_module_top_isaac_import.py` | 16 | AST static guard: no module-top `import omni\|pxr\|isaacsim` in any package source (catches try/except-disguised module-top imports; mirrors the ruff TID253 config). |
 | `test_output_mode.py` | 12 | `isaac_devkit.output_mode.resolve_output_mode` (isaac#366, #514): unset -> `python`; only `python` passes through; `ros`, `ROS`, `Python`, empty, `both`, leading / trailing space raise `ValueError` naming the offending value, `ISAAC_OUTPUT_MODE` and the allowed set; unrelated variables ignored; defaults to `os.environ`; constants. |
@@ -415,7 +417,8 @@ The hosted suite collects **690 tests** on a host without Isaac Sim. CI runs `te
 | `test_adr_drop_isaac_lab.py` | 4 | ADR-0026 (isaac#476), `docs`. Checks the superseded ADR and repository names in the decision, the status in ADR-0018, URDF import ownership in ADR-0020, and the reference in ADR-0017's Isaac Lab amendment. |
 | `test_readme_multi_instance.py` | 24 | `docs`. Six checks per README across four languages (isaac#289) cover section placement, the ADR-0019 and multi_run#15 links, per-instance cache, memory and project guidance, headless ports, and the absence of personal identifiers. |
 | `test_no_ai_attribution.py` | 30 | PR commit checks (isaac#413, isaac#414). Clean commits, ordinary mentions, and human co-author names containing Claude pass. Model names and versions, anthropic.com co-author, author, or committer addresses, generation notices (including Markdown links), and session trailers flag the offending commit SHAs. Coverage includes indentation, mixed case, and versions written without a space (`Claude Sonnet4.5`, `Claude Opus4`, and `Claude-3`). With a stubbed git log, an empty range succeeds and an invalid range reports an error with exit code 2. Omitting both the range and `--stdin` is a usage error. |
-| `test_standalone_scripts.py` | 20 | The README-listed standalone drivers (`src/script/{ros2_test_pub,ros2_test_sub}_standalone.py`), from a README-only onboarding run on 6.2.0. Pins the pure helper `src/script/standalone_common.py`: `kit_config` follows `ISAAC_LIVESTREAM`, `PeriodicTimer` fires once per wall-clock period whatever the Kit update rate and does not burst after a stall, and `run_and_exit` turns an exception into exit code 1 and passes a return code through. The helper exposes no OpenBase path or stage setup functions, wheel names, or base-link constant (isaac#358). Each script has no `omni.isaac.dynamic_control` import (removed in 6.x), no hard-coded `/home/yunchien`, no module-top Isaac import or `SimulationApp(...)` (a module-top failure bypassed every handler and exited 0), and a `__main__` block that goes through `run_and_exit`. `ros2_test_pub` publishes on a `PeriodicTimer` instead of every 60 ticks (measured 3.5-7.5 Hz against a claimed ~1 Hz). The `move_openbase_planar` / `cmd_vel_planar` standalone scripts and their guards moved to `ycpss91255-lab/isaac_physics_test` (isaac#342). Two cases check that the camera and sensor shims expose the corresponding devkit setup functions. |
+| `test_model_readme_layout.py` | 11 | `docs`. Checks the five moved model paths, the removal of their old paths, the sim_asset README citation (isaac#363). |
+| `test_standalone_scripts.py` | 21 | The README-listed standalone drivers (`src/script/{ros2_test_pub,ros2_test_sub}_standalone.py`), from a README-only onboarding run on 6.2.0. Pins the pure helper `src/script/standalone_common.py`: `kit_config` follows `ISAAC_LIVESTREAM`, `PeriodicTimer` fires once per wall-clock period whatever the Kit update rate and does not burst after a stall, and `run_and_exit` turns an exception into exit code 1 and passes a return code through. The helper exposes no OpenBase path or stage setup functions, wheel names, or base-link constant (isaac#358). Each script has no `omni.isaac.dynamic_control` import (removed in 6.x), no hard-coded home directory, no module-top Isaac import or `SimulationApp(...)` (a module-top failure bypassed every handler and exited 0), and a `__main__` block that goes through `run_and_exit`. `ros2_test_pub` publishes on a `PeriodicTimer` instead of every 60 ticks (measured 3.5-7.5 Hz against a claimed ~1 Hz). The `move_openbase_planar` / `cmd_vel_planar` standalone scripts and their guards moved to `ycpss91255-lab/isaac_physics_test` (isaac#342). The smoke script is also checked for a hard-coded workspace. Two cases check that the camera and sensor shims expose the corresponding devkit setup functions. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |
 | `test_test_assets.py` | 12 | Official Isaac test-asset fetch helper (`test/test_assets.py`, #324). Pins the NVIDIA Jetbot USD URL on the Omniverse S3 bucket with a version segment and SHA-256 digest; cache-hit path returns without calling `_download`; cache-miss path calls `_download`; the return value is a `Path`; an empty cache with a simulated `ConnectionError` raises `RuntimeError` naming the asset; an unknown asset name raises `KeyError`. #325 adds the pinned `nvidia_cube` entry (URL on the same bucket/version, SHA-256) and a structural guard that `test_build_scene_adapter.py` / `_build_scene_runner.py` no longer reference `example_driver` / `example/sim` and use `fetch_test_asset`. Pure -- mocked HTTP, filesystem only. |
 | `test_headless_smoke_wiring.py` | 6 | Checks the headless smoke workflow, its CI scope and the scripts installed in the image. |
