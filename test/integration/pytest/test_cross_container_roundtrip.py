@@ -65,10 +65,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ISAAC_RUNNER = Path(__file__).parent / "_cross_container_runner.py"
 ROS2_WS = REPO_ROOT / "example" / "ros2"
 
-# Container-side mount point for the repo (the test service maps the
-# workspace to ~/work; this test mounts the repo there explicitly so the
-# runner's --repo-root resolves regardless of nested-worktree layout).
-CONTAINER_WORK = "/home/yunchien/work"
+# Container-side repo bind mount under the invoking user's home (same location
+# as before; used for the runner, --repo-root and cached assets).
+CONTAINER_WORK = f"/home/{os.environ.get('USER') or os.environ.get('LOGNAME') or 'user'}/work"
 
 PYTHON_SH = "/isaac-sim/python.sh"
 ROS_IMAGE = "ros:humble"
@@ -123,12 +122,12 @@ MAX_RETRIES = 1
 # (`docker compose -p <project> down`, run.sh's EXIT `_app_cleanup`, stop.sh's
 # `_compose_project down --remove-orphans`). If this coincided with the default
 # stream stack's project -- `${DOCKER_HUB_USER}-${IMAGE_NAME}` (e.g.
-# `yunchien-isaac`, from compose.yaml `name:`) -- a CI cross-container run (or
+# `alice-isaac`, from compose.yaml `name:`) -- a CI cross-container run (or
 # its cleanup) would remove EVERY container in that project, killing a
 # long-lived, manually-run `stream` container it never intended to touch
 # (ycpss91255-lab/omniverse_web_viewer#55). Deriving the default from
 # `.env.generated` (`${DOCKER_HUB_USER}-${IMAGE_NAME}`) would STILL resolve to
-# `yunchien-isaac` and re-introduce the collision -- only a distinct name
+# the stream project and re-introduce the collision -- only a distinct name
 # restores the isolation invariant. `XC_COMPOSE_PROJECT` stays an override seam
 # so CI can inject a per-run-unique project for concurrency isolation.
 COMPOSE_PROJECT = os.environ.get("XC_COMPOSE_PROJECT", "xc-isaac-roundtrip")
