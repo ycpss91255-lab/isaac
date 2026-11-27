@@ -1,6 +1,6 @@
 # TEST.md
 
-**222 tests** total (bats). Hosted pytest collects **764 tests**.
+**211 tests** total (bats). Hosted pytest collects **769 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 656 | 35 | 810 |
+| core | 108 | 661 | 35 | 804 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 83 | 0 | 83 |
 
-The `**222 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**211 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -168,13 +168,12 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `log_tail: prints the last N lines between markers` | Failure reporting emits a framed, bounded kit log tail. |
 | `log_tail: missing log -> rc 0 and says so (teardown stays safe)` | The failure reporter never itself fails, so teardown still runs. |
 
-## test/bats/smoke/docker_env.bats (5)
+## test/bats/smoke/docker_env.bats (4)
 
 | Test | Description |
 |------|-------------|
 | `entrypoint.sh is installed and executable` | Entrypoint check |
 | `bash is available on PATH` | Shell sanity |
-| `fastdds.xml is baked at /isaac-sim/fastdds.xml and world-readable` | Fast DDS profile (UDPv4-only) shipped by this repo's Dockerfile, content sanity-checked for `useBuiltinTransports=false` |
 | `custom streaming kit experience baked at /isaac-sim/apps/ (issue #21 fix-B)` | The repo's custom streaming `.kit` experience file is baked into `/isaac-sim/apps/` so the stream stage launches it |
 | `devel stage drops the NGC Kit healthcheck (idle containers are not 'unhealthy')` | The NGC base image's HEALTHCHECK greps a Kit log for `App is loaded`. devel / headless / stream / test idle with no Kit by design, so the devel stage (inherited by the others) resets it with `HEALTHCHECK NONE`. |
 
@@ -187,26 +186,11 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `runtime user is host-aligned (not root, not isaac-sim default)` | Container user is the host-UID-aligned `USER_NAME`, not the image default `isaac-sim` (UID 1234) |
 | `runtime user is in isaac-sim group (can read /isaac-sim/* mode 0750)` | Group membership unlocks read/exec on Isaac Sim binaries |
 | `HOME is writable` | `${HOME}` is owned by the runtime user — required for cache / logs / Documents writes |
-| `bundled ROS 2 humble + jazzy libs are both readable` | `librmw_fastrtps_cpp.so` present under both `humble/lib/` and `jazzy/lib/` — image carries both distros; the headless / stream shim picks one via `ARG ROS_DISTRO` |
+| `bundled ROS 2 humble + jazzy libs are both readable` | `librmw_fastrtps_cpp.so` present under both `humble/lib/` and `jazzy/lib/` in the official base image |
 | `bundled ROS 2 humble + jazzy rclpy are both readable (Python 3.12)` | `rclpy/` Python bindings present under both distros; kit-side `import rclpy` resolves to whichever the bridge extension activates |
 | `Isaac Lab targets the Isaac Sim release the image bundles` | Isaac Lab's `[tool.isaaclab.versions] isaacsim` (root `pyproject.toml`) names the same `X.Y.Z` as `/isaac-sim/VERSION` -- bumping `BASE_IMAGE` without `ISAACLAB_VERSION` (or the reverse) fails at build time, not at first Kit boot (isaac#295) |
 | `Isaac python torch is Isaac Lab's pinned CUDA 13 build` | The torch distribution on the Isaac python is exactly Isaac Lab's pinned version with `+cu130` (sm_120 kernels for the RTX 5090 runner); any other build means a later pip step overrode Isaac Lab's install (isaac#295) |
 | `no pip_prebundle package lost its __init__.py (isaac#288)` | No dangling `__init__.py` symlink under any `pip_prebundle` -- the 6.0.1 build left `packaging` dangling under `omni.services.pip_archive`, breaking matplotlib plots and the Newton experience |
-
-## test/bats/smoke/isaac_ros_env_wrapper.bats (10)
-
-| Test | Description |
-|------|-------------|
-| `wrapper exists and is executable` | `/usr/local/bin/isaac-ros-env-wrapper.sh` 0755 |
-| `/etc/isaac/ros-distro is baked with humble (default ARG)` | Const file written from `ARG ROS_DISTRO` at build time |
-| `wrapper exports ROS_DISTRO from /etc/isaac/ros-distro` | Wrapper reads file and exports |
-| `wrapper exports LD_LIBRARY_PATH derived from ROS_DISTRO` | Wrapper exports `/isaac-sim/exts/isaacsim.ros2.bridge/${ROS_DISTRO}/lib` |
-| `wrapper hard-overrides runtime ROS_DISTRO env` | `ROS_DISTRO=jazzy ./wrapper bash -c 'echo ROS_DISTRO'` still prints `humble` — runtime `-e` ineffective on headless / stream |
-| `wrapper passes args verbatim to wrapped command` | `./wrapper echo arg1 arg2 arg3` → `arg1 arg2 arg3` |
-| `wrapper appends publicEndpointAddress when PUBLIC_IP is set` | With `PUBLIC_IP` exported, the wrapper adds `--/app/livestream/publicEndpointAddress=<ip>` to the Kit args |
-| `wrapper does not append publicEndpointAddress when PUBLIC_IP is empty` | With no `PUBLIC_IP`, the wrapper omits the public-endpoint arg (localhost-only WebRTC) |
-| `devel stage ENV ROS_DISTRO is baked (soft)` | Devel interactive shell sees `ROS_DISTRO=humble` from Dockerfile `ENV` |
-| `devel stage ENV LD_LIBRARY_PATH points to baked humble lib` | Same — `ENV LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.bridge/${ROS_DISTRO}/lib` interpolated at build time |
 
 ## test/bats/smoke/init_isaac_dirs_spec.bats (13)
 
@@ -386,7 +370,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **764 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **769 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -415,6 +399,7 @@ The hosted suite collects **764 tests** on a host without Isaac Sim. CI runs `te
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |
 | `test_ros_io.py` | 23 | Greenfield `isaac_devkit.ros_io` pure surface: `parse_ros2_io_config`, `expected_attr_paths`, `_build_graph_topology`, `RosIo.latest` non-blocking fresh-once bookkeeping against an injected reader. |
 | `test_example_driver.py` | 14 | `example/sim/example_driver.py` pure surface (#131): three-file scene merge (`load_three_file_scene`), expected robot/`base_link` prim-path strings, `cmd_vel_to_planar_velocity` controller mapping, `SCENE` attr shape, the `run()` SCENE-driven lifecycle-order spy + injected-SIGINT shutdown, and example import-safety. |
+| `test_dockerfile_no_ros.py` | 5 | Checks the Dockerfile, scripts, and config for ROS references, verifies removal of the obsolete files and Dockerfile instructions, and checks the cross-container test's Fast DDS fixture path, and that `setup.toml` carries no ROS build argument or environment entry. |
 | `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "auto"` (stream / headless / devel-test stay `off`). No docker/GPU. |
 | `test_test_groups.py` | 25 | Test-group contract (isaac#434), `core`: every pytest module has exactly one `pytestmark` group (static AST check over `test/unit/pytest` and `test/integration/pytest`, with unmarked / two-group / unknown-group / function-level-marker detector self-tests on temp trees); every bats spec has exactly one `# bats file_tags=<group>` (non-group tags allowed, `test_tags` may not name a group) plus per-group bats counts; the collection-time plugin `test/group_markers.py` aborts a subprocess pytest run for an ungrouped or two-group test, accepts a grouped one, and `-m <other group>` collects nothing without an unknown-marker warning; the plugin and `script/ci/scope_groups.py` agree on the five groups; `test/pytest-baseline.txt` has a floor per group that sums to the total, the bats counts meet the `BATS_BASELINE_*` floors, and the 'Tests by group' table above matches the specs and the baseline. |
 | `test_changed_groups.py` | 49 | `core`. Scope selection for CI (isaac#434), `script/ci/changed_groups.py`: push / dispatch / tag run every group; a PR runs the groups its paths belong to plus `docs`; docs-only paths touch only `docs`; a shared layer (Dockerfile, compose, `setup.toml`, config, `.base`, `main.yaml`, the CI scripts and baseline) runs all five; a test file follows the group it declares (not a path pattern); `ci-<group>-*` workflow files follow the group in their name; an unknown or deleted path is `core`, never nothing; dispatch group list validated; outputs (`build`, `stages`, `bats_skip`) per scenario; the CLI prints `$GITHUB_OUTPUT` lines and reads the PR diff with `git diff --name-only base...head` (stub `git`). Each stream smoke input must select `stream` on its own, with the shared entrypoint and pre-hooks selecting all five groups (isaac#459). A merge group selects all five groups and the CLI enables every flag without PR SHAs (isaac#453). |
