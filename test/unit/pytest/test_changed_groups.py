@@ -162,6 +162,10 @@ def test_unknown_path_is_core_never_nothing(cg):
     assert _pr(cg, "some/new/dir/file.txt") == ["core", "docs"]
 
 
+def test_apps_directory_files_fall_back_to_core(cg):
+    assert cg.classify("apps/x.kit") == {"core"}
+
+
 @pytest.mark.parametrize(
     "path",
     [

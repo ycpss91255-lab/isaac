@@ -28,8 +28,10 @@ is the import / CLI surface, which these tests pin:
 """
 
 import importlib.util
+import json
 import re
 import runpy
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -206,9 +208,17 @@ def test_repo_has_no_custom_apps_directory():
 
 def test_dockerfile_does_not_copy_custom_kits():
     dockerfile = (_REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
-    assert not re.search(
-        r"^\s*COPY\b[^\n]*\bapps/\*\.kit\b", dockerfile.replace("\\\n", ""), re.I | re.M
-    )
+    for line in dockerfile.replace("\\\n", "").splitlines():
+        instruction = re.match(r"\s*(?:COPY|ADD)\s+(?:--\S+\s+)*", line, re.I)
+        if not instruction:
+            continue
+        operands = line[instruction.end():]
+        if re.match(r'\[\s*"', operands):
+            paths = json.loads(operands)
+        else:
+            paths = shlex.split(operands)
+        for source in paths[:-1]:
+            assert source != "apps" and not source.startswith("apps/"), line
 
 
 # ---------------------------------------------------------------------------
