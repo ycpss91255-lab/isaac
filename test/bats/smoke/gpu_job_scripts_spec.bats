@@ -43,6 +43,10 @@ setup() {
 
   export CALLS="${FAKE}/calls.log"
   export GITHUB_WORKSPACE="${FAKE}"
+  export HOME="${BATS_TEST_TMPDIR}/home"
+  export ISAAC_CI_CACHE_ROOT="${BATS_TEST_TMPDIR}/runner-cache"
+  mkdir -p "${HOME}"
+  unset ISAAC_CI_CACHE_KEY
   export GITHUB_RUN_ID=1234
   export GITHUB_RUN_ATTEMPT=2
   unset ISAAC_ALLOW_SHARED_IDENTITY BASELINE_PROJECT GPU_ROS_DOMAIN_ID \
@@ -179,6 +183,73 @@ PY
   run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
   grep -qx "setup apply" "${CALLS}"
+}
+
+@test "gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag" {
+  echo 'ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:9.9.9"' > "${FAKE}/Dockerfile"
+  local sim="${FAKE}/isaac-sim" cache="${ISAAC_CI_CACHE_ROOT}/9.9.9"
+  mkdir -p "${sim}/kit/cache" "${sim}/nvidia/computecache"
+  touch "${sim}/kit/cache/old" "${sim}/nvidia/computecache/old"
+
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  [ -L "${sim}/kit/cache" ]
+  [ -L "${sim}/nvidia/computecache" ]
+  [ "${sim}/kit/cache" -ef "${cache}/kit-cache" ]
+  [ "${sim}/nvidia/computecache" -ef "${cache}/computecache" ]
+  [ ! -e "${sim}/kit/cache/old" ]
+  [ ! -e "${sim}/nvidia/computecache/old" ]
+}
+
+@test "gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag" {
+  echo 'ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:9.9.9"' > "${FAKE}/Dockerfile"
+  export ISAAC_CI_CACHE_KEY="Runner_2.test-cache"
+  local cache="${ISAAC_CI_CACHE_ROOT}/${ISAAC_CI_CACHE_KEY}"
+
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  [ "${FAKE}/isaac-sim/kit/cache" -ef "${cache}/kit-cache" ]
+  [ "${FAKE}/isaac-sim/nvidia/computecache" -ef "${cache}/computecache" ]
+}
+
+@test "gpu integration job: both caches survive workspace cleanup between runs" {
+  unset ISAAC_CI_CACHE_ROOT
+  local sim="${FAKE}/isaac-sim" cache="${HOME}/isaac-ci-cache/default"
+
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  [ -d "${cache}/kit-cache" ]
+  [ -d "${cache}/computecache" ]
+  echo shader > "${cache}/kit-cache/marker"
+  echo compute > "${cache}/computecache/marker"
+  touch "${sim}/kit/data/previous-run"
+  rm -rf "${sim}"
+
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  grep -qx shader "${sim}/kit/cache/marker"
+  grep -qx compute "${sim}/nvidia/computecache/marker"
+  [ -d "${sim}/kit/data" ]
+  [ ! -L "${sim}/kit/data" ]
+  [ ! -e "${sim}/kit/data/previous-run" ]
+}
+
+@test "gpu integration job: baseline sees writable mounts and state dirs stay in the workspace" {
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  grep -qx 'caches=writable' "${CALLS}"
+
+  local state target
+  for state in kit/data kit/logs ov/cache ov/data ov/logs pip nvidia/glcache documents; do
+    local path="${FAKE}/isaac-sim/${state}"
+    [ -d "${path}" ]
+    [ ! -L "${path}" ]
+  done
+  for target in kit-cache computecache; do
+    local path="${ISAAC_CI_CACHE_ROOT}/default/${target}"
+    [ -d "${path}" ]
+    [[ "$(stat -c '%a' "${path}")" == *777 ]]
+  done
 }
 
 @test "gpu integration job: a failed build fails the job before the GPU suite" {

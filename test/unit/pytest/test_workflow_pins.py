@@ -132,6 +132,7 @@ def test_reap_filter_matches_script_baseline_project(tmp_path):
         "GITHUB_RUN_ID": "111",
         "GITHUB_RUN_ATTEMPT": "2",
         "OBSERVED": str(observed),
+        "ISAAC_CI_CACHE_ROOT": str(tmp_path / "ci-cache"),
     }
     subprocess.run(
         ["bash", str(tmp_path / "script" / "ci" / "gpu_integration_job.sh")],

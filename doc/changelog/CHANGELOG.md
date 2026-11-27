@@ -2,12 +2,16 @@
 
 ## [Unreleased]
 
+### Changed
+- **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 119 -> 123（併入 main 後重算）。
+
 ### Removed
 
 - **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
 
 ### Fixed
 - 官方 `startuptests` 會在容器結束前，將 `$HOME/.nvidia-omniverse/logs/` 下各個 Kit app 的記錄複製到 `artifacts/startuptests/kit-logs/`。即使 `run_tests.py` 回傳 0，只要 JUnit 報告的 `failures` 或 `errors` 大於 0，或報告無法解析，`core-gpu` 就會失敗。`docker run` 回傳非零時沿用原結束碼。成功或失敗都會保留報告與 Kit log（isaac#436）。
+- **修正 Isaac Sim 更新 PR 內文首行顯示的舊版號（isaac#533）。** 首行使用測試清單實際比較的舊版號：指定 `--current-version` 時使用該值，否則使用 Dockerfile 的 `BASE_IMAGE` 版號。
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。
 - **OutputHub GPU 測試實機驗證（isaac#384）。** `test_output_hub_gpu.py` 在 GPU 容器實跑 4 passed / 0 skipped（RGB uint8、depth float32、joint、IMU 四個 callback 皆觸發），確認 `IMU.create(...)` 與 IMU reader 在 runtime 可用；`GPU_INTEGRATION_BASELINE` 與實際 collected 數量相符，不需調高。僅更新 `TEST.md` 與 baseline 註解。
 - **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
@@ -23,7 +27,7 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 874 -> 877（core 733 -> 736），bats core 115 -> 120（gpu_job_scripts_spec 7 -> 12）。
+- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 876 -> 879（core 735 -> 738），bats core 119 -> 124（gpu_job_scripts_spec 11 -> 16）。
 - **GUI stage 設定與 PR 人工驗證規則（isaac#428）。** `setup.toml` 明確關閉 `producer` stage 的 GUI。在 `["stage:producer"]` 新增 `"gui.mode" = "off"` 後，產生的 `compose.yaml` 將 `producer` 從 `extends: {service: devel}` 改為完整列出 `args`、`env_file`、`privileged`、`cap_add`、`volumes`、`devices` 與 GPU `deploy` 設定，僅 `target`、`image`、`profiles`、`restart`、`tty` 與 `devel` 不同，其餘設定等價，功能不變，`headless` 與 `stream` 區塊不變，`gui` 則新增 `DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`、`group_add` 與 `/tmp/.X11-unix` 掛載。PR 範本新增截圖勾選項，`CONTRIBUTING.md` 說明合併前的人工驗證規則、機器標示與 Xvfb 實測結果。靜態測試核對各 service 的 GUI 宣告及兩份文件。Bats core 從 108 增至 115。
 - **每週追蹤官方 Isaac Sim 穩定版與測試清單（isaac#442）。** `Bot: Isaac Sim Version` 匿名查詢 NGC，發現新版時，若已有分支名稱或 issue 標題與 bot 在該版本使用的名稱完全相符，就略過更新。自動 PR 僅更新 Dockerfile 的 `BASE_IMAGE` pin，`README.md` 與 Dockerfile 註解中的版本號需人工同步。PR 列出測試清單差異，有變更時另開 issue；若無法取得清單，仍送出版本更新。也可手動指定比較版本。若 override 等於最新版而 Dockerfile 的 pin 較舊，追蹤器不會寫入任何變更，留待未指定 override 的排程更新 pin。版本比對只收三到四段、主版本不超過三位數的 tag，排除年份式舊命名（如 2022.2.1）。建立 PR 後以 workflow_dispatch 啟動 `main.yaml`（`GITHUB_TOKEN` 建立的 PR 不會觸發 pull_request）；`dry_run` 輸入可在 Dockerfile 已是最新版時預覽。前提：儲存庫需開啟「Allow GitHub Actions to create and approve pull requests」。新增 65 個測試（追蹤器、離線 run() 與 layer 解析、workflow）。Hosted baseline 809 -> 874（core 668 -> 733）。
 - **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 769 增至 803（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 90 增至 91。

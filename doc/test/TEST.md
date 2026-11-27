@@ -1,6 +1,6 @@
 # TEST.md
 
-**224 tests** total (bats). Hosted pytest collects **877 tests**.
+**228 tests** total (bats). Hosted pytest collects **879 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 120 | 736 | 35 | 891 |
+| core | 124 | 738 | 35 | 897 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 52 | 0 | 143 |
 | headless | 13 | 6 | 0 | 19 |
@@ -264,7 +264,7 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `guard: no .env.generated yet -> nothing to check, passes` | No resolved identity means nothing to refuse. |
 | `pre hooks: build/run/stop refuse a shared checkout and pass an isolated one` | The real baked hooks exit non-zero on the shared identity and zero on an isolated one. |
 
-## test/bats/smoke/gpu_job_scripts_spec.bats (12)
+## test/bats/smoke/gpu_job_scripts_spec.bats (16)
 
 Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. The Docker stub executes the mounted startup script with a temporary home directory. Its fixture `run_tests.py` writes JUnit to `/tmp/r.xml` and a Kit log under `$HOME/.nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)/6.2/`. The spec runs without Docker or a GPU.
 
@@ -282,6 +282,10 @@ Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration
 | `gpu_job_cache_dirs makes the workspace world-writable (rootless Docker)` | Creates a restricted-permission file and directory, runs the integration job, and asserts both are widened to include other-read-write (and execute for directories) by the `chmod -R a+rwX` at the end of `gpu_job_cache_dirs`. On a rootless Docker daemon the container's non-root user maps to a host subuid, so the mounted workspace must be world-writable. |
 | `stream smoke job: a failed smoke fails the job and prints the full kit log` | A failing smoke exits with its status and prints the kit log. |
 | `stream smoke job: a failed smoke with no kit log still fails with the smoke's status` | A failing smoke with no log file still exits with the smoke's exit code. |
+| `gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag` | `isaac-sim/kit/cache` and `isaac-sim/nvidia/computecache` become symlinks into `<ISAAC_CI_CACHE_ROOT>/<BASE_IMAGE tag>/{kit-cache,computecache}`, outside the workspace; old workspace contents are dropped (isaac#260). |
+| `gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag` | An explicit `ISAAC_CI_CACHE_KEY` selects the persistent cache directory instead of the Dockerfile tag. |
+| `gpu integration job: both caches survive workspace cleanup between runs` | Files in the persistent cache dirs remain after the workspace `isaac-sim/` is wiped and the job runs again. |
+| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | Mounts are writable when the baseline stub runs; state dirs (`kit/data`, `ov/*`, ...) stay real workspace dirs, not links, so state starts cold. |
 
 ## test/bats/smoke/cleanup_merged_worktree_spec.bats (14)
 
@@ -397,7 +401,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **877 tests** on a host without Isaac Sim. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **879 tests** on a host without Isaac Sim. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -441,7 +445,7 @@ The hosted suite collects **877 tests** on a host without Isaac Sim. isaac#491 a
 | `test_track_isaac_sim.py` | 24 | `core`. Official Isaac Sim stable tag filtering, version ordering, suite and script changes, Traditional Chinese PR text, deduplication and the Dockerfile pin (isaac#442). |
 | `test_bot_isaac_sim_version_workflow.py` | 13 | `core`. Weekly and manual triggers, optional version override, tracker invocation, gate independence, scoped permissions and built-in token (isaac#442). |
 | `test_track_isaac_sim_inventory.py` | 10 | `core`. Offline tar-layer fixtures for `read_layer`, `image_layers`, `image_inventory` and `inventory_diff`: whiteout, opaque whiteout, oversized metadata, index manifests and history mismatch (isaac#442). |
-| `test_track_isaac_sim_run.py` | 18 | `core`. Offline `run()` flow with faked registry, git and gh: same version opens nothing, new version opens a PR and an inventory issue, an existing branch, PR or issue opens nothing, `--dry-run` writes nothing, and main.yaml is dispatched after the PR is created (isaac#442). |
+| `test_track_isaac_sim_run.py` | 20 | `core`. Offline `run()` flow with faked registry, git and gh: same version opens nothing, new version opens a PR and an inventory issue, an existing branch, PR or issue opens nothing, `--dry-run` writes nothing, and main.yaml is dispatched after the PR is created (isaac#442). |
 | `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only the upstream release trackers `base-version-monitor.yaml` and `bot-isaac-sim-version.yaml` may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
 | `test_workflow_pins.py` | 4 | Parses every `.github/workflows/*.y*ml` and asserts each job calling the org `gpu-self-hosted.yml` reusable is pinned to exactly `@v0.4.0` (isaac#402), and that the discovered caller set is exactly main.yaml, ci-stream-smoke.yaml, publish-stream-source.yaml (no vacuous pass). No docker/GPU. |
 | `test_readme_cleanup_text.py` | 4 | `docs`. One case per README language (isaac#381) checks the inline force-removal warning, the compose project label lookup, the nominal per-tag size and when shared layers can be reclaimed. |
