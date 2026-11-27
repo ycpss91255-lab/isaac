@@ -35,3 +35,5 @@ def to_u8_buffer(arr) -> array.array:
     out = array.array("B")
     out.frombytes(view.cast("B"))
     return out
+
+# ci scope probe
