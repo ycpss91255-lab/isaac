@@ -50,19 +50,8 @@ just docker build         # 第一次 / 改 Dockerfile 後跑
 ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openbase/openbase.usda
 ```
 
-不存在的話 (從 `openbase_minimal.urdf` 走 import_urdf.py 規 SW → URDF → openUSD pipeline)：
+若缺少模型，請將 [asset_converter](https://github.com/ycpss91255-lab/asset_converter) 產出的 OpenBase USD 放在上述路徑。
 
-```bash
-just docker run -t standalone -d
-just docker exec -t standalone /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/import_urdf.py \
-    --no-fix-base \
-    /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
-    /home/yunchien/work/src/model/usd/robot/openbase/openbase.usda
-just docker stop
-```
-
-> URDF 改 → 重跑此步覆寫 openbase.usda。**會 wipe** 任何手工加在 USD 內的 prim（lights / GroundPlane / Action Graph 等）— 不需要擔心，因為 isaac_physics_test 的 `cmd_vel_planar_move.py` setup phase 會自己 re-create lights / GroundPlane / gravity disable / debug cube。
 
 ### 3. fastdds.xml 設定檔存在
 
@@ -207,7 +196,7 @@ just docker stop
 
 ## 重做時機
 
-- **URDF 改動**（B-Phase 加 RGB-D camera mount link、IMU mount 等）→ 重跑 import_urdf.py 覆寫 openbase.usda。script 內 setup phase 會自動 re-create 環境，**不需要動 script**
+- **模型改動**：更新 `openbase.usda`；script 在 setup 時會重新建立環境。
 - **Isaac Sim 升 6.0 GA** → 遷移到 OnImpulseEvent OmniGraph 純腳本路徑（NVIDIA 6.0 standalone tutorial），整個 Step 3 / Step 4 GUI 操作消失，本 MD **可廢棄**
 
 ---
@@ -215,9 +204,7 @@ just docker stop
 ## 已知缺陷
 
 1. **每次 kit launch 需手動 Script Editor 載 + Ctrl+Enter**（無法 auto-load via kit CLI flag，沒找到對應的 startup args）— 6.0 GA 才能解
-2. **mesh import**：`openbase_minimal.urdf` 透過 import_urdf.py 產出後 base_link 是空 Xform 沒 visual mesh，只能靠 debug cube 視覺化。要改進需要：
-   - 走 OpenBase 完整 `openbase.urdf` 32-link 版本（但 dc velocity 在 articulation 內可能再撞到問題）
-   - 或修 `import_urdf.py` 的 mesh path 解析（`package://open_base/mesh/base.stl` 為何沒被 import 進 base_link）
+2. 若 USD 的 `base_link` 沒有 visual mesh，畫面上只會看見 debug cube。
 3. **WebRTC port 不固定**：早期文件寫 8211，實機是 8011；任何 port 衝突要查 kit log 內 `0.0.0.0:NNNN` listening 字樣
 4. **無 follow camera**：base 跑遠了要手動按 F focus；可加 follow camera tick callback 修
 

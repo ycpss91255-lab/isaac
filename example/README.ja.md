@@ -5,7 +5,7 @@
 渡されるのはこれです。ゼロから live な camera topic まで到達し、さらに自分の
 ロボットへ差し替えるまでを、**framework のソースを読まずに**行えます。
 
-- [`sim/`](sim/) -- Isaac 側：`camera_bot` URDF、3 ファイル scene、
+- [`sim/`](sim/) -- Isaac 側：`camera_bot` USD、3 ファイル scene、
   per-sensor の `custom.yaml`、`example_driver.py`（camera stream を発行し、
   `/cmd_vel` でシャシを駆動）。
 - [`ros2/`](ros2/) -- アプリ側：camera を購読し `/cmd_vel` を発行する最小限の
@@ -38,19 +38,12 @@ docker run --rm --net=host ros:humble bash -c '
 
 最初の frame が M1「time-to-first-topic」マイルストーンです。
 
-### 2. URDF の差し替え（自分のロボットへ）
+### 2. 自分のロボットの USD に差し替える
 
-ロボットモデルは [`sim/model/camera_bot.urdf`](sim/model/camera_bot.urdf)
-です（2 つの link：`base_link` シャシ + `camera_link` マウント点）。別の
-最小ロボットに差し替えるには：
+サンプルは [camera_bot.usd](sim/model/usd/robot/camera_bot/camera_bot.usd) を読み込みます。別のモデルを使う手順は次のとおりです。
 
-1. 自分の URDF を `sim/model/<your_robot>.urdf` に置きます。`base_link`
-   （`/cmd_vel` で動く本体）と camera をマウントする link を残します。
-2. 一度だけ USD に再 import します（importer は独自の SimulationApp で動く
-   ため出力 USD は commit します）：`just import-model sim/model/<your_robot>.urdf`。
-3. [`sim/scene/robot.yaml`](sim/scene/robot.yaml) を新しいモデルへ向けます：
-   `source_urdf` と `model` を自分のファイルに、`robot.name` を自分の
-   ロボット名に設定します。
+1. [asset_converter](https://github.com/ycpss91255-lab/asset_converter) で USD を生成し、参照先のアセットと一緒に `sim/model/usd/robot/` に配置します。
+2. [sim/scene/robot.yaml](sim/scene/robot.yaml) の `robot.model` に `sim/` からの相対 USD パスを指定し、`robot.name` を設定します。サンプルの driver はシャシに `base_link` を使います。カメラの `link` にはロボット上の取り付け先を指定します。
 
 再度 `just run` —— あなたのロボットが起動し、camera topic は引き続き発行
 されます。
