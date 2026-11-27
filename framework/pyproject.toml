@@ -2,7 +2,7 @@
 #
 # Install model is MOUNT, not pip install (ADR-0017 section 2): the
 # workspace mount delivers framework/ into the container and PYTHONPATH
-# (wired in config/docker/setup.conf [environment]) makes
+# (wired in setup.toml [environment]) makes
 # `import isaac_devkit` resolve. This file is never used to bake the
 # package into an image; it exists for metadata, version, and as the
 # single home for ruff / coverage configuration.
