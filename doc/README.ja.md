@@ -130,6 +130,26 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 - 1 つの image はまだ共有される：毎回の build で lint/bats 用ツール image `test-tools:<base バージョン>`（現在は `test-tools:v0.42.0`）も build され、その名前は pin した base バージョンだけで決まる。同じ base バージョンを pin する host 上のすべての checkout と repo が同じ tag を書き込むため、別の checkout が build 中かもしれないときは削除しないこと。`just docker build --clean-tools` は全員の分をまとめて削除する。これは base の `build.sh` に由来し、上流では [base#1551](https://github.com/ycpss91255-lab/base/issues/1551) で追跡している。
 - isolate 前に起動した container は共有 project に残る。`docker compose -p <hub>-isaac ps -a` で一覧し、自分のものを名前で停止する。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` は共有 project 全体（別の checkout の container を含む）を停止する。
 
+### 複数 instance の並列実行
+
+この repo は checkout ごとに 1 つの instance を起動する設計を採用し、同じ checkout で複数の instance を管理する独自の仕組みを削除した（[ADR-0019](../src/doc/adr/0019-remove-same-repo-multi-instance.md)）。N 個の instance を実行するには、multi_run からこの repo の `compose.yaml` を使って N 回起動する。設計の詳細は [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15) を参照。
+
+- `-p <name>` で instance ごとに異なる compose project 名を指定する。これで `just docker stop` が停止するのは対象の instance だけになり、起動時に前回の instance を誤って引き継ぐことも防げる。
+- 各 instance にはキャッシュとデータを格納する専用の `isaac-sim/` ディレクトリツリーが必要になる。書き込み可能なキャッシュディレクトリを共有すると、実行中の instance の Kit キャッシュが警告なしに破損する。[Cache レイアウト](#cache-レイアウト)を参照。
+- headless で並列実行する場合、ポートの上書きは不要。ポートの上書きが必要なのはストリーミング時のみ。
+
+実用上の同時実行数は GPU の空きメモリで決まる。32607 MiB の GPU で実測したところ、実行中の Isaac instance は 1 つあたり約 3.9 GiB を使用し、6～7 個を同時に実行できる。手元の GPU の空きメモリを GiB に換算し、3.9 で割ると目安がわかる。GPU の演算資源は共有するため、各 instance の実行速度は低下する。
+
+## ローカルの USD モデルをマウントする
+
+Isaac にはサンプルモデルが同梱されていません。`sim_asset` の USD モデル、または `asset_converter` で変換した USD モデルを使ってください。
+
+1. `cp setup.isaac_sample.toml setup.local.toml` を実行して、Git の管理対象外のローカル設定ファイルを作成します。すでにファイルがある場合は、このチェックアウトの設定を保持するため、既存のファイルにサンプルの設定を統合してください。
+2. モデルのマウント設定の `source` を、モデルがあるディレクトリに変更します。どのマシンでもシーンから同じパスを参照できるように、読み取り専用のマウント先は `/home/${USER_NAME}/models/sim_asset` のままにします。モデルのマウントを追加する場合は、対応するコンテナ内のパスをコロン区切りで `MODEL_PATH` に追加します。
+3. `just docker run -t headless -d` でコンテナを起動します。
+
+Base はローカル設定を適用するときに `[[volumes]]` のリスト全体を置き換えます。ローカル設定には `setup.toml` のマウントをすべて残し、リポジトリにマウントが追加されたら反映してください。
+
 ## WebRTC livestream への接続
 
 Isaac Sim 6.2.0 は NVCF（`omni.services.livestream.nvcf`）livestream プロトコルを使用。デスクトップ client またはブラウザベースのビューアで接続：
@@ -335,7 +355,7 @@ just docker stop                           # cleanup
 
 ### Python 出力 API（isaac#365）
 
-`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。モードは `ISAAC_OUTPUT_MODE`（既定 `python`、`ros` は未接続、ADR-0025 参照）で決まります。
+`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。`ISAAC_OUTPUT_MODE` がサポートする値は既定値の `python` のみです。`ros` を含む他の値を指定すると `ValueError` が発生します。ROS 出力は `isaac_ros_io` が `ISAAC_IO_PLUGIN` を通じて提供します（ADR-0025 は新しい決定に置き換えられました）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
