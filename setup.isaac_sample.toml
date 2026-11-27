@@ -1,0 +1,72 @@
+# Copy this file to setup.local.toml (gitignored), edit the model mount and
+# MODEL_PATH, then run `just docker run -t headless -d`.
+# WARNING: base replaces the entire [[volumes]] list across layers. Keep every
+# repo mount below and update your copy whenever setup.toml gains a mount.
+
+# MODEL_PATH (#334) lists in-container model search roots separated by colons.
+# env_10 leaves the repository's env_1 through env_8 settings intact.
+[environment]
+env_10 = "MODEL_PATH=/home/${USER_NAME}/models/sim_asset"
+
+# Mount the workspace at the container user's work directory.
+[[volumes]]
+source = "${WS_PATH}"
+target = "/home/${USER_NAME}/work"
+
+# Persist the Isaac Sim Kit cache in the workspace.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/kit/cache"
+target = "/isaac-sim/kit/cache"
+
+# Persist Kit data in the workspace.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/kit/data"
+target = "/isaac-sim/kit/data"
+
+# Expose Kit logs on the host.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/kit/logs"
+target = "/isaac-sim/kit/logs"
+
+# Persist the user's Omniverse cache.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/ov/cache"
+target = "/home/${USER_NAME}/.cache/ov"
+
+# Persist the user's Omniverse data.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/ov/data"
+target = "/home/${USER_NAME}/.local/share/ov/data"
+
+# Expose Omniverse logs on the host.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/ov/logs"
+target = "/home/${USER_NAME}/.nvidia-omniverse/logs"
+
+# Reuse downloaded Python packages across container runs.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/pip"
+target = "/home/${USER_NAME}/.cache/pip"
+
+# Persist the NVIDIA OpenGL shader cache.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/nvidia/glcache"
+target = "/home/${USER_NAME}/.cache/nvidia/GLCache"
+
+# Persist the NVIDIA compute cache.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/nvidia/computecache"
+target = "/home/${USER_NAME}/.nv/ComputeCache"
+
+# Keep documents saved by Isaac Sim in the workspace.
+[[volumes]]
+source = "${WS_PATH}/isaac-sim/documents"
+target = "/home/${USER_NAME}/Documents"
+
+# Mount sim_asset or another repository of converted USD models read-only.
+# Keep this container location fixed so scene and model paths resolve the same
+# way on every machine.
+[[volumes]]
+source = "${WS_PATH}/sim_asset"
+target = "/home/${USER_NAME}/models/sim_asset"
+mode = "ro"
