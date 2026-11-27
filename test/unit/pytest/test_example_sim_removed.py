@@ -28,8 +28,6 @@ def test_example_sim_removed():
             if name in {".git", "CHANGELOG.md"} or path == this_test:
                 continue
             relative = path.relative_to(REPO_ROOT)
-            if relative.parent == Path("doc") and relative.match("PRD*.draft.md"):
-                continue
             if path.is_symlink() or not path.is_file():
                 continue
             data = path.read_bytes()

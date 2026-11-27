@@ -418,6 +418,9 @@ section in ADR-0012.
 
 ## Amendment: Isaac Lab spawn backend (ADR-0018, 2026-06-15)
 
+> [ADR-0026](0026-drop-isaac-lab-dependency.md) supersedes this amendment and
+> drops the Isaac Lab dependency from `isaac`.
+
 ADR-0018 adopts NVIDIA Isaac Lab `sim_utils` as the scene-spawn backend, before the `v1.0.0`
 tag. It does not void this contract; it amends three sections and leaves the rest (scene
 schema section 4, sensor catalog section 5, test contract section 7, import-safety section 8)
@@ -481,6 +484,7 @@ versioned; the module set and API contract) is UNCHANGED -- only the concrete ve
   Dockerfile layer against the bundled Isaac Sim binary. torch is now explicitly installed
   (torch 2.11 + cu128) because 6.0.1's bundled torch is deprecated/broken. See ADR-0018 and
   ADR-0020 for the API-level effects of the Isaac Lab 3.0 bump.
+  ADR-0026 retires the Isaac Lab pin.
 
 **Driver decision (why this migration exists).** Isaac Sim 5.1 required the NVIDIA 580.x driver
 line and segfaulted on driver 610; the self-hosted GPU runner had moved to 610. Isaac Sim 6.0.1
