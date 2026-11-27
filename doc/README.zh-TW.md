@@ -254,7 +254,7 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 同時內建 Humble 與 Jazzy 兩套 ROS 2 libraries（5.1 時放在 `isaacsim.ros2.bridge/`；6.0 把單一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），皆走 Python 3.12 rclpy，與 kit 內嵌 interpreter 一致。**本 image 在 build-time hard-bake distro 選擇** — 透過 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 項目指定（預設 `value = "humble"`，CoreSAM 對齊）。
 
-Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若尚未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
+Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
 
 `setup.toml [environment]` 內 distro-agnostic env wiring：
 
@@ -355,7 +355,7 @@ just docker stop                           # cleanup
 
 ### Python 輸出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。模式由 `ISAAC_OUTPUT_MODE` 決定（預設 `python`；`ros` 尚未接上，見 ADR-0025）。
+`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。`ISAAC_OUTPUT_MODE` 僅支援預設值 `python`。其他值（包括 `ros`）都會引發 `ValueError`。`isaac_ros_io` 透過 `ISAAC_IO_PLUGIN` 提供 ROS 輸出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
