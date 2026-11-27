@@ -16,7 +16,11 @@ def test_driver_has_no_retired_stream_stage():
 
 @pytest.mark.parametrize(
     "guide_path",
-    ("src/doc/standalone_livestream_workflow.md", "src/doc/action_graph_setup.md"),
+    (
+        "src/doc/standalone_livestream_workflow.md",
+        "src/doc/action_graph_setup.md",
+        "src/doc/zed_install.md",
+    ),
 )
 def test_docs_use_current_stage_names(guide_path):
     guide = _REPO_ROOT / guide_path
@@ -24,6 +28,9 @@ def test_docs_use_current_stage_names(guide_path):
         "-t standalone",
         "headless-stream",
         "isaac-headless",
+        "headless stage",
+        "headless container",
+        "for the headless",
         "啟 headless kit",
         "把 `headless` container",
         "舊 SOP 寫 headless",
@@ -34,3 +41,4 @@ def test_docs_use_current_stage_names(guide_path):
             assert phrase not in line, location
         if "runheadless" in line:
             assert "-t headless" not in line, location
+            assert "run -t stream" not in line, location

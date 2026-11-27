@@ -171,7 +171,7 @@ sys.exit(exit_code)
 
 ### `[Warning] [carb.scenerenderer-rtx.plugin] Failed to create NGX context`
 
-無害。headless container 沒 NGX driver feature,livestream 仍能跑。
+無害。stream container 沒 NGX driver feature，livestream 仍能跑。
 
 ### 瀏覽器看到一片黑
 
@@ -200,7 +200,8 @@ else:
 
 | 步驟 | 舊 in-kit | 新 standalone-livestream |
 |---|---|---|
-| 起 Kit | `just docker run -t stream -d`（`headless` stage 的 `runheadless.sh` 會啟動另一個 Kit，造成 port 衝突，因此改用 `stream` stage） | `just docker run -t stream -d` |
+| 啟動待命容器 | `just docker run -t stream -d` | `just docker run -t stream -d` |
+| 啟動 Kit | `just docker exec -t stream /isaac-sim/runheadless.sh -v --/app/livestream/nvcf/quitOnSessionEnded=false` | 下一列的 driver 透過 `SimulationApp` 啟動 Kit |
 | 載 driver | 瀏覽器 GUI 開 Script Editor 拖 `.py` 進去 | `just docker exec -t stream /isaac-sim/python.sh <script>` |
 | 跑 | Ctrl+Enter on Script Editor | enter 在 terminal |
 | 看畫面 | 同一個 Kit GUI 瀏覽器 tab | Isaac Sim WebRTC Streaming Client(桌面 app)連 `127.0.0.1`(可關可開) |
