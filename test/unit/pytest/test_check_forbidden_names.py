@@ -2,6 +2,7 @@
 
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -112,6 +113,15 @@ def test_baseline_script_gives_core_group_git_and_forbidden_names():
     assert "-e FORBIDDEN_NAMES" in hosted
     assert "--junitxml" in hosted
     assert re.search(r"\bskipped\b", hosted)
+
+
+def test_hosted_core_pytest_reports_each_test_result():
+    script = (ROOT / "test/assert_pytest_baseline.sh").read_text()
+    hosted = script.partition("# default mode: hosted-unit")[2]
+    core = hosted.partition('if [ "${GROUP}" = core ]; then')[2].partition("\n  fi")[0]
+    args = re.search(r"^\s*set -- (.+)$", core, re.MULTILINE)
+    assert args, "Missing hosted core pytest arguments"
+    assert "-rA" in shlex.split(args.group(1), comments=True)
 
 
 def test_core_unit_hosted_pytest_receives_forbidden_names():

@@ -338,7 +338,7 @@ docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${G
   pip install --quiet --user pyyaml pytest pytest-cov xacro numpy
   cd framework
   if [ "${GROUP}" = core ]; then
-    set -- --junitxml=/tmp/hosted-junit.xml
+    set -- --junitxml=/tmp/hosted-junit.xml -rA
   fi
   rc=0
   python -m pytest ../test/unit/pytest/ '"${PYTEST_SELECT}"' \
