@@ -348,6 +348,10 @@ def run(override, dry_run=False):
             if not any(pr["head"]["ref"] == branch for pr in open_items("pulls")):
                 command("git", "push", f"--force-with-lease={ref}:{commit}", "origin", ":" + ref)
                 raise
+        try:
+            command("gh", "workflow", "run", "main.yaml", "--ref", branch, "-f", "groups=all")
+        except subprocess.CalledProcessError:
+            print("警告：CI 啟動失敗。請儲存庫擁有者關閉 PR 後重新開啟，以觸發 CI。", file=sys.stderr)
         if issue_title:
             body_file.write_text(body + "\n請依差異核對 #435 的 Isaac Sim 測試項目。\n")
             args = ("gh", "issue", "create", "--title", issue_title, "--body-file", str(body_file))

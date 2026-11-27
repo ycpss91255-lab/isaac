@@ -3,6 +3,8 @@
 import importlib.util
 import io
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import Mock
@@ -20,6 +22,7 @@ _BRANCH = f"bot/isaac-sim-{_LATEST}"
 _REF = f"refs/heads/{_BRANCH}"
 _LS_REMOTE = ("git", "ls-remote", "--heads", "origin", _REF)
 _GH_API = ("gh", "api", "--paginate", "--slurp")
+_DISPATCH = ("gh", "workflow", "run", "main.yaml", "--ref", _BRANCH, "-f", "groups=all")
 _TOKEN = "fixture-token"
 _DIFF = {"added": {"startup": ["tests-startup.sh"]}, "removed": {}, "renamed": {}}
 
@@ -41,9 +44,12 @@ class FakeRepository:
         self.remote_head = ""
         self.open_items = {"pulls": [], "issues": []}
         self.pr_body = ""
+        self.fail_dispatch = False
 
     def command(self, *args):
         self.calls.append(args)
+        if args == _DISPATCH and self.fail_dispatch:
+            raise subprocess.CalledProcessError(1, args)
         if args[:2] == ("git", "ls-remote"):
             return self.remote_head
         if args[:4] == _GH_API:
@@ -79,6 +85,7 @@ def repo(tracker, monkeypatch, tmp_path):
 
 
 def _assert_no_writes(repo):
+    assert not any(call[:3] == ("gh", "workflow", "run") for call in repo.calls)
     git_reads = {("git", "ls-remote"), ("git", "rev-parse")}
     for call in repo.calls:
         assert call[:2] in git_reads or call[:4] == _GH_API, call
@@ -102,7 +109,27 @@ def test_new_release_pushes_bump_and_opens_pr_and_inventory_issue(tracker, repo)
     assert pr[pr.index("--title") + 1] == f"更新 Isaac Sim 至 {_LATEST}"
     assert pr[pr.index("--head") + 1] == _BRANCH
     assert pr[pr.index("--base") + 1] == "release"
+    assert [call for call in repo.calls if call[:3] == ("gh", "workflow", "run")] == [_DISPATCH]
+    assert repo.calls.index(pr) < repo.calls.index(_DISPATCH)
     assert sum(call[:3] == ("gh", "issue", "create") for call in repo.calls) == 1
+
+
+def test_dispatch_failure_keeps_created_pr_and_prints_recovery_steps(tracker, repo, capsys):
+    repo.fail_dispatch = True
+    tracker.run("")
+
+    [pr] = [call for call in repo.calls if call[:3] == ("gh", "pr", "create")]
+    after_create = repo.calls[repo.calls.index(pr) + 1:]
+    assert _DISPATCH in after_create
+    assert not any(call[:3] == ("gh", "pr", "close") for call in after_create)
+    assert not any(call[:2] == ("git", "push") for call in after_create)
+    captured = capsys.readouterr()
+    warning = captured.out + captured.err
+    assert re.search(r"\bPR\b|pull request|拉取請求", warning, re.I | re.ASCII)
+    assert re.search(
+        r"(?:請|需|必須|擁有者|維護者).*?關閉.*?(?:重新開啟|重新打開|重新開放|重開|再開啟)",
+        warning, re.S,
+    )
 
 
 def test_existing_remote_branch_skips_writes(tracker, repo):

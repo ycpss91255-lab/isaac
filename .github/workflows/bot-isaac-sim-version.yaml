@@ -1,3 +1,6 @@
+# Enable "Allow GitHub Actions to create and approve pull requests" in the
+# repository or organization Actions settings. The bot starts PR CI through
+# workflow_dispatch because opening a PR with GITHUB_TOKEN does not trigger pull_request workflows.
 name: 'Bot: Isaac Sim Version'
 
 on:
@@ -9,8 +12,13 @@ on:
         description: '與新版比較的 Isaac Sim 版本（預設取自 Dockerfile）'
         type: string
         required: false
+      dry_run:
+        description: '僅預覽更新內容'
+        type: boolean
+        default: false
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
   issues: write
@@ -32,4 +40,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_BRANCH: ${{ github.event.repository.default_branch }}
           CURRENT_VERSION: ${{ inputs.current_version }}
-        run: python3 script/ci/track_isaac_sim.py run --current-version="$CURRENT_VERSION"
+        run: >-
+          python3 script/ci/track_isaac_sim.py run --current-version="$CURRENT_VERSION"
+          ${{ inputs.dry_run && '--dry-run' || '' }}
