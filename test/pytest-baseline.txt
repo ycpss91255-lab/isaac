@@ -304,9 +304,10 @@
 # isaac#430 re-merge: 764 -> 769 (core 656 -> 661).
 # isaac#173: 新增 32 個 stream 畫面驗證案例與 1 個 core 工作流程案例（769 -> 802）。
 # isaac#173: 新增 1 個 stream 容器清理範圍案例（802 -> 803）。
+# isaac#491 adds 19 core cases (hosted 803 -> 822, core 662 -> 681).
 # isaac#442: 65 tracker and bot workflow cases, all core:
-#   803 -> 868, core 662 -> 727.
-HOSTED_UNIT_BASELINE = 868
+#   822 -> 887, core 681 -> 746.
+HOSTED_UNIT_BASELINE = 887
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -344,8 +345,9 @@ HOSTED_UNIT_BASELINE = 868
 #   isaac#359 adds 7 core cases (core 649 -> 656).
 #   isaac#173 新增串流畫面驗證（hosted 769 -> 802、core 661 -> 662、stream 19 -> 51）。
 #   isaac#173 新增容器清理範圍測試（stream 51 -> 52）。
-#   isaac#442 adds 65 core cases (core 662 -> 727).
-HOSTED_UNIT_BASELINE_CORE = 727
+#   isaac#491 adds 19 core cases (core 662 -> 681).
+#   isaac#442 adds 65 core cases (core 681 -> 746).
+HOSTED_UNIT_BASELINE_CORE = 746
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
