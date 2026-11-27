@@ -281,9 +281,10 @@ COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 #   isaacsim.exp.base.python.streaming.kit
 #       Closes #21 fix-B: the lightweight Python experience layered with
 #       omni.kit.livestream.{core,webrtc} so SimulationApp + livestream:2
-#       actually serves a WebRTC stream. Avoids the full.streaming.kit
-#       segfault that hits when that experience is loaded via
-#       SimulationApp instead of the kit binary directly.
+#       actually serves a WebRTC stream. On Isaac Sim 5.1.0, loading
+#       full.streaming.kit via SimulationApp led to a reported segfault.
+#       On 6.2.0.1, 3/3 non-root runs started the server without a segfault.
+#       Client connection and default port 49100 were untested (#473, #485).
 COPY --chmod=0644 apps/*.kit /isaac-sim/apps/
 
 # [isaac] ROS distro is a build-time choice — set via
