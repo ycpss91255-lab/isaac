@@ -117,12 +117,16 @@ source = "${WS_PATH}/isaac-sim/documents"
 target = "/home/${USER_NAME}/Documents"
 
 ["stage:gui"]
-"gui.mode" = "auto"
+# "auto" would inherit the top-level [gui] mode of "off".
+"gui.mode" = "force"
 
 ["stage:headless"]
 "gui.mode" = "off"
 
 ["stage:stream"]
+"gui.mode" = "off"
+
+["stage:producer"]
 "gui.mode" = "off"
 
 ["stage:test-tools-stage"]
