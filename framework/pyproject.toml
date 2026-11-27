@@ -56,7 +56,7 @@ source = ["isaac_devkit"]
 # Each entry is a regex; coverage excludes the clause (def/method body)
 # the matched line begins. We list the Isaac-side functions by signature:
 # every function whose body issues a function-local omni / pxr / isaacsim
-# / rclpy import (it only runs inside a live Kit / GPU stage, verified by
+# import (it only runs inside a live Kit / GPU stage, verified by
 # the GPU integration suite at M2), plus the dispatchers and CLIs that
 # only execute against a live stage. The pure half of every module
 # (config parse / validate / path + string computation / freshness
@@ -73,7 +73,6 @@ exclude_also = [
     # materials is now fully pure (color is a spawn-time cfg param,
     # ADR-0018 decision 7); no Isaac-side appliers to exclude.
     # sensors: Isaac-side dispatchers / builders.
-    "def _ensure_ros2_bridge_enabled\\(",
     "def setup_sensor\\(",
     "def _setup_camera_dispatch\\(",
     "def _setup_lidar\\(",
@@ -82,10 +81,9 @@ exclude_also = [
     "def _setup_realsense\\(",
     "def _setup_custom\\(",
     "def _setup_zed\\(",
-    "def _set_camera_intrinsics\\(",
-    "def _build_graph_topology\\(",
-    "def _resolve_asset_url\\(",
-    "def _set_xform_pose\\(",
+    "def set_camera_intrinsics\\(",
+    "def resolve_asset_url\\(",
+    "def set_xform_pose\\(",
     # scene: Isaac-side stage build + sim_utils cfg materialization
     # (ADR-0018). The pure adapter (to_isaaclab_cfg / rpy_to_quat /
     # _usd_spec / _material_diffuse_for) stays counted.
@@ -99,13 +97,10 @@ exclude_also = [
     "def _imu_reader\\(",
     # output: Isaac-side reader factory.
     "def make_python_sources\\(",
-    # ros_io: Isaac-side OmniGraph attribute reader.
-    "def _og_attr_reader\\(",
     # default_driver: Kit-side fresh-stage creation.
     "def _new_stage\\(",
     # driver: Kit lifecycle (run + Kit-touching internals).
     "def run\\(",
-    "def init_rclpy\\(",
     "def _open_stage\\(",
     "def _ensure_scene_defaults\\(",
     "def _play_timeline\\(",

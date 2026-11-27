@@ -1,19 +1,12 @@
 """Sensor prim creation -- config loading, validation, USD prim helpers.
 
-Layer (a) of the three-layer sensor split (ADR-0024):
-  (a) sensor_prim  -- config I/O, validation, prim creation helpers
-  (b) sensors      -- OmniGraph wiring dispatcher
-  (c) sensor_ros   -- ROS 2 OmniGraph publish chain
-
 Host-side functions (load_config, get_category, validate_camera,
 validation helpers, fov_to_aperture, role_to_helper_type) work without
-Isaac Sim.  The prim-creation helpers (_set_xform_pose,
-_set_camera_intrinsics, _resolve_asset_url) require Isaac Sim and keep
+Isaac Sim.  The prim-creation helpers (set_xform_pose,
+set_camera_intrinsics, resolve_asset_url) require Isaac Sim and keep
 all ``pxr`` / ``omni`` imports function-local (ADR-0017 section 8).
 
-The ``ros:`` config section is **optional**.  When absent, load_config
-sets ``cfg["ros"] = None`` and the caller (layer b) skips OmniGraph
-wiring.  This enables sensor prim placement without ROS 2 dependencies.
+為相容既有 YAML，保留選填的 ``ros:`` 設定並驗證其欄位。
 """
 
 import math
@@ -43,8 +36,7 @@ def load_config(path):
     """Load a sensor YAML config; validate shared + per-category rules.
 
     The ``ros:`` section is optional.  When absent the returned dict has
-    ``cfg["ros"] = None`` and the OmniGraph wiring layer (sensors.py)
-    skips ROS 2 graph creation.
+    ``cfg["ros"] = None``.
     """
     p = Path(path).expanduser().resolve()
     if not p.exists():

@@ -328,16 +328,20 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-HOSTED_UNIT_BASELINE = 705
+# isaac#276：依各模組的分組標記、測試函式與參數案例靜態重算。原有 705 例，
+#   全部差額都在 core（664 → 635）。移除 ros_io（−23）、sensor_ros（−7）；
+#   範例 driver（−2）、逐檔 Isaac 匯入檢查（−2）、感測器設定與分派（各 −1）；
+#   ROS 邊界檢查（淨增 5）及相容入口（+2）。合計減少 29 例。
+HOSTED_UNIT_BASELINE = 676
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
 #   hosted unit test belongs to exactly one group (pytestmark at module level,
 #   enforced at collection by test/group_markers.py and statically by
-#   script/ci/scope_groups.py), so the six floors below sum to
+#   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
 #   collects each group with `-m <group>` and checks it against its own floor.
-#   A group with no tests yet (gui / headless) has floor 0.
+#   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py
 #   docs     -- test_producer_versions.py, test_no_ai_attribution.py
@@ -351,7 +355,7 @@ HOSTED_UNIT_BASELINE = 705
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 664
+HOSTED_UNIT_BASELINE_CORE = 635
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -508,7 +512,9 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-GPU_INTEGRATION_BASELINE = 40
+# isaac#276：範例移除 ROS 訂閱與 /cmd_vel 往返兩例，相機發布測試改驗證 prim。
+#   依測試原始碼重算為容器內 36 例、主機跨容器 2 例，共 38 例。
+GPU_INTEGRATION_BASELINE = 38
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Recorded for traceability; after the ingestion work + the owv#55

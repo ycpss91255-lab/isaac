@@ -32,7 +32,7 @@ clone した直後の repo で、まず repo root から次の 2 つの初回手
 
 | やりたいこと | Build | Run |
 |---|---|---|
-| シーンを実行して ROS 2 topic を見る（まずはここから） | `just docker build -t headless` | `just docker run -t headless -d`、続いて下の「Headless：Isaac を起動してシーンを実行する」 |
+| camera_bot のシーンを実行する（まずはここから） | `just docker build -t headless` | `just docker run -t headless -d`、続いて下の「Headless：Isaac を起動してシーンを実行する」 |
 | 開発用の対話 shell | `just docker build`（devel） | `just docker run` |
 | WebRTC でシミュレーションを見る | `just docker build -t stream` | `just docker run -t stream -d`、続いて「WebRTC livestream への接続」 |
 
@@ -50,33 +50,14 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：Isaac を起動してシーンを実行する
 
-`example/` の camera_bot シーンは headless で動作し、ROS 2 camera topic を publish し `/cmd_vel` を subscribe する。container の working directory は repo root（`~/work` に mount）なので、スクリプトのパスは repo からの相対パス。以下の手順は Isaac Sim 6.2.0（RTX 5090）で検証済み：
+ヘッドレスのサンプルは camera_bot のシーンを構築し、`[CAMERA MOUNT]` とカメラのマウントパスを表示する。シミュレーションの準備ができると `[BOOT OK]` を表示する。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 EXAMPLE_TICK_BUDGET=100000 exec /isaac-sim/python.sh example/sim/example_driver.py'
-# prints [CAMERA GRAPH OK] and [BOOT OK] in about 30 s
-
-# In a second terminal: the camera topic, from a sibling ROS 2 container on the same domain
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash && ros2 topic echo --once /camera_bot/camera/color/image_raw sensor_msgs/msg/Image --field header'
-# frame_id: camera_bot_camera_color_optical_frame
-
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh example/sim/example_driver.py'
 just docker stop
-```
-
-この例は意図的にプライベートな ROS domain（`77`）で動かしている。共有 host ではデフォルトの domain 0 に別の `/cmd_vel` publisher がいることがあり、それもロボットを動かしてしまう。空いている domain（0〜101）を選び、両側で同じ `ROS_DOMAIN_ID` を使うこと。
-
-**初回起動では、camera topic は `[BOOT OK]` の約 2 分後に現れる。** camera publisher は最初の frame の render が終わってから現れ、cache が空のときは renderer がまず shader をコンパイルする。あるコールド実行では topic が `[BOOT OK]` の 1 分 52 秒後に現れ、`ros2 topic echo --once` はその 2 秒後に返った。その実行で残った cache で再実行すると、topic は `[BOOT OK]` から 3 秒以内に存在した。待ち時間は DDS discovery ではない：Isaac が publish している間は、新しく起動した sibling container がすぐに topic を見つけた。`echo` で待つ代わりに出現を監視するには：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash &&
-   until ros2 topic list | grep -q image_raw; do sleep 1; done &&
-   ros2 topic hz /camera_bot/camera/color/image_raw'
-# average rate: ~30
 ```
 
 `EXAMPLE_TICK_BUDGET` を指定しない場合、driver は 1800 update（headless で約 2 分）後に自動で停止し、`[EXIT CLEAN]` を出力する。Kit は session log を host 側の `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` に書き込む。最新のものを追うには：
@@ -233,7 +214,7 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 Isaac Sim 6.2.0 は Humble と Jazzy 両方の内部 ROS 2 ライブラリを `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` に同梱しており（5.1 では `isaacsim.ros2.bridge/` に配置。6.0 で単一の bridge ext が `isaacsim.ros2.core` + `isaacsim.ros2.nodes` などに分割された）、両方とも kit 内蔵インタプリタと一致する Python 3.12 rclpy。**本イメージは build-time に distro を hard-bake する** — `setup.toml` の `[[build.args]]` で `key = "ROS_DISTRO"` の項目を指定（デフォルトは `value = "humble"`、CoreSAM 整合）。
 
-bridge extension は base `IsaacDriver` が Kit BOOT 時に有効化する（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）。未ロードの場合は sensor setup が runtime に Kit extension manager 経由で有効化するため、BOOT 時の有効化は最適化であり必須ではない（isaac#248）。driver パスでは追加の launch flag は不要。
+`IsaacDriver` が起動時に既定で有効にする拡張は `isaacsim.core.nodes` のみ。ROS 2 を利用する場合は、外部プラグインの `module:function` を `ISAAC_IO_PLUGIN` に指定し、必要な Kit 拡張を `ISAAC_KIT_EXTRA_ARGS` で有効にする。センサー設定は既存の YAML の `ros:` フィールドを受け付け、作成した USD prim またはマウントのパスを返す。
 
 `setup.toml [environment]` で配線済みの env（distro-agnostic）：
 
@@ -334,7 +315,7 @@ just docker stop                           # cleanup
 
 ### Python 出力 API（isaac#365）
 
-`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。モードは `ISAAC_OUTPUT_MODE`（既定 `python`、`ros` は未接続、ADR-0025 参照）で決まります。
+`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。モードは `ISAAC_OUTPUT_MODE`（既定 `python`、ROS I/O は外部プラグインが担当）で決まります。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
@@ -403,11 +384,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 システムの `python3` ではこれらのパッケージはインストールできない（Isaac base image の PEP 668 が `pip` をブロック）— 必ず `/isaac-sim/python.sh -m pytest ...` を使い、`pytest ...` は使わない。
 
-GPU integration test（Isaac Sim の実起動が必要なもの、例: camera → ROS 2 headless smoke、#127）は `test` compose service で実行する。この service の NVIDIA GPU reservation は `setup.toml` の `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`、base #493）に由来する:
+GPU integration test（Isaac Sim の実起動が必要なもの、例: ヘッドレスでのカメラ prim のテスト、#127）は `test` compose service で実行する。この service の NVIDIA GPU reservation は `setup.toml` の `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`、base #493）に由来する:
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_camera_headless.py
 ```
 
-合否判定は stdout の marker 行（`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`）であり、return code ではない — Kit の `app.close` は `_exit(0)` を呼ぶ。詳細は [doc/test/TEST.md](test/TEST.md) を参照。
+合否判定は stdout の marker 行（`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`）であり、return code ではない — Kit の `app.close` は `_exit(0)` を呼ぶ。詳細は [doc/test/TEST.md](test/TEST.md) を参照。

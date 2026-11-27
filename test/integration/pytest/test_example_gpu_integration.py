@@ -1,55 +1,4 @@
-"""Example GPU automated integration test (isaac#132, M2 gate; #325).
-
-Boots a headless Isaac scene inside the devel-test GPU container (no
-livestream -- bypasses IsaacSim#228) and makes the strong L1-L4 +
-``/cmd_vel`` round-trip assertions the PRD lists (Testing & Acceptance
-Criteria) as committed test code.
-
-Scene source (#325): the official NVIDIA Jetbot USD fetched through the
-``test/test_assets.py`` helper (#341), NOT the bundled ``example/sim/``
-camera_bot, which is being removed. The assertions keep their meaning;
-only the scene (and so the expected prim paths / counts / topic) changed:
-
-* L1 -- ``/World/Robot/chassis`` IsValid + RigidBodyAPI present +
-  link/joint counts (3 links / 2 joints / root ``/jetbot``) on the live
-  Jetbot robot subtree, spawned through the framework Isaac Lab adapter
-  (#154). The former URDF->USD diff==0 leg is RETIRED
-  (#154): the committed asset is a curated legacy-importer USD, so a fresh
-  re-import diff is non-zero by construction; the "fresh import is
-  structurally correct" contract lives in ``test_model_import.py`` (#150).
-* L3 -- camera topic exists, type ``sensor_msgs/Image``, ``frame_id`` ==
-  expected, and >= 1 message within budget.
-* ros_io / cmd_vel round-trip -- ``io.latest()`` is None before any
-  publish (non-blocking), then a published ``/cmd_vel`` Twist is echoed
-  back through ``io.latest()`` within K ticks with matching content.
-* L4 -- ``[BOOT OK]`` / ``[EXIT CLEAN]`` markers present; an injected
-  SIGINT runs ``shutdown()`` (``[SIGINT SHUTDOWN OK]``). The pure-side
-  lifecycle call ORDER spy lives in the hosted unit suite where Isaac
-  is not needed; this asserts the live runner honors the same SIGINT
-  path.
-
-The in-process ``/cmd_vel`` round-trip here publishes the Twist from an
-in-process rclpy node (no second container) to verify the OmniGraph
-Subscribe attribute path. The genuine Isaac<->ament cross-container
-round-trip (PRD Pre-Publish item 1 -- a real message crossing the
-container boundary in both directions) lives in
-``test_cross_container_roundtrip.py``, host-orchestrated against a
-sibling ``ros:humble`` container running the ``example/ros2/`` ament
-nodes.
-
-Pass criterion is stdout marker lines, not the return code: Kit's
-``app.close`` calls ``_exit(0)`` and swallows ``sys.exit`` (same
-convention as ``test_camera_ros2_headless.py``).
-
-GPU CI policy (PRD Testing & Acceptance): headless; timeout = boot budget
-x 1.5; retry <= 1, logged. A skipped GPU job does NOT count as green.
-
-Run inside the GPU-enabled test container (requires the
-``["stage:devel-test"] "deploy.gpu_mode" = "force"`` setup.toml override)::
-
-    ./script/run.sh -t test -- /isaac-sim/python.sh -m pytest \
-        <repo>/test/integration/pytest/test_example_gpu_integration.py -s
-"""
+"""GPU coverage for the Jetbot structure, mounted camera and driver lifecycle."""
 
 import re
 import subprocess
@@ -71,23 +20,13 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUNNER_SCRIPT = Path(__file__).parent / "_example_headless_runner.py"
 PYTHON_SH = "/isaac-sim/python.sh"
 
-# Boot budget = warm Kit boot + camera graph + first frame + cmd_vel
-# round-trip. On the reference GPU runner (RTX 5090) a warm shader cache
-# boots the camera path in ~60-120 s; the example adds the robot
-# reference + cmd_vel graph. Boot budget 400 s; GPU CI policy timeout =
-# boot budget x 1.5 = 600 s. A cold cache can take longer, but retry
-# (below) re-runs once with a warmed cache.
 BOOT_BUDGET_SEC = 400
 SUBPROC_TIMEOUT_SEC = int(BOOT_BUDGET_SEC * 1.5)
 
 # GPU CI policy: retry at most once, logged.
 MAX_RETRIES = 1
 
-# Scene dict in the runner + camera ``ros:`` section -> expected L1 / L3
-# values. The Jetbot chassis is its articulation body (no ``base_link``).
 EXPECTED_BASE_LINK = "/World/Robot/chassis"
-EXPECTED_CAMERA_TOPIC = "/jetbot/camera/color/image_raw"
-EXPECTED_CAMERA_FRAME_ID = "jetbot_camera_color_optical_frame"
 
 # Jetbot USD structure (pxr inspection of the pinned asset, defaultPrim
 # /jetbot): three rigid-body Xform links directly under the root (chassis,
@@ -97,10 +36,6 @@ EXPECTED_CAMERA_FRAME_ID = "jetbot_camera_color_optical_frame"
 EXPECTED_LINK_COUNT = 3
 EXPECTED_JOINT_COUNT = 2
 EXPECTED_ROBOT_ROOT_PRIM_NAME = "/jetbot"
-
-# Sent /cmd_vel content (must match _example_headless_runner.py).
-EXPECTED_VX = 0.42
-EXPECTED_WZ = 0.21
 
 
 def _run_once(robot_usd):
@@ -269,61 +204,11 @@ def test_l1_link_and_joint_counts(example_run):
 # test/pytest-baseline.txt and the PR body.
 
 
-def test_l3_camera_topic_frame_and_message(example_run):
-    """L3: camera topic + frame_id == expected + >= 1 sensor_msgs/Image."""
-    out = example_run.stdout
-    assert "[CAMERA GRAPH OK]" in out, (
-        "setup_camera() did not build the OmniGraph publish chain."
-    )
-    m = re.search(
-        r"\[L3 CAMERA OK\] topic=(\S+) frame_id=(\S+) "
-        r"width=(\d+) height=(\d+) count=(\d+)",
-        out,
-    )
-    assert m, "No camera frame observed on the ROS 2 topic within budget."
-    assert m.group(1) == EXPECTED_CAMERA_TOPIC, (
-        f"topic mismatch: got {m.group(1)!r}, "
-        f"expected {EXPECTED_CAMERA_TOPIC!r}"
-    )
-    assert m.group(2) == EXPECTED_CAMERA_FRAME_ID, (
-        f"frame_id mismatch: got {m.group(2)!r}, "
-        f"expected {EXPECTED_CAMERA_FRAME_ID!r}"
-    )
-    assert int(m.group(5)) >= 1, "Zero camera frames received."
-
-
-def test_ros_io_latest_none_before_publish(example_run):
-    """ros_io: latest() returns None (non-blocking) before any publish."""
-    out = example_run.stdout
-    assert "[ROS_IO NONE FAIL]" not in out, (
-        "io.latest() returned a message before any /cmd_vel was published."
-    )
-    assert "[ROS_IO NONE OK]" in out, (
-        "ros_io non-blocking None marker missing."
-    )
-
-
-def test_cmd_vel_round_trip(example_run):
-    """cmd_vel: published Twist echoes back through io.latest() in budget."""
-    out = example_run.stdout
-    assert "[CMD_VEL ROUNDTRIP MISSING]" not in out, (
-        "Published /cmd_vel never echoed back through io.latest() within "
-        "the tick budget."
-    )
-    m = re.search(
-        r"\[CMD_VEL ROUNDTRIP OK\] seq=(\d+) vx=(\S+) vy=(\S+) wz=(\S+)",
-        out,
-    )
-    assert m, "cmd_vel round-trip marker missing."
-    assert int(m.group(1)) >= 1, (
-        "round-trip freshness counter did not advance."
-    )
-    assert float(m.group(2)) == pytest.approx(EXPECTED_VX, abs=1e-3), (
-        f"vx mismatch: got {m.group(2)}, expected {EXPECTED_VX}"
-    )
-    assert float(m.group(4)) == pytest.approx(EXPECTED_WZ, abs=1e-3), (
-        f"wz mismatch: got {m.group(4)}, expected {EXPECTED_WZ}"
-    )
+def test_l3_camera_prim_on_chassis(example_run):
+    path = re.search(r"^\[CAMERA PRIM\] (\S+)$", example_run.stdout, re.MULTILINE)
+    assert path, example_run.stdout[-1000:]
+    assert path.group(1).startswith(f"{EXPECTED_BASE_LINK}/")
+    assert path.group(1).endswith("/color")
 
 
 def test_l4_injected_sigint_runs_shutdown(example_run):
@@ -334,13 +219,3 @@ def test_l4_injected_sigint_runs_shutdown(example_run):
         "the lifecycle-order assertion; the pure-side ORDER spy is in "
         "hosted unit suite)."
     )
-
-
-# The Isaac<->ament cross-container round-trip (PRD Pre-Publish item 1)
-# is now IMPLEMENTED in test_cross_container_roundtrip.py: it
-# host-orchestrates a sibling ros:humble container running the
-# example/ros2/ ament nodes and asserts a real message crosses the
-# container boundary in both directions (sim->ament camera receipt,
-# ament->sim /cmd_vel receipt). The previously-skipped placeholder that
-# deferred it to #133 has been removed now that example/ros2/ is on this
-# branch.

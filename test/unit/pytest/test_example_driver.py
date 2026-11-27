@@ -1,20 +1,4 @@
-"""Hosted unit tests for the example camera_bot driver (isaac#131).
-
-Pure surface only -- no Isaac Sim. Covers:
-
-* the three-file scene merge (scene.yaml imports robot.yaml + object.yaml
-  -> one validated scene dict the framework lifecycle consumes);
-* the expected robot/base_link prim-path string the L1 GPU assertions
-  (separate issue #132) check;
-* the cmd_vel -> chassis-velocity controller mapping;
-* the SCENE class attr shape + the run() lifecycle call ORDER, verified
-  with a pure-side spy and a fake isaacsim module (the Kit-touching
-  internals are overridden with recorders).
-
-The Kit-side end-to-end behavior (camera frame on the ROS 2 topic, the
-/cmd_vel OmniGraph round-trip on a live stage) is the GPU integration
-issue (#132); this file is the hosted, no-GPU half.
-"""
+"""Hosted coverage for scene loading and the camera_bot driver lifecycle."""
 
 import sys
 import types
@@ -59,9 +43,8 @@ class TestLoadThreeFileScene:
         # objects from object.yaml
         assert len(scene["objects"]) == 1
         assert scene["objects"][0]["mobility"] in ("dynamic", "static")
-        # ros2_io from scene.yaml
-        topics = [s["topic"] for s in scene["ros2_io"]["subscriptions"]]
-        assert "/cmd_vel" in topics
+        assert scene["environment"]["ground_plane"] is True
+        assert "ros2_io" not in scene
 
     def test_robot_has_nested_sensor_placement(self):
         scene = ed.load_three_file_scene(EXAMPLE_SCENE)
@@ -86,7 +69,7 @@ class TestLoadThreeFileScene:
             "robot: {name: r, model: m.urdf, pose: {xyz: [0,0,0], rpy: [0,0,0]}}\n"
         )
         scene = tmp_path / "scene.yaml"
-        scene.write_text("imports: [robot.yaml]\nros2_io: {subscriptions: []}\n")
+        scene.write_text("imports: [robot.yaml]\n")
         merged = ed.load_three_file_scene(scene)
         assert merged["robot"]["name"] == "r"
 
@@ -104,31 +87,15 @@ class TestExpectedPrimPaths:
         )
 
 
-# ---------- cmd_vel -> chassis velocity controller (pure) ----------
-
-
-class TestCmdVelController:
-    def test_forward_linear_velocity_passthrough(self):
-        # A twist with forward x maps to a planar linear velocity vector.
-        vx, vy, wz = ed.cmd_vel_to_planar_velocity(
-            linear=(0.5, 0.0, 0.0), angular=(0.0, 0.0, 0.0)
-        )
-        assert vx == pytest.approx(0.5)
-        assert vy == pytest.approx(0.0)
-        assert wz == pytest.approx(0.0)
-
-    def test_yaw_rate_passthrough(self):
-        vx, vy, wz = ed.cmd_vel_to_planar_velocity(
-            linear=(0.0, 0.0, 0.0), angular=(0.0, 0.0, 0.7)
-        )
-        assert wz == pytest.approx(0.7)
-
-    def test_handles_missing_components(self):
-        # Robustness: scalar-or-short tuples still yield a 3-vector.
-        vx, vy, wz = ed.cmd_vel_to_planar_velocity(
-            linear=(1.0,), angular=()
-        )
-        assert (vx, vy, wz) == pytest.approx((1.0, 0.0, 0.0))
+def test_main_ticks_without_an_io_plugin(monkeypatch):
+    ticks = []
+    driver = ed.ExampleDriver()
+    driver._app = types.SimpleNamespace(
+        is_running=lambda: True, update=lambda: ticks.append(1)
+    )
+    monkeypatch.setenv("EXAMPLE_TICK_BUDGET", "2")
+    driver.main()
+    assert len(ticks) == 2
 
 
 # ---------- SCENE attr shape ----------
@@ -150,7 +117,7 @@ class TestLifecycleOrder:
     (ADR-0017 section 9 / PRD A2):
 
         SimulationApp -> load_scene -> get_stage -> build_scene ->
-        setup_sensors -> setup_ros2_io -> ensure_scene_defaults ->
+        setup_sensors -> ensure_scene_defaults ->
         play_timeline -> setup -> main -> shutdown -> close
 
     Verified hosted with a fake isaacsim module and recorder overrides;
@@ -189,7 +156,7 @@ class TestLifecycleOrder:
         class _Spy(ed.ExampleDriver):
             def _load_scene(self):
                 calls.append("load_scene")
-                return {"robot": {}, "ros2_io": {"subscriptions": []}}
+                return {"robot": {}}
 
             def _get_stage(self):
                 calls.append("get_stage")
@@ -200,10 +167,6 @@ class TestLifecycleOrder:
 
             def _setup_sensors(self, scene, stage):
                 calls.append("setup_sensors")
-
-            def _setup_ros2_io(self, scene, stage):
-                calls.append("setup_ros2_io")
-                return object()
 
             def _ensure_scene_defaults(self, stage):
                 calls.append("ensure_scene_defaults")
@@ -228,7 +191,6 @@ class TestLifecycleOrder:
             "get_stage",
             "build_scene",
             "setup_sensors",
-            "setup_ros2_io",
             "ensure_scene_defaults",
             "play_timeline",
             "setup",
@@ -251,7 +213,7 @@ class TestLifecycleOrder:
 
         class _Spy(ed.ExampleDriver):
             def _load_scene(self):
-                return {"robot": {}, "ros2_io": {"subscriptions": []}}
+                return {"robot": {}}
 
             def _get_stage(self):
                 return object()
@@ -261,9 +223,6 @@ class TestLifecycleOrder:
 
             def _setup_sensors(self, scene, stage):
                 pass
-
-            def _setup_ros2_io(self, scene, stage):
-                return object()
 
             def _ensure_scene_defaults(self, stage):
                 pass

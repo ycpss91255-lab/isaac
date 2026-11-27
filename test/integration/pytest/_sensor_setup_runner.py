@@ -70,7 +70,13 @@ def _do_setup(args, app) -> int:
         # the printed marker line.
         print(f"[RAISED] {type(exc).__name__}: {exc}", flush=True)
         return 1
-    print(f"[OK] setup_sensor returned: {result}", flush=True)
+    prim = stage.GetPrimAtPath(result)
+    if not prim.IsValid():
+        raise AssertionError(f"setup_sensor returned a missing prim: {result}")
+    for graph_root in ("/World/CameraGraphs", "/World/SensorGraphs"):
+        if stage.GetPrimAtPath(graph_root).IsValid():
+            raise AssertionError(f"Unexpected publish graph at {graph_root}")
+    print(f"[SENSOR PRIM] {prim.GetPath()}", flush=True)
     return 0
 
 

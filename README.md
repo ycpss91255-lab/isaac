@@ -32,7 +32,7 @@ Then pick **one** path. The stages are independent: build only the stage you are
 
 | You want to | Build | Run |
 |---|---|---|
-| Run a scene and its ROS 2 topics (start here) | `just docker build -t headless` | `just docker run -t headless -d`, then [Headless: bring Isaac up and run a scene](#headless-bring-isaac-up-and-run-a-scene) |
+| Run the camera_bot scene (start here) | `just docker build -t headless` | `just docker run -t headless -d`, then [Headless: bring Isaac up and run a scene](#headless-bring-isaac-up-and-run-a-scene) |
 | An interactive shell to develop in | `just docker build` (devel) | `just docker run` |
 | Watch the sim over WebRTC | `just docker build -t stream` | `just docker run -t stream -d`, then [Connecting to the WebRTC livestream](#connecting-to-the-webrtc-livestream) |
 
@@ -50,33 +50,14 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless: bring Isaac up and run a scene
 
-The `example/` camera_bot scene runs headless, publishes a ROS 2 camera topic and subscribes to `/cmd_vel`. The container's working directory is the repo root (mounted at `~/work`), so script paths are repo-relative. This sequence was verified on Isaac Sim 6.2.0 (RTX 5090):
+The headless example builds the camera_bot scene. It prints `[CAMERA MOUNT]` with the camera mount path, then `[BOOT OK]` when the simulation is ready.
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 EXAMPLE_TICK_BUDGET=100000 exec /isaac-sim/python.sh example/sim/example_driver.py'
-# prints [CAMERA GRAPH OK] and [BOOT OK] in about 30 s
-
-# In a second terminal: the camera topic, from a sibling ROS 2 container on the same domain
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash && ros2 topic echo --once /camera_bot/camera/color/image_raw sensor_msgs/msg/Image --field header'
-# frame_id: camera_bot_camera_color_optical_frame
-
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh example/sim/example_driver.py'
 just docker stop
-```
-
-The example runs on a private ROS domain (`77`) on purpose. A shared host can have other `/cmd_vel` publishers on the default domain 0, and they would drive the robot too. Pick any free domain (0 to 101), and use the same `ROS_DOMAIN_ID` on both sides.
-
-**On the first launch, expect the camera topic about 2 minutes after `[BOOT OK]`.** The camera publisher only appears once the first frame has rendered, and with empty caches the renderer compiles its shaders first. In one cold run the topic appeared 1 min 52 s after `[BOOT OK]`, and `ros2 topic echo --once` returned 2 s later. With the caches from that run, the topic was there within 3 s of `[BOOT OK]`. The wait is not DDS discovery: a new sibling container saw the topic at once while Isaac was publishing. To watch for it instead of waiting on `echo`:
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash &&
-   until ros2 topic list | grep -q image_raw; do sleep 1; done &&
-   ros2 topic hz /camera_bot/camera/color/image_raw'
-# average rate: ~30
 ```
 
 Without `EXAMPLE_TICK_BUDGET`, the driver stops by itself after 1800 updates (about 2 minutes headless) and prints `[EXIT CLEAN]`. Kit writes its session log to `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` on the host. To follow the newest one:
@@ -233,7 +214,7 @@ Required: an NVIDIA GPU runtime (`--gpus all`) for NVENC frame encoding, `--netw
 
 Isaac Sim 6.2.0 ships internal ROS 2 libraries for both Humble and Jazzy under `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` (in 5.1 this lived under `isaacsim.ros2.bridge/`; 6.0 split the monolithic bridge ext into `isaacsim.ros2.core` + `isaacsim.ros2.nodes` etc.), both with Python 3.12 rclpy matching kit's embedded interpreter. **This image hard-bakes the distro at build time** via the `[[build.args]]` entry in `setup.toml` with `key = "ROS_DISTRO"` (default `value = "humble"`, CoreSAM-aligned).
 
-The bridge extension is enabled at Kit boot by the base `IsaacDriver` (`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args); the sensor setups also enable it at runtime through the Kit extension manager if it is not loaded yet, so boot-time enable is an optimisation, not a requirement (isaac#248). No additional launch flag is needed on the driver path.
+The base `IsaacDriver` enables only `isaacsim.core.nodes` at boot. To use ROS 2 with this driver, set `ISAAC_IO_PLUGIN` to the external plugin’s `module:function` and pass any Kit extensions it requires through `ISAAC_KIT_EXTRA_ARGS`. Sensor setup accepts the existing `ros:` YAML fields and returns the USD prim or mount path.
 
 Env wiring shipped in `setup.toml [environment]` (distro-agnostic):
 
@@ -334,7 +315,7 @@ A shared host can have other `/cmd_vel` publishers on ROS domain 0, and they mov
 
 ### Python output API (isaac#365)
 
-`isaac_devkit.output.setup_output` delivers simulation data to Python callbacks without ROS. Kinds: `rgb` (uint8 `(H, W, 3)`), `depth` (float32 `(H, W)`), `joint_state` (`names` / `positions` / `velocities` / `efforts`) and `imu` (`lin_acc` / `ang_vel` / `orientation`, order `w, x, y, z`). The GPU to CPU copy happens only for kinds that have a registered consumer. The mode comes from `ISAAC_OUTPUT_MODE` (default `python`; `ros` is not wired yet, see ADR-0025).
+`isaac_devkit.output.setup_output` delivers simulation data to Python callbacks without ROS. Kinds: `rgb` (uint8 `(H, W, 3)`), `depth` (float32 `(H, W)`), `joint_state` (`names` / `positions` / `velocities` / `efforts`) and `imu` (`lin_acc` / `ang_vel` / `orientation`, order `w, x, y, z`). The GPU to CPU copy happens only for kinds that have a registered consumer. The mode comes from `ISAAC_OUTPUT_MODE` (default `python`; ROS I/O requires an external plugin).
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
@@ -403,11 +384,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 System `python3` cannot install these packages (PEP 668 blocks `pip` on the Isaac base image) — always invoke `/isaac-sim/python.sh -m pytest ...` instead of `pytest ...`.
 
-GPU integration tests (Isaac Sim must boot, e.g. the camera → ROS 2 headless smoke, #127) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `["stage:devel-test"]` override in `setup.toml` (`"deploy.gpu_mode" = "force"`, base #493):
+GPU integration tests (Isaac Sim must boot, e.g. headless camera prim smoke test, #127) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `["stage:devel-test"]` override in `setup.toml` (`"deploy.gpu_mode" = "force"`, base #493):
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_camera_headless.py
 ```
 
-Pass criterion is stdout marker lines (`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).
+Pass criterion is stdout marker lines (`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).

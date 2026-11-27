@@ -32,7 +32,7 @@ NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；為何不�
 
 | 你想要 | Build | Run |
 |---|---|---|
-| 跑一個場景並看它的 ROS 2 topic（建議從這裡開始） | `just docker build -t headless` | `just docker run -t headless -d`，接著看下方「Headless：啟動 Isaac 並跑一個場景」 |
+| 執行 camera_bot 場景（建議從這裡開始） | `just docker build -t headless` | `just docker run -t headless -d`，接著看下方「Headless：啟動 Isaac 並跑一個場景」 |
 | 一個用來開發的互動 shell | `just docker build`（devel） | `just docker run` |
 | 透過 WebRTC 看模擬畫面 | `just docker build -t stream` | `just docker run -t stream -d`，接著看「連接 WebRTC livestream」 |
 
@@ -50,33 +50,14 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：啟動 Isaac 並跑一個場景
 
-`example/` 的 camera_bot 場景以 headless 執行，會發布 ROS 2 camera topic 並訂閱 `/cmd_vel`。container 的工作目錄是 repo root（mount 在 `~/work`），所以腳本路徑都相對於 repo。以下流程已在 Isaac Sim 6.2.0（RTX 5090）驗證：
+Headless 範例會建立 camera_bot 場景，先印出 `[CAMERA MOUNT]` 與相機掛載路徑，待模擬就緒後印出 `[BOOT OK]`。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 EXAMPLE_TICK_BUDGET=100000 exec /isaac-sim/python.sh example/sim/example_driver.py'
-# prints [CAMERA GRAPH OK] and [BOOT OK] in about 30 s
-
-# In a second terminal: the camera topic, from a sibling ROS 2 container on the same domain
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash && ros2 topic echo --once /camera_bot/camera/color/image_raw sensor_msgs/msg/Image --field header'
-# frame_id: camera_bot_camera_color_optical_frame
-
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh example/sim/example_driver.py'
 just docker stop
-```
-
-範例刻意跑在私有 ROS domain（`77`）上。共用的 host 可能有其他 `/cmd_vel` publisher 在預設的 domain 0，它們也會驅動這台機器人。任選一個沒人用的 domain（0 到 101），兩端用同一個 `ROS_DOMAIN_ID`。
-
-**第一次啟動時，camera topic 大約會在 `[BOOT OK]` 之後 2 分鐘才出現。** camera publisher 要等第一個 frame render 完才會出現，而 cache 是空的時候 renderer 要先編譯 shader。在一次冷啟動中，topic 在 `[BOOT OK]` 之後 1 分 52 秒出現，`ros2 topic echo --once` 再過 2 秒回傳。用那次留下的 cache 再跑，topic 在 `[BOOT OK]` 之後 3 秒內就在。等待的不是 DDS discovery：Isaac 在發布時，新開的 sibling container 立刻就看得到 topic。想要看它何時出現、而不是乾等 `echo`：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash &&
-   until ros2 topic list | grep -q image_raw; do sleep 1; done &&
-   ros2 topic hz /camera_bot/camera/color/image_raw'
-# average rate: ~30
 ```
 
 沒設 `EXAMPLE_TICK_BUDGET` 時，driver 跑完 1800 次 update（headless 約 2 分鐘）後會自行停止並印出 `[EXIT CLEAN]`。Kit 會把 session log 寫到 host 端的 `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log`。追最新一份：
@@ -233,7 +214,7 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 同時內建 Humble 與 Jazzy 兩套 ROS 2 libraries（5.1 時放在 `isaacsim.ros2.bridge/`；6.0 把單一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），皆走 Python 3.12 rclpy，與 kit 內嵌 interpreter 一致。**本 image 在 build-time hard-bake distro 選擇** — 透過 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 項目指定（預設 `value = "humble"`，CoreSAM 對齊）。
 
-Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若尚未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
+`IsaacDriver` 啟動時預設只啟用 `isaacsim.core.nodes`。要接入 ROS 2，將 `ISAAC_IO_PLUGIN` 設為外部插件的 `module:function`，並透過 `ISAAC_KIT_EXTRA_ARGS` 啟用插件所需的 Kit 擴充套件。感測器設定仍接受 YAML 的 `ros:` 欄位，建立後回傳 USD prim 或掛載路徑。
 
 `setup.toml [environment]` 內 distro-agnostic env wiring：
 
@@ -334,7 +315,7 @@ just docker stop                           # cleanup
 
 ### Python 輸出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。模式由 `ISAAC_OUTPUT_MODE` 決定（預設 `python`；`ros` 尚未接上，見 ADR-0025）。
+`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。模式由 `ISAAC_OUTPUT_MODE` 決定（預設 `python`；ROS I/O 由外部插件提供）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
@@ -403,11 +384,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 系統的 `python3` 無法安裝這些套件（Isaac base image 的 PEP 668 擋 `pip`）— 一律走 `/isaac-sim/python.sh -m pytest ...`，不要用 `pytest ...`。
 
-GPU integration test（需要 Isaac Sim 真的開機，例如 camera → ROS 2 headless smoke，#127）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
+GPU integration test（需要 Isaac Sim 真的開機，例如 headless 相機 prim 測試，#127）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_camera_headless.py
 ```
 
-判定標準是 stdout marker 行（`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 會呼叫 `_exit(0)`。詳見 [doc/test/TEST.md](test/TEST.md)。
+判定標準是 stdout marker 行（`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 會呼叫 `_exit(0)`。詳見 [doc/test/TEST.md](test/TEST.md)。

@@ -5,8 +5,7 @@ chooses how simulation data leaves Isaac for the whole container:
 
 * ``python`` (default): Python callbacks receive the data; no ROS node
   is created.
-* ``ros``: the native OmniGraph ROS 2 bridge publishes the topics;
-  Python receives no data.
+* ``ros``: 供外部 I/O 插件使用。
 
 The two are exclusive. This module only resolves the value; it is pure
 (no Isaac or ROS import, ADR-0017 section 8 / ADR-0023) so it is

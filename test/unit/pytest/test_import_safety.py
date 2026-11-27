@@ -37,7 +37,7 @@ _DEVKIT_MODULES = (
     "isaac_devkit.model_import",
     "isaac_devkit.materials",
     "isaac_devkit.sensors",
-    "isaac_devkit.ros_io",
+    "isaac_devkit.sensor_prim",
     "isaac_devkit.scene",
     "isaac_devkit.driver",
     "isaac_devkit.sim_version",

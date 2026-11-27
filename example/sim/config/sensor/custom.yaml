@@ -36,10 +36,7 @@ sensors:
     hfov: 90.0                 # degrees
     vfov: 60.0                 # degrees
 
-# ROS 2 output:
-#   <topic_prefix>/color/image_raw, .../color/camera_info
-# Frame id:
-#   <frame_id_prefix>_color_optical_frame
+# 保留既有設定格式。範例使用 frame_id_prefix 命名相機的掛載 prim。
 ros:
   topic_prefix: "/camera_bot/camera"
   frame_id_prefix: "camera_bot_camera"

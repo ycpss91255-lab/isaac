@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **移除 `isaac_devkit` 內建的 ROS 2 I/O（isaac#276）。** `IsaacDriver` 預設只啟用 `isaacsim.core.nodes`。ROS I/O 由 `ISAAC_IO_PLUGIN` 載入外部插件，所需的 Kit 擴充套件可透過 `ISAAC_KIT_EXTRA_ARGS` 啟用。感測器仍接受並驗證 YAML 的 `ros:` 欄位，建立後回傳 USD prim 或掛載路徑。camera_bot 範例改為建立相機並執行模擬迴圈。
+  - `isaac_ros_io` 移植時可從本次移除前的 `origin/main` 提取訂閱與感測器發布的 OmniGraph 實作。兩個檔案均保存在提交 `170de8c`。[ros_io.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/ros_io.py) · [sensor_ros.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/sensor_ros.py)
+
 ### Fixed
 - **修正 Dockerfile 與 ADR-0005、ADR-0007 對串流啟動的描述（isaac#473、#485）。** 透過 `SimulationApp` 載入 `full.streaming.kit` 後發生 segfault 是 Isaac Sim 5.1.0 的觀察。在 6.2.0.1 上，3/3 次非 root 測試皆成功啟動伺服器並正常結束，Kit 記錄 `Started primary stream server on signal port 49521`。未測試用戶端連線或預設連接埠 49100。
 - **四種語言的 README、操作文件與註解統一使用 rc7 命名（isaac#458）。** 設定範例對齊 `setup.toml` 的表格與欄位，本機覆寫檔為 `setup.local.toml`。建置、啟動、執行與停止容器的範例改用 `just docker` 指令。`core-unit` CI 在 checkout 後執行命名檢查，掃描 Git 追蹤的文字檔。

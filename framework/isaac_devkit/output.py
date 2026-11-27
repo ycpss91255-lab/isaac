@@ -6,8 +6,7 @@
   an :class:`~isaac_devkit.output_hub.OutputHub`; consumers register
   callbacks and the caller invokes :meth:`Output.step` once per
   ``app.update()``.
-* ``ros``: not available in this module yet (the native OmniGraph path
-  and its placement are tracked in ADR-0025).
+* ``ros``: 由外部 I/O 插件提供。
 
 Import safety (ADR-0017 section 8 / ADR-0023): no Isaac or ROS import at
 module top; the Isaac-side readers are imported inside :func:`setup_output`.
@@ -64,12 +63,12 @@ def setup_output(environ=None, *, cameras=(), joint=None, imu=None):
 
     Raises:
         ValueError: ``ISAAC_OUTPUT_MODE`` holds an invalid value.
-        NotImplementedError: mode ``ros`` (not wired in this module yet).
+        NotImplementedError: mode ``ros`` requires an external I/O plugin.
     """
     mode = resolve_output_mode(environ)
     if mode == "ros":
         raise NotImplementedError(
-            "ISAAC_OUTPUT_MODE='ros' output is not wired yet (ADR-0025)"
+            "ISAAC_OUTPUT_MODE='ros' requires an external I/O plugin"
         )
     sources = make_python_sources(tuple(cameras), joint, imu)
     return Output(mode, OutputHub(), sources)

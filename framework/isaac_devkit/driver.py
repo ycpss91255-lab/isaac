@@ -8,8 +8,7 @@ Subclass contract:
         USD = "model/usd/robot/openbase/openbase.usd"  # repo-relative
 
         def setup(self, stage):
-            self.init_rclpy()                          # optional
-            # create publishers, attach OmniGraph, etc.
+            self.stage = stage
 
         def main(self):
             while not self._should_quit and self._app.is_running():
@@ -17,7 +16,7 @@ Subclass contract:
                 self._app.update()
 
         def shutdown(self):
-            # release rclpy node, close files, etc.
+            # close files and release application resources
             pass
 
     if __name__ == "__main__":
@@ -132,9 +131,7 @@ def parse_livestream_applauncher(env_value: Optional[str]) -> Dict[str, Any]:
     - ``"2"`` -> WebRTC streaming.
 
     ``enable_cameras=True`` is set in every mode so cameras render even
-    headless -- the ROS 2 camera publish chain needs rendered frames (the
-    headless+enable_cameras path the GPU integration relies on; cf. Isaac
-    Lab issue #3250). Unknown values raise, same as ``parse_livestream_env``.
+    in headless runs (Isaac Lab issue #3250). Unknown values raise, same as ``parse_livestream_env``.
     """
     if env_value is None or env_value == "" or env_value == "0":
         return {"headless": True, "enable_cameras": True}
@@ -154,8 +151,7 @@ def boot_extension_kit_args(extensions) -> list:
     Isaac Lab's ``AppLauncher`` forwards leftover ``sys.argv`` tokens to
     the underlying Kit process, so appending ``--enable <ext>`` pairs
     before constructing the launcher makes Kit enable those extensions
-    during boot. See ``IsaacDriver.BOOT_EXTENSIONS`` for what loads there
-    and why it is an optimisation, not a requirement (isaac#248).
+    during boot. See ``IsaacDriver.BOOT_EXTENSIONS`` for the defaults.
 
     Pure (host-runnable): returns the flat argv list; the caller splices
     it into ``sys.argv``. Empty / falsy input yields ``[]`` (no-op).
@@ -211,21 +207,14 @@ class IsaacDriver:
         section 9); kept functional for the existing drivers until the
         forklift migration (#136). Subclass must set this for now.
         ``SCENE`` -- repo-relative path to a scene YAML (ADR-0017 A7
-        contract surface). Declared for the new contract shape; ``run()``
-        is rewired to the ``load_scene -> build_scene -> setup_sensors ->
-        setup_ros2_io`` lifecycle with the example (#131).
+        contract surface). Used by scene-based drivers.
 
     Override surface:
-        ``setup(stage)`` -- post-stage-open init (rclpy, publishers, OG).
+        ``setup(stage)`` -- post-stage-open initialization.
         ``main()``        -- the loop. Default: ``app.update()`` until
                              ``_should_quit`` flips or Kit reports
                              ``is_running()`` is False.
-        ``shutdown()``    -- pre-close cleanup (destroy rclpy node, etc.).
-
-    Helpers:
-        ``init_rclpy()``  -- safe rclpy init that suppresses rclpy's own
-                             signal handler so it does not race Kit's +
-                             ours into a 3-way SIGINT segfault.
+        ``shutdown()``    -- pre-close cleanup.
 
     Internals (subclass should not override):
         ``_on_signal``, ``_open_stage``, ``_ensure_scene_defaults``,
@@ -235,25 +224,13 @@ class IsaacDriver:
     USD: str = ""
     SCENE: str = ""
 
-    # Extensions enabled at Kit BOOT (via ``--enable`` kit args). The base
-    # driver is the ROS 2 sim driver (``init_rclpy`` + the ros_io
-    # contract), so it loads the ROS 2 bridge up front; ``setup_camera`` /
-    # the sensor setups then find it enabled and skip their own enable.
-    # This is an optimisation, not a requirement: runtime enable through
-    # the ``omni.kit.app`` extension manager works under the Isaac Lab
-    # ``AppLauncher`` experience too. (isaac#248: the "runtime enable
-    # closes Kit" theory recorded here before was wrong -- the real failure
-    # was a ``ModuleNotFoundError`` on the deprecated
-    # ``isaacsim.core.utils``, which that experience does not load, hidden
-    # by ``close()`` in ``run()``'s ``finally``.) Subclasses may override,
-    # including with ``()``.
-    BOOT_EXTENSIONS: tuple = ("isaacsim.core.nodes", "isaacsim.ros2.bridge")
+    # 外部插件可透過 ISAAC_KIT_EXTRA_ARGS 指定額外的 Kit 擴充套件。
+    BOOT_EXTENSIONS: tuple = ("isaacsim.core.nodes",)
 
     def __init__(self) -> None:
         self._should_quit: bool = False
         self._app: Any = None
         self._app_launcher: Any = None
-        self._rclpy_inited: bool = False
 
     # -- Entry point ---------------------------------------------------------
 
@@ -272,7 +249,7 @@ class IsaacDriver:
         launcher_args = parse_livestream_applauncher(
             os.environ.get("ISAAC_LIVESTREAM")
         )
-        # Enable the boot-time extensions (ros2.bridge et al.) via Kit
+        # Enable the boot-time extensions via Kit
         # ``--enable`` args, which AppLauncher forwards from leftover
         # sys.argv to the Kit process it constructs (see BOOT_EXTENSIONS).
         # AppLauncher reads sys.argv only during construction, so restore
@@ -328,25 +305,6 @@ class IsaacDriver:
 
     def shutdown(self) -> None:
         """Pre-close cleanup hook. Default is a no-op."""
-
-    # -- ROS 2 helper --------------------------------------------------------
-
-    def init_rclpy(self) -> None:
-        """Initialise rclpy without registering its signal handlers.
-
-        Isaac Sim's Kit installs SIGINT/SIGTERM during SimulationApp
-        construction; we then install our own. rclpy.init() also wants
-        to install handlers by default, and the 3-way race triggers
-        segfaults during driver shutdown. ``SignalHandlerOptions.NO``
-        keeps rclpy clean and lets Kit + our handler co-exist.
-        """
-        if self._rclpy_inited:
-            return
-        import rclpy
-        from rclpy.signals import SignalHandlerOptions
-
-        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
-        self._rclpy_inited = True
 
     # -- Internals -----------------------------------------------------------
 
