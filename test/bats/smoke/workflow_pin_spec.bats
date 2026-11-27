@@ -3,6 +3,7 @@
 #
 # Guard: every reusable-workflow reference to the org's gpu-self-hosted.yml
 # must be pinned to a release tag, never @main.
+# test_workflow_pins.py is the authoritative structural guard for these pins.
 #
 # Motivation: when .github's main branch is broken even briefly, every isaac
 # push/PR that reaches core-gpu or stream-smoke fails with "workflow
