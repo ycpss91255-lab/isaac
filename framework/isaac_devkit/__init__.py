@@ -27,9 +27,9 @@ from isaac_devkit.exceptions import (
     SensorConfigError,
     SensorNotFoundError,
 )
-from isaac_devkit.model_import import PrimSummary, import_urdf
 from isaac_devkit.scene import build_scene, load_scene
 from isaac_devkit.sensors import setup_sensors
+from isaac_devkit.usd_model import PrimSummary
 
 # Tracks the repo git tag (ADR-0017 section 3); pre-release placeholder
 # until the first release (v1.0.0 at the MVP gate, PRD A6). Keep in
@@ -43,8 +43,7 @@ __all__ = [
     "build_scene",
     # Sensors.
     "setup_sensors",
-    # Model import (L1 contract).
-    "import_urdf",
+    # USD model structure.
     "PrimSummary",
     # Driver lifecycle (ADR-0009 / A2).
     "IsaacDriver",

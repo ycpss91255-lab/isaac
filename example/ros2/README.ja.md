@@ -92,9 +92,8 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`。
 
-Isaac <-> ament のコンテナ間の完全な往復（ノードが live の sim トピックを
-実際に受信する）は GPU 統合テスト（#132）で検証します。ここのテンプレート
-は `colcon build` + `ament_lint` でホスト検証され、GPU は不要です。
+Isaac と ament のコンテナ間の往復テストは `isaac_ros_io` に移りました（isaac#276）。
+このテンプレートはホスト側の CI で `colcon build` と `ament_lint` を使って検証します。
 
 ## 自分用にする
 

@@ -82,7 +82,7 @@ def _main() -> None:
             IsaacDriver,
             parse_livestream_env,
         )
-        from isaac_devkit.model_import import (  # noqa: E402
+        from isaac_devkit.usd_model import (  # noqa: E402
             _summarize_prim_records,
         )
 
@@ -169,14 +169,7 @@ def _main() -> None:
                 # Fold the live committed-USD robot subtree into a
                 # PrimSummary with the same pure summarizer the unit tests
                 # exercise, then report the OBSERVED link/joint structure.
-                # The robot reference roots at /World/Robot; re-root to
-                # /<robot_name> so the records line up with the importer's
-                # own /<robot_name> rooting (the URDF->USD diff=0 contract
-                # is asserted separately by a subprocess re-import in
-                # test_example_gpu_integration.py, the proven
-                # test_model_import.py pattern -- it cannot run here
-                # because importing in-process needs a second
-                # SimulationApp).
+                # Report paths relative to the USD robot root.
                 robot_root = stage.GetPrimAtPath(self._robot_prim_path)
                 records = []
                 for prim in Usd.PrimRange(robot_root):

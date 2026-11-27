@@ -34,7 +34,7 @@ _ISAAC_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab")
 _DEVKIT_MODULES = (
     "isaac_devkit",
     "isaac_devkit.exceptions",
-    "isaac_devkit.model_import",
+    "isaac_devkit.usd_model",
     "isaac_devkit.materials",
     "isaac_devkit.sensors",
     "isaac_devkit.sensor_prim",

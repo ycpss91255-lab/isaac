@@ -41,7 +41,7 @@ def _build_minimal_stage(stage, body_mode: str):
     base_link = UsdGeom.Xform.Define(stage, Sdf.Path("/World/Robot/base_link"))
     if body_mode == "rigid":
         # ApplyAPI on the prim, not the schema class -- matches the
-        # imported-URDF shape isaac_devkit.sensors expects in production.
+        # USD rigid-body shape isaac_devkit.sensors expects in production.
         UsdPhysics.RigidBodyAPI.Apply(base_link.GetPrim())
 
 

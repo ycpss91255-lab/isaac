@@ -103,17 +103,14 @@ def _model_search_roots(repo_root):
 def _resolve_package_uri(uri, roots):
     """Resolve a ``package://<pkg>/<rel>`` URI under the MODEL_PATH roots.
 
-    For each root, checks whether ``<root>/<pkg>/package.xml`` exists (the
-    same ``package.xml``-required convention as
-    ``model_import._resolve_package_dir`` from #267). The first root whose
-    ``<pkg>/`` carries a ``package.xml`` **and** the target file is used.
+    Use the first root containing both the package manifest and the target file.
 
     PURE apart from filesystem existence checks -- no Isaac import.
 
     Raises:
         FileNotFoundError: naming the package and listing the searched roots.
     """
-    # "package://my_pkg/urdf/robot.usd" -> pkg="my_pkg", rel="urdf/robot.usd"
+    # "package://my_pkg/usd/robot.usd" -> pkg="my_pkg", rel="usd/robot.usd"
     stripped = uri[len("package://"):]
     pkg, _, rel = stripped.partition("/")
     if not pkg or not rel:
@@ -144,8 +141,7 @@ def resolve_model_path(model_rel, repo_root):
     * **absolute path** -- returned as-is if it exists.
     * **package:// URI** -- ``package://<pkg>/<rel>`` is resolved by
       scanning each MODEL_PATH root for a ``<pkg>/`` directory that
-      carries a ``package.xml`` (the same convention as
-      ``model_import._resolve_package_dir`` from #267).
+      carries a ``package.xml``.
     * **relative path** -- searched under each MODEL_PATH root (or the
       legacy ``<repo_root>/model/usd/`` fallback).
 
@@ -426,7 +422,7 @@ def _orientation_xyzw(wxyz):
 
     ``rpy_to_quat`` returns (w, x, y, z) -- the convention Isaac Lab uses for
     quaternions nearly everywhere. The ``sim_utils`` SPAWNERS are the
-    exception: ``spawn_from_usd`` / ``spawn_from_urdf`` document their
+    exception: ``spawn_from_usd`` documents its
     ``orientation`` argument as ``(x, y, z, w)``.
 
     Passing (w, x, y, z) straight through therefore rotates every spawned prim.

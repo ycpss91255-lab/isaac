@@ -39,7 +39,6 @@ class TestLoadThreeFileScene:
         # robot from robot.yaml
         assert scene["robot"]["name"] == "camera_bot"
         assert scene["robot"]["model"].endswith(".usd")
-        assert scene["robot"]["source_urdf"].endswith(".urdf")
         # objects from object.yaml
         assert len(scene["objects"]) == 1
         assert scene["objects"][0]["mobility"] in ("dynamic", "static")
@@ -66,7 +65,7 @@ class TestLoadThreeFileScene:
     def test_imports_resolved_relative_to_scene_file(self, tmp_path):
         # A scene that imports a sibling robot fragment merges its keys.
         (tmp_path / "robot.yaml").write_text(
-            "robot: {name: r, model: m.urdf, pose: {xyz: [0,0,0], rpy: [0,0,0]}}\n"
+            "robot: {name: r, model: m.usd, pose: {xyz: [0,0,0], rpy: [0,0,0]}}\n"
         )
         scene = tmp_path / "scene.yaml"
         scene.write_text("imports: [robot.yaml]\n")
