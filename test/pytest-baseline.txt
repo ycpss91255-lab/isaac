@@ -327,7 +327,7 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-HOSTED_UNIT_BASELINE = 683
+HOSTED_UNIT_BASELINE = 687
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -348,7 +348,8 @@ HOSTED_UNIT_BASELINE = 683
 #   all core: 627 -> 633 (core 598).
 #   The workflow naming lint (isaac#443) adds test_workflow_naming.py (42) and 1 in
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
-HOSTED_UNIT_BASELINE_CORE = 642
+#   isaac#430 adds four core checks in test_dockerfile_no_ros.py.
+HOSTED_UNIT_BASELINE_CORE = 646
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -524,7 +525,8 @@ AGGREGATE_TARGET = 126
 #   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
-BATS_BASELINE_CORE = 114
+#   isaac#430 removes the ROS wrapper (10) and baked DDS profile (1) checks.
+BATS_BASELINE_CORE = 103
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 81
 BATS_BASELINE_HEADLESS = 13

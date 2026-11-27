@@ -21,7 +21,6 @@
 #   devel-base    - Development tools and packages
 #   builder       - Compile/build stage (optional; opt-in for runtime split, keeps source)
 #   devel         - Application-specific tools + entrypoint
-#                   (+ fastdds.xml, ROS_DISTRO bake, env-wrapper shim)
 #   test-tools-stage - Lint binaries (shellcheck / hadolint / bats) for devel-test
 #   devel-test    - Lint + bats smoke test (ephemeral, discarded after build)
 #   gui           - Isaac Sim desktop GUI (the only stage whose service mounts X11)
@@ -155,9 +154,7 @@ ARG CONFIG_DIR="/tmp/config"
 # .base/dist/config/ stay; files only in <repo>/config/ are added. Mental
 # model is the same as setup.conf section-replace, just at file
 # granularity. Trim <repo>/config/ files that match base default to
-# start receiving template-side improvements (we did this in the
-# rebase: only docker/setup.conf, shell/bashrc, ros2/fastdds.xml
-# remain in <repo>/config/).
+# start receiving template-side improvements.
 ARG CONFIG_SRC="config"
 
 # [isaac #149 / ADR-0018] Isaac Lab as a baked base tool (alongside Isaac
@@ -264,13 +261,6 @@ COPY --chown="${USER}":"${GROUP}" --chmod=0755 .base/dist/config "${CONFIG_DIR}"
 # Layer 2: <repo>/config/ overrides (per-repo, survives subtree pull).
 # Files here overlay matching paths from layer 1.
 COPY --chown="${USER}":"${GROUP}" --chmod=0755 "${CONFIG_SRC}" "${CONFIG_DIR}"
-# [isaac] Fast DDS profile (UDPv4-only, no built-in transports). Per
-# Isaac Sim 5.1 official ROS 2 install guide, required for cross-container
-# DDS to work reliably on a shared host (--net=host). Pointed to by
-# FASTRTPS_DEFAULT_PROFILES_FILE in setup.conf [environment]. Lands
-# directly at /isaac-sim/ (not via CONFIG_DIR) because the runtime path
-# is what the env var references — no override mechanism needed.
-COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 
 # [isaac] Custom kit experience files. Layered into /isaac-sim/apps/
 # next to NVIDIA's bundled experiences (isaacsim.exp.base.python.kit,
@@ -286,14 +276,6 @@ COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 #       SimulationApp instead of the kit binary directly.
 COPY --chmod=0644 apps/*.kit /isaac-sim/apps/
 
-# [isaac] ROS distro is a build-time choice — set via
-# setup.conf [build] arg_N=ROS_DISTRO=<value> (default humble). Bake
-# the value into a const file consumed by the headless / stream ENTRYPOINT
-# shim, so runtime `-e ROS_DISTRO=...` flags are ignored. Rebuild
-# (just docker build) to switch distros.
-ARG ROS_DISTRO=humble
-RUN mkdir -p /etc/isaac && echo "${ROS_DISTRO}" > /etc/isaac/ros-distro
-
 # [isaac] Pre-create the extension folders Kit tries to create at boot.
 # The experience file lists ${app}/../extsUser, which the NGC image does
 # not ship, and the non-root container user cannot create it under
@@ -303,19 +285,6 @@ RUN mkdir -p /etc/isaac && echo "${ROS_DISTRO}" > /etc/isaac/ros-distro
 # top-level directory on every launch. kit/exts and kit/extsPhysics are
 # the other two folders Kit tries to create there.
 RUN mkdir -p /isaac-sim/extsUser /isaac-sim/kit/exts /isaac-sim/kit/extsPhysics
-
-# [isaac] Soft bake for devel stage (interactive shell). headless / stream
-# stages additionally run the wrapper shim below — that re-exports from
-# /etc/isaac/ros-distro at every container start, hard-baking against
-# runtime override.
-ENV ROS_DISTRO=${ROS_DISTRO} \
-    LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib
-
-# [isaac] ENTRYPOINT shim for headless / stream stages: re-reads
-# /etc/isaac/ros-distro and unconditionally exports ROS_DISTRO +
-# LD_LIBRARY_PATH before exec'ing the wrapped binary. Lives in /usr/local/bin/
-# so the headless / stream stages can name it absolutely in ENTRYPOINT.
-COPY --chmod=0755 script/isaac-ros-env-wrapper.sh /usr/local/bin/isaac-ros-env-wrapper.sh
 
 # [isaac] runheadless wrapper that reads per-host config from
 # /etc/host.yaml (mounted from <repo>/config/host.yaml by caller).
