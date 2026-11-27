@@ -2,11 +2,11 @@
 
 Every experiment driver records which Isaac Sim produced its numbers in an
 ``isaac_variant`` field. Until the 6.2.0 upgrade that field was the string
-literal ``"6.0.1"`` in every driver script, so re-running the physics re-validation on
-a new base image would have written 6.2.0 results labelled 6.0.1 -- exactly
-the comparison the re-validation exists to make. The version now comes from
-the image itself (``/isaac-sim/VERSION``), and the last test stops a literal
-from coming back.
+literal ``"6.0.1"`` in every driver script, so re-running the physics
+re-validation on a new base image would have written 6.2.0 results labelled
+6.0.1 -- exactly the comparison the re-validation exists to make. The version
+now comes from the image itself (``/isaac-sim/VERSION``), and the last test
+stops a literal from coming back.
 """
 
 import ast
@@ -21,6 +21,18 @@ sys.path.insert(0, str(_REPO_ROOT / "framework"))
 from isaac_devkit import sim_version  # noqa: E402
 
 pytestmark = pytest.mark.core
+
+
+def test_module_docstring_line_length():
+    offenders = [
+        f"line {number} ({len(line)} characters)"
+        for number, line in enumerate(__doc__.splitlines(), start=1)
+        if len(line) > 79
+    ]
+    message = "Module docstring exceeds 79 characters on " + ", ".join(
+        offenders
+    )
+    assert not offenders, message
 
 
 @pytest.mark.parametrize(
@@ -82,7 +94,9 @@ def _hardcodes_variant(node):
 
 
 def _find_hardcoded_variants(root: Path) -> list[str]:
-    """Return repo-relative paths of driver scripts with an isaac_variant literal."""
+    """Return repo-relative paths of driver scripts with an
+    isaac_variant literal.
+    """
     scripts = []
     # isaac#360: an empty glob would make the scan pass checking nothing. The
     # test/verify_*.py family moved to isaac_physics_test, so only src/script
