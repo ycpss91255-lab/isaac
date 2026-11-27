@@ -148,6 +148,7 @@
 #   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
+#   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
 #   test_repo_config.py (2): .dockerignore keeps isaac-sim/ out of the
 #   build context, and setup.toml [deploy] uses gpu_runtime. Pure -- AST,
 #   file reads and a fake clock. Live count was then 388.
@@ -285,8 +286,10 @@
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
-# isaac#484 adds 3 hosted tests on top of main's 671 -> 674 (core 602 -> 603, stream 19 -> 21).
-HOSTED_UNIT_BASELINE = 674
+# isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
+
+# isaac#484 adds 3 hosted tests on top of main's 687 -> 690 (core 618 -> 619, stream 19 -> 21).
+HOSTED_UNIT_BASELINE = 690
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -312,11 +315,13 @@ HOSTED_UNIT_BASELINE = 674
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
+#   isaac#338 adds 16 core cases (core 602 -> 618).
+
 #   isaac#484 replaces two custom experience checks with four checks for the
 #   official experience and removal of the custom file (stream 19 -> 21).
 #   isaac#484 review round 1: test_changed_groups.py +1 (apps/ falls back to
 #   core), bringing the total from 653 to 654 (core 602 -> 603).
-HOSTED_UNIT_BASELINE_CORE = 603
+HOSTED_UNIT_BASELINE_CORE = 619
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 21
 HOSTED_UNIT_BASELINE_HEADLESS = 6
