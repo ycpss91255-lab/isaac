@@ -52,8 +52,7 @@
 # 6.2.0: `6.2.0` (built 2026-10-08, /isaac-sim/VERSION 6.2.0-rc.14) and
 # `6.2.0.1` (built 2026-10-14, the GA release day, 6.2.0-rc.15). Same
 # Dockerfile recipe; across all 52,988 .so/.py files the only differences
-# are the URDF importer's UDIM material XML-declaration parser
-# (material_reconstruction.py, on our model_import path), the unused UCX
+# are a material XML-declaration parser, the unused UCX
 # bridge, the version plugin and one test file. Every physics, RTX,
 # replicator and ROS 2 binary is byte-identical, so evidence gathered on
 # `6.2.0` (e.g. the IsaacSim#803 repro) holds for `6.2.0.1`.
@@ -158,7 +157,7 @@ ARG CONFIG_SRC="config"
 
 # [isaac #149 / ADR-0018] Isaac Lab as a baked base tool (alongside Isaac
 # Sim). It is the scene-spawn backend: sim_utils spawners (build_scene),
-# the UrdfConverter (model_import), and AppLauncher + SimulationContext
+# and AppLauncher + SimulationContext
 # (driver). Installed against the bundled Isaac Sim binary via the
 # documented _isaac_sim symlink, into /isaac-sim's Python, so every stage
 # deriving from devel (headless / stream / devel-test) has it. Kept early
@@ -203,14 +202,7 @@ ARG CONFIG_SRC="config"
 # omni.services.pip_archive links into -> 12 dangling links, matplotlib
 # plots and the Newton experience broke. v3.0.0 filters pip_prebundle
 # paths out of PYTHONPATH during every pip operation and fails the build
-# on a new dangling __init__.py. The RUN after the xacro install below
-# re-asserts it over every pip step in this file, not just Isaac Lab's.
-#
-# URDF importer: Isaac Sim 6.2.0 bundles isaacsim.asset.importer.urdf
-# 3.11.12 (6.0.1: 3.11.2), and Isaac Lab 3.0's isaaclab.python.kit does not
-# pin it. The 2.4.31 experience pin in
-# framework/isaac_devkit/model_import.py (_simulation_app_kwargs) is a 5.1
-# leftover that is now only a docstring; it does not block anything.
+# on a new dangling __init__.py. The check below covers every pip step.
 ARG ISAACLAB_VERSION="v3.0.0"
 # cmake / build-essential are what isaaclab.sh would otherwise apt-install
 # itself (it skips that when cmake is already present).
@@ -224,14 +216,6 @@ RUN apt-get update && \
     /isaac-sim/python.sh -c "import torch; v = torch.__version__; assert v.endswith('+cu130'), v; print('torch', v)" && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-# xacro: the offline URDF preprocess (isaac_devkit.model_import,
-# ADR-0020 decision 6, isaac#169) expands a .xacro input to plain URDF
-# before the Isaac importer runs. The standalone PyPI 'xacro' package is
-# pure Python and expands without a live ROS environment (xacro.process_file).
-# Installed into the Isaac python so the offline commit step
-# (/isaac-sim/python.sh -m isaac_devkit.model_import) can import it.
-RUN /isaac-sim/python.sh -m pip install --no-cache-dir xacro
 
 # [isaac#288] Fail the build if any pip step above left a pip_prebundle
 # package without its __init__.py. Isaac Sim shares prebundled packages
@@ -277,9 +261,10 @@ COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 #   isaacsim.exp.base.python.streaming.kit
 #       Closes #21 fix-B: the lightweight Python experience layered with
 #       omni.kit.livestream.{core,webrtc} so SimulationApp + livestream:2
-#       actually serves a WebRTC stream. Avoids the full.streaming.kit
-#       segfault that hits when that experience is loaded via
-#       SimulationApp instead of the kit binary directly.
+#       actually serves a WebRTC stream. On Isaac Sim 5.1.0, loading
+#       full.streaming.kit via SimulationApp led to a reported segfault.
+#       On 6.2.0.1, 3/3 non-root runs started the server without a segfault.
+#       Client connection and default port 49100 were untested (#473, #485).
 COPY --chmod=0644 apps/*.kit /isaac-sim/apps/
 
 # [isaac] Set the ROS distro at build time via the [[build.args]] entry in
