@@ -51,6 +51,24 @@ def test_job_set_is_exactly_the_scoped_jobs_plus_changes_gate_release(jobs):
     assert set(jobs) == {"changes", "gate", "release", *SCOPED}
 
 
+def test_only_changes_and_docs_unit_run_unconditionally_before_gate(jobs):
+    unconditional = {name for name in jobs["gate"]["needs"] if "if" not in jobs[name]}
+    assert unconditional == {"changes", "docs-unit"}
+
+
+def test_concurrency_groups_runs_by_pr_number_or_ref(doc):
+    assert "concurrency" in doc
+    group = " ".join(doc["concurrency"]["group"].split())
+    assert "${{ github.event.pull_request.number || github.ref }}" in group
+
+
+def test_concurrency_cancels_in_progress_only_for_pull_requests(doc):
+    assert "concurrency" in doc
+    cancel = doc["concurrency"]["cancel-in-progress"]
+    assert isinstance(cancel, str)
+    assert " ".join(cancel.split()) == "${{ github.event_name == 'pull_request' }}"
+
+
 def test_no_trigger_level_path_filter(doc):
     triggers = _triggers(doc)
     for name, cfg in triggers.items():
