@@ -7,6 +7,7 @@
 - **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
 
 ### Fixed
+- **修正 Isaac Sim 更新 PR 內文首行顯示的舊版號（isaac#533）。** 首行使用測試清單實際比較的舊版號：指定 `--current-version` 時使用該值，否則使用 Dockerfile 的 `BASE_IMAGE` 版號。
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。
 - **OutputHub GPU 測試實機驗證（isaac#384）。** `test_output_hub_gpu.py` 在 GPU 容器實跑 4 passed / 0 skipped（RGB uint8、depth float32、joint、IMU 四個 callback 皆觸發），確認 `IMU.create(...)` 與 IMU reader 在 runtime 可用；`GPU_INTEGRATION_BASELINE` 與實際 collected 數量相符，不需調高。僅更新 `TEST.md` 與 baseline 註解。
 - **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。

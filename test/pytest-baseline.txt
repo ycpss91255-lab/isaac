@@ -309,7 +309,8 @@
 # isaac#327 (re-merge 2): -14 +1 core (822 -> 809, core 681 -> 668).
 # isaac#442: 65 tracker and bot workflow cases, all core:
 #   809 -> 874, core 668 -> 733.
-HOSTED_UNIT_BASELINE = 874
+# isaac#533 adds two core cases for the first line of the tracker PR body.
+HOSTED_UNIT_BASELINE = 876
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -317,7 +318,7 @@ HOSTED_UNIT_BASELINE = 874
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 809。
+#   以下五組的測試數量下限合計為 876。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -350,7 +351,7 @@ HOSTED_UNIT_BASELINE = 874
 #   isaac#491 adds 19 core cases (core 662 -> 681).
 #   isaac#327: -14 +1 core (core 681 -> 668).
 #   isaac#442 adds 65 core cases (core 668 -> 733).
-HOSTED_UNIT_BASELINE_CORE = 733
+HOSTED_UNIT_BASELINE_CORE = 735
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
