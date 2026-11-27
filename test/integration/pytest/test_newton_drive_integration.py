@@ -7,11 +7,15 @@ checks, per engine (PhysX is the control):
 * the captured output contains no Kit exception or Python traceback;
 * the live settings enable the 60 Hz rate limit and fixed time stepping,
   and the timeline reports looping disabled;
-* the wheel joint positions advance past a threshold (Newton used to
+* both wheels advance at least half the commanded displacement (Newton used to
   ignore every command: the AppLauncher experience leaves
   ``SimulationManager`` default callbacks off, so no physics sim view);
 * updates run at 60 Hz (+-15 %) in simulation time, wall-clock throughput
   exceeds 20 updates/s, and sim time never wraps (timeline looping off).
+
+``sim_hz`` is derived from differences in ``omni.timeline`` simulation time.
+It estimates the ``/clock`` rate without subscribing to the topic. With fixed
+time stepping enabled, it should equal the configured rate.
 
 The runner enables Newton itself in ``_open_stage`` to verify the sim loop
 settings applied by ``driver._play_timeline``.
@@ -41,9 +45,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUNNER = Path(__file__).parent / "_newton_drive_runner.py"
 PYTHON_SH = "/isaac-sim/python.sh"
 SUBPROC_TIMEOUT_SEC = 900
-# 10 rad/s commanded for ~6 s; even at a fraction of realtime the wheels
-# must turn well past one radian.
-MIN_WHEEL_DELTA_RAD = 1.0
+COMMAND_RAD_S = 10.0  # Matches the runner's velocity command for each wheel.
+MIN_WHEEL_FRACTION = 0.5  # Fraction of commanded displacement over the sim-time span.
 RATE_HZ = 60.0
 RATE_TOLERANCE = 0.15
 
@@ -95,23 +98,32 @@ def test_drive_settings(run_output):
     assert looping == "False", m.group(0)
 
 
+def _parse_drive_clock(out):
+    m = re.search(
+        r"\[DRIVE CLOCK\] sim_hz=([\d.]+) wall_hz=([\d.]+) "
+        r"monotonic=(\w+) span_s=(?P<span_s>-?[\d.]+) updates=\d+", out)
+    assert m, out[-2000:]
+    return m
+
+
 @requires_isaac
 def test_wheels_turn_under_velocity_command(run_output):
     _, out = run_output
     m = re.search(r"\[DRIVE WHEELS\] left=(-?[\d.]+) right=(-?[\d.]+) delta_rad=[\d.]+", out)
     assert m, out[-2000:]
     left, right = map(float, m.groups())
-    assert abs(left) > MIN_WHEEL_DELTA_RAD, m.group(0)
-    assert abs(right) > MIN_WHEEL_DELTA_RAD, m.group(0)
+    span_s = float(_parse_drive_clock(out).group("span_s"))
+    expected = COMMAND_RAD_S * span_s
+    minimum = MIN_WHEEL_FRACTION * expected
+    message = f"{m.group(0)} (expected {expected:g} rad per wheel, minimum {minimum:g} rad)"
+    assert left >= minimum, message
+    assert right >= minimum, message
 
 
 @requires_isaac
 def test_loop_runs_at_configured_rate_and_time_never_wraps(run_output):
     _, out = run_output
-    m = re.search(
-        r"\[DRIVE CLOCK\] sim_hz=([\d.]+) wall_hz=([\d.]+) "
-        r"monotonic=(\w+) span_s=(-?[\d.]+) updates=\d+", out)
-    assert m, out[-2000:]
+    m = _parse_drive_clock(out)
     sim_hz, wall_hz, monotonic, span_s = m.groups()
     assert float(sim_hz) == pytest.approx(RATE_HZ, rel=RATE_TOLERANCE), m.group(0)
     assert float(wall_hz) > 20.0, m.group(0)

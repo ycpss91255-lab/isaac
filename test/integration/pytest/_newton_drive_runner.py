@@ -17,6 +17,7 @@ Usage (inside the GPU container)::
 """
 
 import argparse
+import math
 import sys
 import time
 from pathlib import Path
@@ -153,16 +154,20 @@ def _main() -> None:
 
             for _ in range(5):
                 self._app.update()
-            left_start, right_start = wheel_pos()
+            prev_left, prev_right = wheel_pos()
+            left = right = 0.0
             times = []
             wall0 = time.monotonic()
             while time.monotonic() - wall0 < RUN_WALL_SECONDS:
                 self._app.update()
                 times.append(timeline.get_current_time())
+                cur_left, cur_right = wheel_pos()
+                # PhysX wheel positions wrap by 4π, but each real step is under π.
+                d_left, d_right = cur_left - prev_left, cur_right - prev_right
+                left += d_left - math.tau * round(d_left / math.tau)
+                right += d_right - math.tau * round(d_right / math.tau)
+                prev_left, prev_right = cur_left, cur_right
             wall = time.monotonic() - wall0
-            left_end, right_end = wheel_pos()
-            left = left_end - left_start
-            right = right_end - right_start
             span_s = times[-1] - times[0]
             sim_hz = (len(times) - 1) / span_s if span_s > 0 else 0.0
             monotonic = all(b >= a for a, b in zip(times, times[1:]))
