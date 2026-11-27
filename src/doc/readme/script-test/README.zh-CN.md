@@ -12,32 +12,18 @@
 
 # 单一 case(改 script 时快速 iterate)
 ./isaac_ws/src/script/test/standalone_smoke.sh --only ros2_test_pub
-
-# CI / strict 模式:SKIP 视为 FAIL
-./isaac_ws/src/script/test/standalone_smoke.sh --strict
 ```
 
 前置条件:
 
 - `just docker run -t stream -d` 跑得起来(container 没起时 smoke 会自动带起)
-- 仓内已 track `isaac_ws/src/model/usd/robot/openbase/openbase.usda`,USD 相关 case 直接吃。如果该档不见了(checkout 不完整 / 意外删掉),从 repo 内 URDF 源档重新产:
-
-  ```bash
-  cd isaac_ws/src/docker
-  just docker exec -t stream /isaac-sim/python.sh \
-      /home/yunchien/work/src/script/import_urdf.py \
-      /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
-      /tmp/openbase_generated.usda
-  ```
-
-  真的要覆写 in-repo USD,再把 `openbase_generated.usda` 搬到 `model/usd/robot/openbase/openbase.usda`。in-repo USD 不在的话相关 case 会 SKIP(`--strict` 下会 FAIL)。
 
 ## Cases
 
-| Script | Marker phrase | Timeout | USD? |
-|--------|---------------|--------:|:----:|
-| `ros2_test_pub_standalone.py` | `standalone publishing` | 150s | no |
-| `ros2_test_sub_standalone.py` | `standalone subscribed to` | 150s | no |
+| Script | Marker phrase | Timeout |
+|--------|---------------|--------:|
+| `ros2_test_pub_standalone.py` | `standalone publishing` | 150s |
+| `ros2_test_sub_standalone.py` | `standalone subscribed to` | 150s |
 
 Marker 用 regex 比对在收到的 stdout+stderr 串上。每支 standalone script 都会在核心 setup 完成(rclpy subscriber 活、或第一次 `[tick]`)时恰好打印一次该 tag 行。
 
@@ -45,22 +31,20 @@ Marker 用 regex 比对在收到的 stdout+stderr 串上。每支 standalone scr
 
 | Code | 意义 |
 |-----:|------|
-| 0 | 全部 PASS(SKIP 容许,除非 `--strict`)|
+| 0 | 所选案例全部 PASS |
 | 1 | 至少 1 个 FAIL |
-| 2 | Pre-flight 失败(docker dir 不在 / standalone container 起不来)|
+| 2 | 未知选项或 Pre-flight 失败(docker dir 不在 / standalone container 起不来)|
 
 ## 失败除错
 
 FAIL 时 runner 会把该 script 的 stdout+stderr 最后 20 行打印到 stderr。常见模式:
 
 - `ModuleNotFoundError: No module named 'rclpy'` — `enable_extension("isaacsim.ros2.bridge")` 没调用,或在 `import rclpy` 之后才调用
-- `AttributeError: 'NoneType' object has no attribute 'GetPrimAtPath'` — `ctx.open_stage()` 返回了,但 OPENED-spin loop 没等到 stage 填好
-- `Failed to open: <USD path>` — USD 不在或不可读;检查 host-side 路径
 - 跑到 timeout 都没看到 marker — kit 起来但 script 主 loop 没走到 print;检查 marker 行以上是否有 exception
 
 ## 为什么用 integration 不用 unit
 
-Standalone scripts 会起 kit + livestream + rclpy subscriber。纯 Python unit test 无法取代「script 真的有走到 ROS subscriber loop,USD 载入完,bridge alive」这件事。Marker 字串就是契约 — script 打印得出来,等于 SimulationApp init、ROS 2 bridge extension load、rclpy import、node 建立、USD load + OPENED transition 全成立。
+Standalone scripts 会起 kit + livestream + rclpy subscriber。纯 Python unit test 无法取代「script 真的有走到 ROS subscriber loop,bridge alive」这件事。Marker 字串就是契约 — script 打印得出来,等于 SimulationApp init、ROS 2 bridge extension load、rclpy import 和 node 创建均已完成。
 
 ## 为什么放这个目录,不放 isaac_ws/src/docker/test/
 

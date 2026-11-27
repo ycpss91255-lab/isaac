@@ -16,12 +16,11 @@
 #   not git-tracked so a separate per-repo test dir wasn't picked.
 #
 # Exit codes:
-#   0 = all PASS (SKIPped cases tolerated by default)
+#   0 = all selected cases PASS
 #   1 = at least one FAIL
-#   2 = pre-flight failure (docker dir missing / standalone container won't start)
+#   2 = unknown flag or pre-flight failure (docker dir missing / standalone container won't start)
 #
 # Flags:
-#   --strict       Treat SKIP as FAIL (e.g. CI where USD must be pre-generated).
 #   --only <name>  Run a single case by script basename (substring match).
 #   -h, --help     Print usage.
 #
@@ -35,13 +34,12 @@ set -uo pipefail
 
 DOCKER_DIR=/home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker
 SCRIPT_PATH_IN_CONTAINER=/home/yunchien/work/src/script
-USD_HOST=/home/yunchien/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openbase/openbase.usda
 CONTAINER=yunchien-isaac-standalone
 
-# Smoke matrix: <basename>|<grep-marker>|<timeout-sec>|<needs-usd>
+# Smoke matrix: <basename>|<grep-marker>|<timeout-sec>
 CASES=(
-  "ros2_test_pub_standalone.py|standalone publishing|150|no"
-  "ros2_test_sub_standalone.py|standalone subscribed to|150|no"
+  "ros2_test_pub_standalone.py|standalone publishing|150"
+  "ros2_test_sub_standalone.py|standalone subscribed to|150"
 )
 
 usage() {
@@ -49,11 +47,9 @@ usage() {
   exit 0
 }
 
-STRICT=0
 ONLY=""
 while (( $# > 0 )); do
   case "$1" in
-    --strict) STRICT=1; shift ;;
     --only) ONLY="$2"; shift 2 ;;
     -h|--help) usage ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
@@ -77,15 +73,10 @@ if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
 fi
 
 # Per-case runner ----------------------------------------------------
-# Args: script_basename, marker_regex, timeout_sec, needs_usd (yes|no)
-# Echoes "PASS|FAIL|SKIP <script> (<elapsed>s)" and returns 0 / 1 / 0.
+# Args: script_basename, marker_regex, timeout_sec
+# Returns 0 for PASS or 1 for FAIL.
 _run_case() {
-  local script="$1" marker="$2" timeout="$3" needs_usd="$4"
-
-  if [[ "$needs_usd" == "yes" && ! -f "$USD_HOST" ]]; then
-    echo "SKIP $script (USD missing at $USD_HOST — run import_urdf.py first)"
-    return 0  # SKIP not counted as FAIL unless --strict
-  fi
+  local script="$1" marker="$2" timeout="$3"
 
   local tmp
   tmp="$(mktemp)"
@@ -131,19 +122,15 @@ _run_case() {
 }
 
 # Drive matrix -------------------------------------------------------
-pass=0 fail=0 skip=0
+pass=0 fail=0
 for c in "${CASES[@]}"; do
-  IFS='|' read -r script marker timeout needs_usd <<< "$c"
+  IFS='|' read -r script marker timeout <<< "$c"
   if [[ -n "$ONLY" && "$script" != *"$ONLY"* ]]; then
     continue
   fi
   echo "=== $script ==="
-  if _run_case "$script" "$marker" "$timeout" "$needs_usd"; then
-    if [[ "$needs_usd" == "yes" && ! -f "$USD_HOST" ]]; then
-      skip=$(( skip + 1 ))
-    else
-      pass=$(( pass + 1 ))
-    fi
+  if _run_case "$script" "$marker" "$timeout"; then
+    pass=$(( pass + 1 ))
   else
     fail=$(( fail + 1 ))
   fi
@@ -152,13 +139,9 @@ for c in "${CASES[@]}"; do
 done
 
 echo "---"
-echo "smoke summary: pass=$pass fail=$fail skip=$skip"
+echo "smoke summary: pass=$pass fail=$fail"
 
 if (( fail > 0 )); then
-  exit 1
-fi
-if (( STRICT == 1 && skip > 0 )); then
-  echo "FAIL: --strict mode and $skip cases skipped"
   exit 1
 fi
 exit 0
