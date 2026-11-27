@@ -44,6 +44,25 @@ if [[ -z "${SMOKE_DROP_REGEX:-}" ]]; then
   SMOKE_DROP_REGEX+='|Stream Server: stream[0-9]+.*stopped'
 fi
 
+smoke_port_in_use() {
+  (exec 3<>"/dev/tcp/127.0.0.1/${1:?missing port}") 2>/dev/null
+}
+
+smoke_load_avg() {
+  cut -d' ' -f1-3 /proc/loadavg
+}
+
+smoke_port_holders() {
+  local port="${1:?missing port}" holders
+  holders="$({
+    docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -wF -- "${port}" || true
+    if command -v ss >/dev/null; then
+      ss -ltnup -H "sport = :${port}" 2>/dev/null || true
+    fi
+  } | paste -sd ' ' -)"
+  printf '%s\n' "${holders:-unknown}"
+}
+
 # Liveness hook. Fail-closed on purpose: a caller that forgets to bind a
 # real probe must make the smoke FAIL, never silently assume the container
 # is up -- a silent pass on a dead Kit is the bug #233 fixes.
