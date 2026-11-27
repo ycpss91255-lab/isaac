@@ -253,7 +253,7 @@ fi
 docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
   -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
   set -eu
-  pip install --quiet --user pyyaml pytest pytest-cov xacro numpy
+  pip install --quiet --user pyyaml pytest pytest-cov numpy
   cd framework
   rc=0
   python -m pytest ../test/unit/pytest/ '"${PYTEST_SELECT}"' \
@@ -272,7 +272,7 @@ counts="$(
   docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
     -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
     set -eu
-    pip install --quiet --user pyyaml pytest xacro numpy >/dev/null
+    pip install --quiet --user pyyaml pytest numpy >/dev/null
     total="$(python -m pytest test/unit/pytest/ --collect-only -q -p no:cacheprovider \
       2>/dev/null | grep -c "::" || true)"
     echo "total ${total}"

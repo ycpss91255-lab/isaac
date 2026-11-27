@@ -104,7 +104,7 @@ def _main() -> None:
             IsaacDriver,
             parse_livestream_env,
         )
-        from isaac_devkit.model_import import (  # noqa: E402
+        from isaac_devkit.usd_model import (  # noqa: E402
             _summarize_prim_records,
         )
 
