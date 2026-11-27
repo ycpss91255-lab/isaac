@@ -4,9 +4,9 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
 
-Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner、`UrdfConverter`、`AppLauncher`；ADR-0018）。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
+Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
 
-本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD / URDF 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
+本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
 ## 前置需求
 
@@ -113,19 +113,20 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 - `./script/checkout_identity.sh isolate` 會把 `[[image.rules]] rule = "string:isaac-<dir>-<hash>"`（含 `[project] name`） 寫進 gitignored 的 `setup.local.toml`。image tag、compose project 與 container 名稱都跟著它走。`./script/checkout_identity.sh show` 會印出這個 checkout 解析出的名稱。
 - pre build / run / stop hook 會拒絕對共用名稱動作。`ISAAC_ALLOW_SHARED_IDENTITY=1` 可以略過；CI 的 build 步驟就是這樣用。
 - `just docker run` 不會重 build 已存在的 image（base#1552）。pull 新變更後，先 `just docker build -t <stage>` 再 `just docker run -t <stage>`。
-- 磁碟用量：每個會 build 的 checkout 或 worktree 都擁有自己的一組 image（`<hub>/isaac-<dir>-<hash>:<stage>`），每個 stage tag 名義上約 31 GB。它們不共用，刪掉 checkout 目錄也不會從 Docker daemon 移除。
-- 清理已刪除的 checkout：從 `./script/checkout_identity.sh show`（刪目錄前執行；需要 `.env.generated`）或 `docker images` 取得 `isaac-<dir>-<hash>` 名稱，先列出再移除：
+- 磁碟用量：每個會 build 的 checkout 或 worktree 都有自己的 image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）。`docker images` 顯示每個 stage tag 名義上約 31 GB。因為有共用層，移除 tag 時實際回收的空間較少。刪掉 checkout 目錄後，image 仍留在 Docker daemon。
+- 清理已刪除的 checkout：從 `./script/checkout_identity.sh show`（刪目錄前執行；需要 `.env.generated`）或 `docker images` 取得 `isaac-<dir>-<hash>` 名稱。自訂的 `PROJECT_NAME` 可能與 `<hub>-<slug>` 不同。請在標籤輸出中找到已刪除 checkout 的 image，複製同一行的 project 名稱。
 
   ```bash
-  SLUG=isaac-<dir>-<hash>   # 完整名稱，例如取自 "image: <hub>/<SLUG>:<stage>"
-  HUB=<hub>                 # 該 image 名稱中的 <hub> 部分
-  docker ps -a --filter "label=com.docker.compose.project=${HUB}-${SLUG}" --format '{{.Names}}'
-  docker ps -aq --filter "label=com.docker.compose.project=${HUB}-${SLUG}" | xargs -r docker rm -f
+  SLUG='isaac-<dir>-<hash>'   # 完整名稱，例如取自 "image: <hub>/<SLUG>:<stage>"
+  docker ps -a --format '{{.Label "com.docker.compose.project"}}  {{.Image}}  {{.Names}}'
+  PROJECT='<project>'
+  docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format '{{.Names}}'
+  docker ps -aq --filter "label=com.docker.compose.project=${PROJECT}" | xargs -r docker rm -f  # 會強制終止執行中的容器，僅限 checkout 已不存在時使用，切勿用於仍存在的 checkout
   docker images --filter "reference=*/${SLUG}:*"
-  docker images -q --filter "reference=*/${SLUG}:*" | xargs -r docker rmi
+  docker images --filter "reference=*/${SLUG}:*" --format '{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
   ```
 
-  filter 只精確比對 slug。不要放寬成 `isaac*`，也不要跑 `docker image prune -a`：共用的 `test-tools:<base 版本>` image（下一條）不可被此流程移除。
+  filter 精確比對 project 與 image slug。用 `docker rmi` 移除 tag 時，若其他 checkout 仍使用共用層，在移除參照這些層的最後一個 tag 前，不會釋放這些層佔用的空間。不要放寬成 `isaac*`，也不要跑 `docker image prune -a`：共用的 `test-tools:<base 版本>` image（下一條）不可被此流程移除。
 - 有一個 image 仍然共用：每次 build 也會 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名稱只由 pin 住的 base 版本決定。host 上所有 pin 同一個 base 版本的 checkout 與 repo 都寫同一個 tag，所以別的 checkout 可能正在 build 時不要刪它。`just docker build --clean-tools` 會替所有人把它刪掉。它來自 base 的 `build.sh`，上游追蹤在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前啟動的 container 還留在共用 project 裡。用 `docker compose -p <hub>-isaac ps -a` 列出，按名稱停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 會停掉整個共用 project，包含別的 checkout 的 container。
 
@@ -294,7 +295,7 @@ Kit terminal 應印出 `[ros2_test_sub] /host/test <- 'hello-from-host'`。
 
 #### 額外 Kit 參數（`ISAAC_KIT_EXTRA_ARGS`）
 
-`IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`example_driver.py`、`model_import`、`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
+`IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`example_driver.py`、`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -305,7 +306,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### 啟動插件（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`example_driver.py`、`model_import`、`stream_source_producer` 與 `src/script/` 下的腳本不支援。
+`IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`example_driver.py`、`stream_source_producer` 與 `src/script/` 下的腳本不支援。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
