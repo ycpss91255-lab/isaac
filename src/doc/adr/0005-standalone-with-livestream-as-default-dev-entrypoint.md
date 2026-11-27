@@ -43,7 +43,7 @@ The browser-close behaviour is intentional and load-bearing: the sim keeps runni
 
 ## Consequences
 
-- The new SOP `doc/standalone_livestream_workflow.md` is the operating procedure for all driver scripts written from #19 onward. The superseded `doc/action_graph_setup.md` remains available for historical reference.
+- The new SOP `doc/standalone_livestream_workflow.md` is the operating procedure for all driver scripts written from #19 onward; the legacy `doc/cmd_vel_inkit_teleop.md` and `doc/action_graph_setup.md` SOPs are kept as historical reference but flagged as superseded at the top of each file.
 - The application demo driver (the camera-bot example's predecessor) was ported to this pattern in PR-B for #19. Other legacy drivers (the planar-move and `diag_*` families) can be ported opportunistically; they continue to work under the in-kit Script Editor flow until ported.
 - ADR-0002 keeps its original decision (use in-kit Script Editor + `rclpy` + `dc` velocity write) as the *historical* path; this ADR-0005 adds an addendum-style "Update" at the bottom of ADR-0002 pointing at this file.
 - The new pattern is also LLM-friendly: Claude can run `./exec.sh -t headless /isaac-sim/python.sh <script>` directly, capture stdout, and time-bound the run via `timeout`. No browser interaction is required.
@@ -88,8 +88,12 @@ sim_app = SimulationApp(
 )
 ```
 
-The Decision / Why / Considered Options in the body of this ADR all stand — the entrypoint *pattern* (Python-driven, livestream-on-demand) is correct. The two corrections above are about *which container target* and *which Kit experience* the pattern lands on inside `ycpss91255-docker/isaac`. The legacy `action_graph_setup.md` describes the GUI fallback if the standalone path regresses.
+The Decision / Why / Considered Options in the body of this ADR all stand — the entrypoint *pattern* (Python-driven, livestream-on-demand) is correct. The two corrections above are about *which container target* and *which Kit experience* the pattern lands on inside `ycpss91255-docker/isaac`. The legacy `cmd_vel_inkit_teleop.md` / `action_graph_setup.md` Script Editor fallback paths in the body remain valid as a Plan B if the standalone path ever regresses.
 
 ## Editorial note (2026-06-11)
 
 Incidental application-specific example names in this ADR were replaced with generic wording (camera-bot example) as part of the base-repo convergence (ADR-0017, #128). Decision content is unchanged; the original wording is preserved in git history.
+
+## Editorial note (2026-11-27)
+
+#429 removed the ROS scripts and the `cmd_vel_inkit_teleop.md` guide. References to that guide above describe the historical Script Editor workflow.

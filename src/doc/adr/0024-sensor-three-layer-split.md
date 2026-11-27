@@ -105,8 +105,10 @@ remains the same.
 - **Existing public API unchanged.** `from isaac_devkit.sensors import
   load_config, setup_sensor` works exactly as before.  `scene.py` and
   the example driver do not need changes.
-- **GPU integration coverage.** `test_sensor_setup_integration.py` exercises
-  sensor setup with ROS-enabled configurations.
+- **Integration tests unchanged.** The GPU integration tests
+  (`test_sensor_setup_integration.py`, `test_camera_ros2_headless.py`)
+  exercise the full prim+ROS path and continue to pass because the sensor
+  configs in those tests include `ros:`.
 - **New unit tests.** `test_sensor_prim.py` (host-runnable) covers config
   loading, the `ros:` optional path, and host-pure helpers.
   `test_sensor_ros.py` covers the graph topology builder.
@@ -116,6 +118,8 @@ remains the same.
   `urdf2usd`'s sensor prim support.  Layer (c) is the seed for
   `isaac_ros2`'s OmniGraph publish chain.  Both can be moved with a
   one-line import change in layer (b).
+
+**Update (2026-11-27).** #429 removed `test_camera_ros2_headless.py`. Its entry above records the coverage at the time of this decision.
 
 ## References
 

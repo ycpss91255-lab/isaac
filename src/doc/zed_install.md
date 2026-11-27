@@ -125,7 +125,7 @@ The driver log should show `camera graph created at /World/CameraGraphs/forklift
 
 - **`set_extension_enabled_immediate("sl.sensor.camera", True)` returns false** — extension dir not on Isaac's path. Re-check step 3 + step 4. The exact extension name may differ between Stereolabs versions; inspect `<mount-dir>/sl.*/extension.toml` and use whatever the `[package] name` field says.
 - **ZED OmniGraph node not registered** — ext loaded but kit needs an `update()` cycle to register its nodes. The dispatch in `camera_setup.py` already calls `sim_app.update()` before building the graph; if you're using a custom entrypoint, do the same.
-- **No topics on consumer side** — Stereolabs publishes through its own SDG pipeline, which may need a different DDS profile than the standard `isaacsim.ros2.bridge`. Check `FASTRTPS_DEFAULT_PROFILES_FILE` is the same on both sides.
+- **No topics on consumer side** — Stereolabs publishes through its own SDG pipeline, which may need a different DDS profile than the standard `isaacsim.ros2.bridge`. Check that the publisher and subscriber use the same DDS profile.
 
 ## References
 

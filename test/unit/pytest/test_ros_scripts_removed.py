@@ -118,3 +118,55 @@ def test_cross_subnet_adr_points_to_ros_io():
 def test_baseline_has_no_cross_container_leg():
     baseline = REPO_ROOT / "test/assert_pytest_baseline.sh"
     assert "XC_PYTEST" not in baseline.read_text(encoding="utf-8")
+
+
+def _doc_files_containing(needle):
+    doc_dir = REPO_ROOT / "src/doc"
+    return sorted(
+        path.relative_to(doc_dir)
+        for path in doc_dir.rglob("*")
+        if path.is_file() and needle in path.read_bytes()
+    )
+
+
+def test_action_graph_setup_has_no_fastdds_profile():
+    doc_dir = REPO_ROOT / "src/doc"
+    action_graph = (doc_dir / "action_graph_setup.md").read_text(encoding="utf-8")
+    zed_install = (doc_dir / "zed_install.md").read_text(encoding="utf-8")
+    profile_var = "FASTRTPS_DEFAULT_PROFILES_FILE"
+    assert "config/ros2/fastdds.xml" not in action_graph
+    assert profile_var not in action_graph
+    assert profile_var not in zed_install
+    assert _doc_files_containing(profile_var.encode()) == []
+
+
+def test_adr_0025_fastdds_note():
+    adr = Path("adr/0025-output-mode-ros-or-python.md")
+    lines = (REPO_ROOT / "src/doc" / adr).read_text(encoding="utf-8").splitlines()
+    original = "the UDPv4-only Fast DDS profile (`config/ros2/fastdds.xml`, #367)."
+    original_line = next((i for i, line in enumerate(lines) if original in line), None)
+    assert original_line is not None, original
+    required = ("test/fixtures/ros2/fastdds.xml", "isaac_ros_io", "ADR-0015")
+    assert any(all(term in line for term in required) for line in lines[original_line + 1:])
+    assert _doc_files_containing(b"config/ros2/fastdds.xml") == [adr]
+
+
+def test_acceptance_doc_has_no_cmd_vel_coverage():
+    acceptance = (REPO_ROOT / "doc/v1.0.0-rc1-acceptance.md").read_text(encoding="utf-8")
+    assert "cmd_vel" not in acceptance
+    assert "camera topic + `frame_id`" not in acceptance
+    assert "test_l3_camera_prim_exists" in acceptance
+
+
+def test_adr_0005_0024_original_text_kept():
+    adr_dir = REPO_ROOT / "src/doc/adr"
+    adr_0005, = adr_dir.glob("0005-*.md")
+    adr_0024, = adr_dir.glob("0024-*.md")
+    original = (
+        "the legacy `doc/cmd_vel_inkit_teleop.md` and `doc/action_graph_setup.md` SOPs "
+        "are kept as historical reference but flagged as superseded at the top of each file."
+    )
+    assert original in adr_0005.read_text(encoding="utf-8")
+    text = adr_0024.read_text(encoding="utf-8")
+    assert "**Integration tests unchanged.**" in text
+    assert "test_camera_ros2_headless.py" in text
