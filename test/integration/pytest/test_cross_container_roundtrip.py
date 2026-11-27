@@ -73,11 +73,11 @@ PYTHON_SH = "/isaac-sim/python.sh"
 ROS_IMAGE = "ros:humble"
 
 # DDS env every participant must share for host-network discovery
-# (compose test service + config/ros2/fastdds.xml). The sibling
-# containers inherit these so they find the Isaac participant.
+# between the compose test service and the sibling containers. The latter
+# mount the UDPv4 profile from test/fixtures/ros2/fastdds.xml.
 ROS_DOMAIN_ID = "0"
 RMW = "rmw_fastrtps_cpp"
-FASTDDS_PROFILE = REPO_ROOT / "config" / "ros2" / "fastdds.xml"
+FASTDDS_PROFILE = REPO_ROOT / "test" / "fixtures" / "ros2" / "fastdds.xml"
 
 EXPECTED_CAMERA_TOPIC = "/jetbot/camera/color/image_raw"
 EXPECTED_CAMERA_FRAME_ID = "jetbot_camera_color_optical_frame"

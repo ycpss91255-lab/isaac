@@ -22,10 +22,9 @@
 #   devel-base    - Development tools and packages
 #   builder       - Compile/build stage (optional; opt-in for runtime split, keeps source)
 #   devel         - Application-specific tools + entrypoint
-#                   (+ fastdds.xml, ROS_DISTRO bake, env-wrapper shim)
 #   test-tools-stage - Lint binaries (shellcheck / hadolint / bats) for devel-test
 #   devel-test    - Lint + bats smoke test (ephemeral, discarded after build)
-#   gui           - Isaac Sim desktop GUI (the only stage whose service mounts X11)
+#   gui           - Isaac Sim desktop GUI (X11 via `[stage:gui] gui.mode = "force"` in setup.toml)
 #   headless      - Isaac Sim, no streaming (ISAAC_LIVESTREAM=0; pure inference / batch)
 #   stream        - Isaac Sim + WebRTC streaming (ISAAC_LIVESTREAM=2; devel observation)
 #   producer      - Baked WebRTC stream-source producer (FROM stream; published image)
@@ -204,9 +203,8 @@ ARG CONFIG_SRC="config"
 #
 # RL learning frameworks (rl_games / rsl_rl / sb3 / skrl / robomimic) are
 # NOT installed yet (`--install none` below; Isaac Lab 3.0 treats `none`
-# as the old name for `core`): the current product is single-scene + ROS 2
-# service, no reinforcement learning. They are DEFERRED, not excluded --
-# parallel-environment / RL-style work is planned later (the "C" /
+# as the old name for `core`). The current product runs a single scene.
+# Parallel-environment / RL-style work is planned later (the "C" /
 # InteractiveScene direction in ADR-0018). When that lands, replace the
 # `--install none` line with the full install:
 #
@@ -276,13 +274,6 @@ COPY --chown="${USER}":"${GROUP}" --chmod=0755 .base/dist/config "${CONFIG_DIR}"
 # Layer 2: <repo>/config/ overrides (per-repo, survives subtree pull).
 # Files here overlay matching paths from layer 1.
 COPY --chown="${USER}":"${GROUP}" --chmod=0755 "${CONFIG_SRC}" "${CONFIG_DIR}"
-# [isaac] Fast DDS profile (UDPv4-only, no built-in transports). Per
-# Isaac Sim 5.1 official ROS 2 install guide, required for cross-container
-# DDS to work reliably on a shared host (--net=host). Pointed to by
-# FASTRTPS_DEFAULT_PROFILES_FILE in setup.toml [environment]. Lands
-# directly at /isaac-sim/ (not via CONFIG_DIR) because the runtime path
-# is what the env var references — no override mechanism needed.
-COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 
 # [isaac] Custom kit experience files. Layered into /isaac-sim/apps/
 # next to NVIDIA's bundled experiences (isaacsim.exp.base.python.kit,
@@ -299,14 +290,6 @@ COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 #       Client connection and default port 49100 were untested (#473, #485).
 COPY --chmod=0644 apps/*.kit /isaac-sim/apps/
 
-# [isaac] Set the ROS distro at build time via the [[build.args]] entry in
-# setup.toml with key = "ROS_DISTRO" (default value = "humble"). Bake
-# the value into a const file consumed by the headless / stream ENTRYPOINT
-# shim, so runtime `-e ROS_DISTRO=...` flags are ignored. Rebuild
-# (just docker build) to switch distros.
-ARG ROS_DISTRO=humble
-RUN mkdir -p /etc/isaac && echo "${ROS_DISTRO}" > /etc/isaac/ros-distro
-
 # [isaac] Pre-create the extension folders Kit tries to create at boot.
 # The experience file lists ${app}/../extsUser, which the NGC image does
 # not ship, and the non-root container user cannot create it under
@@ -316,19 +299,6 @@ RUN mkdir -p /etc/isaac && echo "${ROS_DISTRO}" > /etc/isaac/ros-distro
 # top-level directory on every launch. kit/exts and kit/extsPhysics are
 # the other two folders Kit tries to create there.
 RUN mkdir -p /isaac-sim/extsUser /isaac-sim/kit/exts /isaac-sim/kit/extsPhysics
-
-# [isaac] Soft bake for devel stage (interactive shell). headless / stream
-# stages additionally run the wrapper shim below — that re-exports from
-# /etc/isaac/ros-distro at every container start, hard-baking against
-# runtime override.
-ENV ROS_DISTRO=${ROS_DISTRO} \
-    LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib
-
-# [isaac] ENTRYPOINT shim for headless / stream stages: re-reads
-# /etc/isaac/ros-distro and unconditionally exports ROS_DISTRO +
-# LD_LIBRARY_PATH before exec'ing the wrapped binary. Lives in /usr/local/bin/
-# so the headless / stream stages can name it absolutely in ENTRYPOINT.
-COPY --chmod=0755 script/isaac-ros-env-wrapper.sh /usr/local/bin/isaac-ros-env-wrapper.sh
 
 # [isaac] runheadless wrapper that reads per-host config from
 # /etc/host.yaml (mounted from <repo>/config/host.yaml by caller).
@@ -366,8 +336,7 @@ RUN cat "${CONFIG_DIR}"/shell/bashrc >> "${HOME}/.bashrc" && \
 # anything else that writes under ~/.cache then fails -- concretely
 # warp's '~/.cache/warp' PermissionError kills omni.replicator.core at
 # extension startup, which unregisters the SDG node templates
-# (DispatchSync etc.) the ROS2 camera publish chain needs: graph builds,
-# zero frames published.
+# (including DispatchSync). The camera graph then builds but produces no frames.
 RUN mkdir -p "${HOME}/.cache" "${HOME}/.nv" && \
     chown "${USER}":"${GROUP}" "${HOME}/.cache" "${HOME}/.nv"
 
@@ -375,8 +344,7 @@ RUN mkdir -p "${HOME}/.cache" "${HOME}/.nv" && \
 # shell helpers that should run during `docker build` under
 # <repo>/script/docker/<name>.sh, then COPY them into a build-time
 # scratch location and RUN them. Cleanup keeps the final image lean.
-# Runtime helpers (entrypoint, ros bringup, ...) stay under
-# <repo>/script/ as before; the two classes are deliberately split.
+# Runtime helpers such as the entrypoint live under <repo>/script/.
 #
 # Example (uncomment and adapt):
 #COPY --chmod=0755 script/docker/build_helper.sh /tmp/build_helper.sh
@@ -481,6 +449,8 @@ ENV BATS_LIB_PATH="/usr/lib/bats"
 COPY .base/dist/test/bats/smoke/shared/ /smoke_test/
 COPY .base/dist/test/bats/smoke/devel-test/ /smoke_test/
 COPY test/bats/smoke/ /smoke_test/
+COPY setup.toml CONTRIBUTING.md /lint/
+COPY .github/pull_request_template.md /lint/.github/
 # [isaac#402] Workflow files baked so workflow_pin_spec.bats cannot pass vacuously
 # on a missing directory (bats runs non-recursively, so this is not a spec).
 COPY .github/workflows/ /smoke_test/workflows/
@@ -570,7 +540,7 @@ CMD ["sleep", "infinity"]
 ############################## gui ##############################
 # [isaac #427] Desktop GUI variant. The image is the same as devel; what
 # makes it the GUI stage is its compose service: `["stage:gui"]` in setup.toml sets
-# `"gui.mode" = "auto"`, which mounts X11 / DISPLAY here and nowhere else.
+# `"gui.mode" = "force"`, which mounts X11 / DISPLAY here and nowhere else.
 #
 # Usage:
 #   just docker run -t gui

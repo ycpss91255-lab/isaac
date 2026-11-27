@@ -26,6 +26,7 @@ _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 _EXPECTED_CALLERS = {
     "main.yaml",
     "ci-stream-smoke.yaml",
+    "ci-stream-visual-e2e.yaml",
     "ci-headless-smoke.yaml",
     "publish-stream-source.yaml",
 }
@@ -64,7 +65,7 @@ def test_every_gpu_reusable_caller_uses_the_pinned_tag():
     )
 
 
-def test_gpu_reusable_callers_are_the_known_four():
+def test_gpu_reusable_callers_are_the_known_five():
     callers = set(_callers())
     assert callers == _EXPECTED_CALLERS, (
         f"missing={_EXPECTED_CALLERS - callers}, extra={callers - _EXPECTED_CALLERS}. "
@@ -131,6 +132,7 @@ def test_reap_filter_matches_script_baseline_project(tmp_path):
         "GITHUB_RUN_ID": "111",
         "GITHUB_RUN_ATTEMPT": "2",
         "OBSERVED": str(observed),
+        "ISAAC_CI_CACHE_ROOT": str(tmp_path / "ci-cache"),
     }
     subprocess.run(
         ["bash", str(tmp_path / "script" / "ci" / "gpu_integration_job.sh")],

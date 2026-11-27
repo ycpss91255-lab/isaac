@@ -13,11 +13,10 @@
 # limitations under the License.
 
 """
-Camera subscriber node: the app-side consumer of the example camera.
+Camera subscriber node: the app-side consumer of a simulated camera.
 
-Subscribes to the camera topic the base-repo Isaac example publishes
-(/camera_bot/camera/color/image_raw, sensor_msgs/Image) and logs a
-one-line summary per frame. This is the inbound half of the ROS 2
+Subscribes to sensor_msgs/Image on the configured camera topic and logs
+one line per frame. This is the inbound half of the ROS 2
 bidirectional topology (ADR-0017 section 6): the Isaac driver publishes
 the camera stream through an OmniGraph chain, and this sibling ament node
 -- running in a standard ROS 2 Humble container -- receives it.
@@ -38,8 +37,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 
-# The topic the base-repo example publishes (example/sim/config/sensor/
-# custom.yaml: topic_prefix /camera_bot/camera + /color/image_raw).
+# Default image topic for a camera in the /camera_bot namespace.
 DEFAULT_CAMERA_TOPIC = "/camera_bot/camera/color/image_raw"
 
 
@@ -68,7 +66,7 @@ def describe_image(msg: Image) -> str:
 
 
 class CameraSubscriber(Node):
-    """Subscribe to the example camera topic and log each frame."""
+    """Subscribe to a simulated camera topic and log each frame."""
 
     def __init__(self) -> None:
         """Declare the camera_topic parameter and create the subscription."""

@@ -16,6 +16,9 @@ name: Main CI/CD
 # pending forever. Branch protection requires only `gate`, which runs
 # always() after every other job and passes when each one succeeded or was
 # skipped (GitHub's recommended pattern for path-filtered required checks).
+#
+# A new PR run cancels the previous run for that PR to free the runner.
+# merge_group runs must finish so the merge queue receives the gate result.
 on:
   push:
     branches: [main, master]
@@ -34,6 +37,12 @@ on:
         required: false
         default: all
         type: string
+
+concurrency:
+  # A new run replaces a pending run in the same group even with cancel-in-progress false.
+  # Use run_id to give each non-PR run its own group.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # release uses softprops/action-gh-release@v2 which needs
 # contents: write to create a GitHub Release. Reusable workflow
@@ -251,6 +260,14 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository)
     uses: ./.github/workflows/ci-stream-smoke.yaml
 
+  stream-visual-e2e:
+    needs: [changes, stream-unit]
+    if: >-
+      needs.changes.outputs.stream == 'true' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    uses: ./.github/workflows/ci-stream-visual-e2e.yaml
+
   # Headless group GPU job (isaac#461): starts the headless stage and requires
   # it to stay running with RestartCount 0. The stage was only ever built, so
   # a broken start command (a restart loop under base's restart policy) was
@@ -267,7 +284,7 @@ jobs:
   # it pending, and fails when any job failed or was cancelled, or when
   # `changes` itself did not succeed (script/ci/gate_result.py).
   gate:
-    needs: [changes, docs-unit, core-unit, stream-unit, core-build, core-gpu, stream-smoke, headless-smoke]
+    needs: [changes, docs-unit, core-unit, stream-unit, core-build, core-gpu, stream-smoke, stream-visual-e2e, headless-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:

@@ -128,18 +128,15 @@ if [[ "${MODE}" == "gpu" ]]; then
   GPU_JUNIT="${GPU_JUNIT_PATH:-test/.gpu-pytest-report.xml}"
   # ROS 2 domain isolation. The example runner's /cmd_vel round-trip uses
   # network=host (the compose default), so on a shared self-hosted runner
-  # it shares ROS_DOMAIN_ID=0 (baked into the compose `environment:`, which
-  # outranks any env_file overlay) with every other ROS 2 node on the box
-  # -- including leaked sibling ros:humble containers from the
+  # it shares the default domain 0 with other nodes using that domain
+  # on the host, including leaked sibling ros:humble containers from the
   # cross-container test that keep publishing /cmd_vel (0.37/0.19). The
   # example runner's io.latest('/cmd_vel') then picks up that foreign
   # traffic, breaking the "latest() is None before publish" check and the
   # round-trip value assertion (it sees 0.37, not its own 0.42). Pass an
   # explicit ROS_DOMAIN_ID into the in-container pytest process via the
-  # `env` wrapper -- a command-line env assignment outranks the container's
-  # `environment:` for that process tree, and the example runner subprocess
-  # inherits it -- so the run is isolated onto a private domain. CI passes
-  # a per-run value via GPU_ROS_DOMAIN_ID; default 0 keeps local behavior.
+  # `env` wrapper so the example runner subprocess inherits it. CI passes
+  # a per-run value via GPU_ROS_DOMAIN_ID. Local runs default to 0.
   #
   # Isolated compose project (owv#55 second axis; first axis was isaac#239).
   # This is a foreground run.sh with no --no-rm, so run.sh installs its EXIT
