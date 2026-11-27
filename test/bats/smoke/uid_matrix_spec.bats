@@ -5,9 +5,9 @@
 bats_require_minimum_version 1.5.0
 
 setup() {
-  SCRIPT="${BATS_TEST_DIRNAME}/../../../script/ci/uid_matrix.sh"
-  if [[ "${BATS_TEST_DIRNAME}" == /smoke_test ]]; then
-    SCRIPT=/lint/ci/uid_matrix.sh
+  SCRIPT="${BATS_TEST_DIRNAME}/uid_matrix.sh"
+  if [[ ! -f "${SCRIPT}" ]]; then
+    SCRIPT="${BATS_TEST_DIRNAME}/../../../script/ci/uid_matrix.sh"
   fi
   [ -f "${SCRIPT}" ]
 

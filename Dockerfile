@@ -498,6 +498,8 @@ COPY --chmod=0755 script/ci/stream_smoke.sh /smoke_test/stream_smoke.sh
 # so its running + RestartCount == 0 verdict is checked on every build against
 # stub run.sh / docker (no docker, no GPU).
 COPY --chmod=0755 script/ci/headless_smoke.sh /smoke_test/headless_smoke.sh
+# Bake the UID matrix helper next to its dry-run spec.
+COPY --chmod=0755 script/ci/uid_matrix.sh /smoke_test/uid_matrix.sh
 # The self-hosted GPU job scripts the org reusable workflow runs
 # (gpu-self-hosted.yml), baked next to gpu_job_scripts_spec.bats so their
 # step order and env scoping are checked on every build against stubs --
