@@ -102,10 +102,10 @@ def _enable_extensions(*names):
 
     Deliberately NOT ``isaacsim.core.utils.extensions.enable_extension``:
     that module is deprecated since Isaac Sim 6.0 (it lives in
-    ``extsDeprecated/``) and the Isaac Lab ``AppLauncher`` experience never
-    loads it, so importing it raises ``ModuleNotFoundError`` there
-    (isaac#248).  Enabling at runtime through the extension manager works
-    under both the Isaac Lab experience and a bare ``SimulationApp``.
+    ``extsDeprecated/``). Both the default and streaming experiences for
+    ``isaacsim.SimulationApp`` omit it, so importing it raises
+    ``ModuleNotFoundError`` (isaac#248). The extension manager supports
+    runtime enablement in both experiences.
 
     Already-enabled extensions are skipped.  Raises ``RuntimeError`` when
     Kit reports that an extension could not be enabled, so a missing

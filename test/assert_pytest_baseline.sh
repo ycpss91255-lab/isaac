@@ -32,14 +32,14 @@
 #   test/assert_pytest_baseline.sh --group <g>
 #       hosted-unit for ONE scope group (isaac#434): runs `pytest -m <g>` and
 #       checks that group against its own floor HOSTED_UNIT_BASELINE_<G>. The
-#       framework coverage gate applies to `core` (the group that exercises
-#       isaac_devkit); the total and group-sum checks need every group, so they
-#       only run in the default full mode. Not valid with --gpu.
+#       core group also enforces framework coverage and fails if any test is
+#       skipped. The total and group-sum checks need every group, so they only
+#       run in the default full mode. Not valid with --gpu.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="${REPO_ROOT}/test/pytest-baseline.txt"
-PY_IMAGE="${PY_IMAGE:-python:3.12-slim}"
+PY_IMAGE="${PY_IMAGE:-python:3.12}"
 
 ALL_GROUPS="core gui stream headless docs"
 MODE="hosted"
@@ -128,18 +128,15 @@ if [[ "${MODE}" == "gpu" ]]; then
   GPU_JUNIT="${GPU_JUNIT_PATH:-test/.gpu-pytest-report.xml}"
   # ROS 2 domain isolation. The example runner's /cmd_vel round-trip uses
   # network=host (the compose default), so on a shared self-hosted runner
-  # it shares ROS_DOMAIN_ID=0 (baked into the compose `environment:`, which
-  # outranks any env_file overlay) with every other ROS 2 node on the box
-  # -- including leaked sibling ros:humble containers from the
+  # it shares the default domain 0 with other nodes using that domain
+  # on the host, including leaked sibling ros:humble containers from the
   # cross-container test that keep publishing /cmd_vel (0.37/0.19). The
   # example runner's io.latest('/cmd_vel') then picks up that foreign
   # traffic, breaking the "latest() is None before publish" check and the
   # round-trip value assertion (it sees 0.37, not its own 0.42). Pass an
   # explicit ROS_DOMAIN_ID into the in-container pytest process via the
-  # `env` wrapper -- a command-line env assignment outranks the container's
-  # `environment:` for that process tree, and the example runner subprocess
-  # inherits it -- so the run is isolated onto a private domain. CI passes
-  # a per-run value via GPU_ROS_DOMAIN_ID; default 0 keeps local behavior.
+  # `env` wrapper so the example runner subprocess inherits it. CI passes
+  # a per-run value via GPU_ROS_DOMAIN_ID. Local runs default to 0.
   #
   # Isolated compose project (owv#55 second axis; first axis was isaac#239).
   # This is a foreground run.sh with no --no-rm, so run.sh installs its EXIT
@@ -147,7 +144,7 @@ if [[ "${MODE}" == "gpu" ]]; then
   # `COMPOSE_PROFILES='*' compose down --remove-orphans` over the resolved
   # compose project. base v0.42.0 removed --instance (base#666); the project
   # is now the single resolved PROJECT_NAME. Left at the DEFAULT project
-  # (${DOCKER_HUB_USER}-${IMAGE_NAME}, e.g. yunchien-isaac) that teardown
+  # (${DOCKER_HUB_USER}-${IMAGE_NAME}, e.g. <user>-isaac) that teardown
   # would reap a co-hosted manually-run `stream` container living in the same
   # project on a shared GPU host, on every GPU pytest run. So pin a DISTINCT
   # PROJECT_NAME in the derived .env.generated (the --env-file the wrappers
@@ -306,7 +303,7 @@ if [[ -z "${baseline}" ]]; then
 fi
 echo "hosted-unit baseline = ${baseline}"
 
-# Run pytest with coverage inside the slim Python container. cd framework
+# Run pytest with coverage inside the Python container with git. cd framework
 # so coverage picks up [tool.coverage] from framework/pyproject.toml.
 #
 # Run the container as the host user (--user + HOME=/tmp). The repo is
@@ -330,14 +327,29 @@ if [[ -n "${GROUP}" ]]; then
   PYTEST_SELECT="-m ${GROUP}"
   [[ "${GROUP}" == "core" ]] || PYTEST_COV=""
 fi
-docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
+# Run the FORBIDDEN_NAMES scan from a normal clone. The container mounts only
+# the worktree directory, and a linked worktree's .git file points outside it.
+docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${GROUP}" \
   -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
   set -eu
   pip install --quiet --user pyyaml pytest pytest-cov numpy
   cd framework
+  if [ "${GROUP}" = core ]; then
+    set -- --junitxml=/tmp/hosted-junit.xml -rA
+  fi
   rc=0
   python -m pytest ../test/unit/pytest/ '"${PYTEST_SELECT}"' \
-    -p no:cacheprovider '"${PYTEST_COV}"' || rc=$?
+    -p no:cacheprovider "$@" '"${PYTEST_COV}"' || rc=$?
+  if [ "${GROUP}" = core ]; then
+    python - <<"PY"
+import sys
+import xml.etree.ElementTree as ET
+
+report = ET.parse("/tmp/hosted-junit.xml")
+if any(int(suite.attrib["skipped"]) > 0 for suite in report.iter("testsuite")):
+    sys.exit("core group has skipped tests (a skipped test is not a pass)")
+PY
+  fi
   # rc 5: no tests collected (an empty group); checked against its floor below.
   [ "${rc}" -eq 0 ] || [ "${rc}" -eq 5 ] || exit "${rc}"
 '
@@ -349,7 +361,7 @@ docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
 # counts as 0.
 GROUPS_LIST="${GROUP:-${ALL_GROUPS}}"
 counts="$(
-  docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
+  docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES \
     -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
     set -eu
     pip install --quiet --user pyyaml pytest numpy >/dev/null

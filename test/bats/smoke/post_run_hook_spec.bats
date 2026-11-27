@@ -65,6 +65,13 @@ teardown() {
   [ -z "${output}" ]
 }
 
+@test "post-run: stream + -d is a no-op with ISAAC_SKIP_STREAM_POST_RUN=1" {
+  ISAAC_SKIP_STREAM_POST_RUN=1 run --separate-stderr "${HOOK}" -t stream -d
+  [ "$status" -eq 0 ]
+  [ -z "${output}" ]
+  [ -z "${stderr}" ]
+}
+
 @test "post-run: stream + -d starts the viewer with stream-only UI mode" {
   run --separate-stderr "${HOOK}" -t stream -d
   [ "$status" -eq 0 ]

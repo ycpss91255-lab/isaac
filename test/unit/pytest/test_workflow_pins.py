@@ -26,6 +26,7 @@ _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 _EXPECTED_CALLERS = {
     "main.yaml",
     "ci-stream-smoke.yaml",
+    "ci-stream-visual-e2e.yaml",
     "ci-headless-smoke.yaml",
     "publish-stream-source.yaml",
 }
@@ -64,7 +65,7 @@ def test_every_gpu_reusable_caller_uses_the_pinned_tag():
     )
 
 
-def test_gpu_reusable_callers_are_the_known_four():
+def test_gpu_reusable_callers_are_the_known_five():
     callers = set(_callers())
     assert callers == _EXPECTED_CALLERS, (
         f"missing={_EXPECTED_CALLERS - callers}, extra={callers - _EXPECTED_CALLERS}. "

@@ -134,7 +134,13 @@ jobs:
         uses: actions/checkout@v7
       - name: Stale naming scan
         run: python3 script/ci/check_stale_naming.py
+      - name: Forbidden names scan
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
+        run: python3 script/ci/check_forbidden_names.py --allow-unset
       - name: Hosted core-group pytest + group floor + coverage gate
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
         run: ./test/assert_pytest_baseline.sh --group core
 
   stream-unit:
@@ -239,6 +245,14 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository)
     uses: ./.github/workflows/ci-stream-smoke.yaml
 
+  stream-visual-e2e:
+    needs: [changes, stream-unit]
+    if: >-
+      needs.changes.outputs.stream == 'true' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
+    uses: ./.github/workflows/ci-stream-visual-e2e.yaml
+
   # Headless group GPU job (isaac#461): starts the headless stage and requires
   # it to stay running with RestartCount 0. The stage was only ever built, so
   # a broken start command (a restart loop under base's restart policy) was
@@ -255,7 +269,7 @@ jobs:
   # it pending, and fails when any job failed or was cancelled, or when
   # `changes` itself did not succeed (script/ci/gate_result.py).
   gate:
-    needs: [changes, docs-unit, core-unit, stream-unit, core-build, core-gpu, stream-smoke, headless-smoke]
+    needs: [changes, docs-unit, core-unit, stream-unit, core-build, core-gpu, stream-smoke, stream-visual-e2e, headless-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
