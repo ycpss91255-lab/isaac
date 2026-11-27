@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pre-stop hook: host-side, runs before stop.sh main logic.
 # Receives the same "$@" as stop.sh. Non-zero exit aborts the wrapper.
-# Skipped when ./stop.sh runs with --dry-run.
+# Skipped when just docker stop runs with --dry-run.
 #
 # Refuses to stop while this checkout still uses the image tag / compose
 # project that every checkout on this host shares (stopgap for base#1550 /
