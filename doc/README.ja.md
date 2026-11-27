@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
-イメージには Isaac Sim 本体と、scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）として使う NVIDIA Isaac Lab 3.0（`v3.0.0`）が含まれます。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
+イメージには Isaac Sim 本体と、scene-spawn backend（`sim_utils` spawner；ADR-0018）として使う NVIDIA Isaac Lab 3.0（`v3.0.0`）が含まれます。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
 本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 

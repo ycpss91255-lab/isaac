@@ -140,7 +140,7 @@ just docker run -t headless -d   # 啟 runheadless.sh -v
 docker ps | grep headless # 確認 Up
 ```
 
-預期：`yunchien-isaac-headless` Up。kit 跟 bridge extension 都載完約需 30-60 秒。
+預期：`<user>-isaac-headless` Up。kit 跟 bridge extension 都載完約需 30-60 秒。
 
 ![kit 啟動完成](image/01_kit_started.png)
 
@@ -163,7 +163,7 @@ Server 欄填 `localhost`（**不加** `:8011` 或任何 port 後綴）。Click 
 在 kit GUI：
 
 1. **File → Open**
-2. 路徑輸入：`/home/yunchien/work/src/model/usd/robot/openbase/openbase.usda`
+2. 路徑輸入：`/home/<user>/work/src/model/usd/robot/openbase/openbase.usda`
 3. 載入完 viewport 應該看到 OpenBase 模型（一塊圓形平台 STL mesh）
 
 > 如果 viewport 黑暗 / 看不到物體：Stage 應該已經有 mesh prim 但沒燈光。先做 Step 3.1 + 3.2 補燈跟地板。
@@ -293,7 +293,7 @@ OpenBase 應該掉到 GroundPlane 上停住。沒有任何 cmd_vel 進來時 bas
 
 ```bash
 docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
-    -v /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
+    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
     -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'source /opt/ros/humble/setup.bash && \
         ros2 topic pub /cmd_vel geometry_msgs/Twist "{linear: {x: 0.5}}" -r 10'
@@ -309,7 +309,7 @@ WebRTC viewport 內 OpenBase 應該開始沿 +x 方向移動，速度約 0.5 m/s
 
 ```bash
 docker run --rm -it --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
-    -v /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
+    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
     -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'apt update && apt install -y ros-humble-teleop-twist-keyboard && \
         source /opt/ros/humble/setup.bash && \
