@@ -65,7 +65,11 @@ def test_driver_timeline_settings(driver_run):
 
 
 def test_driver_timeline_clock(driver_run):
-    """sim_hz measures updates per second of omni.timeline simulation time."""
+    """sim_hz measures updates per second of omni.timeline simulation time.
+
+    sim_hz is a sanity check, and the wall_hz upper bound detects removal
+    of the 60 Hz rate limit.
+    """
     _, output = driver_run
     match = re.search(
         r"^\[DRIVE CLOCK\] sim_hz=(\S+) wall_hz=(\S+) monotonic=(\w+) "
