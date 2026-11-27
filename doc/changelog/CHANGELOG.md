@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
+
 ### Fixed
 - **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
 - **調整 `test_sim_version.py` 的 docstring 換行（isaac#376）。** 模組與 `_find_hardcoded_variants` 的 docstring 每行最多 79 個字元。新增一項 core 測試檢查模組 docstring 的行長，hosted 測試基準 756 -> 757，core 648 -> 649。
@@ -17,6 +21,8 @@
 
 ### Added
 - **新增場景生成與關節驅動的 hosted 單元測試（isaac#478）。** 既有場景規格測試改用 `to_scene_specs`。新增 4 個 core 測試，檢查舊名稱已移除、`src/script/scene_builder.py` 匯出新名稱、場景與關節驅動模組均無 Isaac Lab 匯入，以及 `usd_model.apply_joint_drive` 在未安裝 Isaac Sim 的主機上仍可匯入並指向場景端實作。另增 12 個 core 測試檢查關節驅動增益，另有 2 個 core 測試涵蓋既有碰撞體的覆寫位置、巢狀碰撞體的剪枝與純幾何模型的根節點回退。新增 2 個 GPU 測試，分別檢查材質綁定與顏色，以及 NVIDIA 方塊子網格上的碰撞偏移。Hosted 測試下限由 716 調至 734（core 由 623 調至 641），GPU 由 34 調至 36。 另增 5 個 core 測試固定 `spawn_overrides` 的合法與非法鍵行為，以及 2 個 core 測試確認 `framework/pyproject.toml` 不再禁用 `isaaclab` 模組層級匯入，且 hosted 測試會直接執行的函式不被排除於覆蓋率之外。Hosted baseline 764 -> 789（core 656 -> 681），GPU baseline 35 -> 37。
+- **每週追蹤官方 Isaac Sim 穩定版與測試清單（isaac#442）。** `Bot: Isaac Sim Version` 匿名查詢 NGC，發現新版時，若已有分支名稱或 issue 標題與 bot 在該版本使用的名稱完全相符，就略過更新。自動 PR 僅更新 Dockerfile 的 `BASE_IMAGE` pin，`README.md` 與 Dockerfile 註解中的版本號需人工同步。PR 列出測試清單差異，有變更時另開 issue；若無法取得清單，仍送出版本更新。也可手動指定比較版本。若 override 等於最新版而 Dockerfile 的 pin 較舊，追蹤器不會寫入任何變更，留待未指定 override 的排程更新 pin。版本比對只收三到四段、主版本不超過三位數的 tag，排除年份式舊命名（如 2022.2.1）。建立 PR 後以 workflow_dispatch 啟動 `main.yaml`（`GITHUB_TOKEN` 建立的 PR 不會觸發 pull_request）；`dry_run` 輸入可在 Dockerfile 已是最新版時預覽。前提：儲存庫需開啟「Allow GitHub Actions to create and approve pull requests」。新增 65 個測試（追蹤器、離線 run() 與 layer 解析、workflow）。Hosted baseline 809 -> 874（core 668 -> 733）。
+- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 769 增至 803（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 90 增至 91。
 - **新增 stream smoke 在 GPU 主機忙碌時的診斷測試（isaac#497）。** 九個 Bats 案例涵蓋訊號埠或媒體埠被占用時提早失敗（有 `ss` 時也能偵測 UDP 媒體埠占用）、略過連接埠檢查、啟動與就緒時的主機負載及就緒耗時，以及逾時時回報就緒標記與連接埠占用者。stream 組由 81 增至 90 項。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
@@ -30,11 +36,13 @@
 ### Changed
 - **場景生成與執行期關節驅動改用 OpenUSD（isaac#478）。** `to_scene_specs` 產生場景規格，`build_scene` 直接在指定或目前的 USD stage 建立地板、光源和模型參照。參照模型會先在已有對應物理 API 的節點寫入覆寫值，再將移動性設定所需的 API 套用到根節點。若找不到對應 API，則將覆寫值寫入根節點。`usd_model.apply_joint_drive` 轉匯出場景端的實作，使用 `UsdPhysics.DriveAPI` 寫入並讀回增益。增益驗證統一由 `scene.resolve_joint_drive_gains` 處理，`usd_model` 委派給該函式。 `framework/pyproject.toml` 的 `banned-module-level-imports` 同步移除 `isaaclab`，覆蓋率排除清單只保留需要實際 stage 的函式。
 - **場景 `spawn_overrides` 的 `*_props` 改為 snake_case dict，未支援的覆寫鍵會丟出 `ValueError`（isaac#478）。** 舊版把值直接傳給 Isaac Lab，遇到不支援的值會以 TypeError 當掉。
+- **同一 PR 的新 CI run 會取消執行中的舊 run（closes isaac#491）。** Main CI/CD 依 PR 號碼將 PR run 分組。推送到 main、推送 tag、手動執行與 `merge_group` 事件則以 `github.run_id` 為每次 run 建立獨立群組，因此排隊中的 run 不會被後續 run 取代或取消。新增 19 個 core 測試案例，其中包含只修改文件目錄下的 HTML 或 PNG 檔案時，CI 只選取 `docs` 組的回歸測試。
 - **`IsaacDriver.run()` 改用 `isaacsim.SimulationApp` 啟動 Kit（isaac#479）。** 啟動前驗證 `ISAAC_LIVESTREAM`。`ISAAC_LIVESTREAM=1` 原本使用原生串流，現在與模式 2 選用相同的 WebRTC experience（行為變更）。串流由 experience 檔決定，啟動設定不再包含 `livestream` 鍵。開機擴充套件與 `ISAAC_KIT_EXTRA_ARGS` 透過 `extra_args` 傳入，保留呼叫端的 `sys.argv`。播放前啟用 #447 的 physics warm start 與 60 Hz 限速。新增 6 個 hosted 單元測試，以模擬的 `carb`、`omni` 與 `simulation_manager` 模組驗證 `_play_timeline`。GPU 測試以 PhysX、Newton 的 Jetbot 雙輪位移取代套件可用性檢查。Hosted 基準 716 → 725（core 623 → 632），GPU 基準 34 → 35。
 - **更新已搬移模型的路徑（isaac#363）。** 模型 README 依 sim_asset 的目錄結構列出 openbase、omwr 與 forklift_blocky 的位置。新增 11 項測試，hosted 單元測試基準由 725 提高至 736，docs 組由 68 提高至 79。
 - **縮小 `Co-authored-by` 的比對範圍（isaac#414）。** 共同作者的姓名僅含 Claude 時不再誤判，也能辨識版本號緊接模型名稱或以連字號相連的寫法，例如 `Claude Sonnet4.5`、`Claude Opus4` 和 `Claude-3`。
 - **Workflow / job 命名規則與 lint（isaac#443，#434 PR4）。** 規則寫在 `doc/workflow-naming.md`：檔名 `<category>-<feature>.yaml`（category 為 ci / release / bot / tool）、顯示名稱 `<Category>: <Feature Words>`、job id 小寫 kebab-case、不加 job 層 `name:`、CI job id 為 `changes` / `gate` / `release` 或以組別開頭（`core-` `gui-` `stream-` `headless-` `docs-`）。`script/ci/lint_workflow_names.py` 檢查 `.github/workflows/*.yaml`，並掃文件有沒有殘留已改掉的名稱；它在 `docs-unit` job 執行，也由 `test_workflow_naming.py` 固定。改名：`stream-smoke.yaml` -> `ci-stream-smoke.yaml`、顯示名稱 `Stream Smoke (GPU)` -> `CI: Stream Smoke`（`main.yaml` 的 `uses:`、路徑規則 `ci-stream-*`、文件與測試同步）。**Required check 不受影響**：required 只有 `gate`，job 名稱變動不碰 branch protection。**例外（精確檔名）**：`main.yaml`（org 通用入口、base 的 `init.sh` 建立）；`base-version-monitor.yaml`（`init.sh` 的 `_sync_base_monitor_workflow` 在該路徑不存在時產生，改檔名會在下次 base 升級時於旁邊重新產生一份；`init.sh` 只建立不覆蓋，所以內容不會被蓋回去，但檔名會，故保留原名與內容，原因寫在文件裡）；`publish-stream-source.yaml`（isaac#432 會刪，不改）。Hosted baseline 633 -> 676（core 641）。
 ### Removed
+- **移除映像檔的 ROS 設定（isaac#430）。** Dockerfile 不再指定 ROS 發行版、設定 ROS 函式庫路徑或安裝入口包裝腳本，互動式 shell 也不再載入 ROS。ROS I/O 改由 `ISAAC_IO_PLUGIN` 指定的外部插件提供。Fast DDS 設定檔移至跨容器整合測試的 fixture。`setup.toml` 的 `ROS_DISTRO` 建置參數與 `ROS_DOMAIN_ID` / `RMW_IMPLEMENTATION` / `FASTRTPS_DEFAULT_PROFILES_FILE` 環境變數一併移除，容器內 `env` 不再出現 ROS 相關變數；其餘 ROS 腳本留待 #429 處理。
 - **移除 `standalone_common.py` 中的 OpenBase 專用函式與常數（isaac#358）。** 移除 USD 路徑查詢、場景設定函式，以及車輪關節與底盤連桿常數。原本的 USD 路徑測試改為確認這四個名稱均已移除，測試總數不變。Hosted baseline 維持 642（core 601）。
 - **移除 URDF 匯入功能（isaac#477）。** Isaac 現在直接載入 USD；需要轉檔時，請用 [asset_converter](https://github.com/ycpss91255-lab/asset_converter) 產出模型，再設定 `robot.model`。
 - **移除 `ros` 輸出模式（isaac#514）。** `ISAAC_OUTPUT_MODE=ros` 現在和其他不合法值一樣丟 `ValueError`（只允許 `python`），`setup_output` 也不再有 `ros` 的 `NotImplementedError` 分支。ADR-0025 依 owner 2026-11-27 的決定（#388）標為 Superseded：isaac 不碰 ROS，ROS 輸出由 `isaac_ros_io` 透過 `ISAAC_IO_PLUGIN` 提供。測試數量不變。
