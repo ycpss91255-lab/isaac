@@ -1,6 +1,7 @@
 """Hosted tests for the pure helpers in standalone_common.py."""
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -11,6 +12,7 @@ pytestmark = pytest.mark.core
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT_DIR = _REPO_ROOT / "src" / "script"
 _HELPER = _SCRIPT_DIR / "standalone_common.py"
+_HARD_CODED_HOME = re.compile(r"/home/[^/\s<>]+/")
 
 _ISAAC_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab", "carb", "rclpy")
 
@@ -45,11 +47,15 @@ def test_kit_config_follows_isaac_livestream():
         helper.kit_config("9")
 
 
-def test_openbase_usd_path_raises_when_models_are_absent():
-    """openbase_usd_path raises FileNotFoundError pointing to sim_asset repo."""
+def test_helper_has_no_openbase_attributes():
     helper = _load_helper()
-    with pytest.raises(FileNotFoundError, match="sim_asset"):
-        helper.openbase_usd_path()
+    names = (
+        "openbase_usd_path",
+        "setup_openbase_stage",
+        "OPENBASE_WHEELS",
+        "OPENBASE_BASE_LINK",
+    )
+    assert [name for name in names if hasattr(helper, name)] == []
 
 
 def test_periodic_timer_fires_once_per_period_regardless_of_tick_rate():
@@ -92,3 +98,8 @@ def test_run_and_exit_passes_main_return_code_through(returned, expected):
     codes = []
     helper.run_and_exit(lambda: returned, exit_fn=codes.append)
     assert codes == [expected]
+
+
+def test_standalone_smoke_has_no_hard_coded_workspace():
+    source = (_SCRIPT_DIR / "test" / "standalone_smoke.sh").read_text(encoding="utf-8")
+    assert not _HARD_CODED_HOME.search(source)

@@ -129,15 +129,22 @@ def _doc_files_containing(needle):
     )
 
 
-def test_action_graph_setup_has_no_fastdds_profile():
-    doc_dir = REPO_ROOT / "src/doc"
-    action_graph = (doc_dir / "action_graph_setup.md").read_text(encoding="utf-8")
-    zed_install = (doc_dir / "zed_install.md").read_text(encoding="utf-8")
-    profile_var = "FASTRTPS_DEFAULT_PROFILES_FILE"
-    assert "config/ros2/fastdds.xml" not in action_graph
-    assert profile_var not in action_graph
-    assert profile_var not in zed_install
-    assert _doc_files_containing(profile_var.encode()) == []
+def test_action_graph_clients_mount_the_fastdds_profile():
+    guide = Path("action_graph_setup.md")
+    text = (REPO_ROOT / "src/doc" / guide).read_text(encoding="utf-8")
+    commands = [
+        block for block in re.findall(r"```bash\n(.*?)```", text, re.S)
+        if "ros:humble" in block
+    ]
+    mount = (
+        '-v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml'
+        ':/isaac-sim/fastdds.xml:ro'
+    )
+    assert len(commands) == 2
+    for cmd in commands:
+        assert mount in cmd
+        assert "-e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml" in cmd
+    assert _doc_files_containing(b"FASTRTPS_DEFAULT_PROFILES_FILE") == [guide]
 
 
 def test_adr_0025_fastdds_note():
@@ -148,7 +155,7 @@ def test_adr_0025_fastdds_note():
     assert original_line is not None, original
     required = ("test/fixtures/ros2/fastdds.xml", "isaac_ros_io", "ADR-0015")
     assert any(all(term in line for term in required) for line in lines[original_line + 1:])
-    assert _doc_files_containing(b"config/ros2/fastdds.xml") == [adr]
+    assert _doc_files_containing(b"config/ros2/fastdds.xml") == [Path("action_graph_setup.md"), adr]
 
 
 def test_acceptance_doc_has_no_cmd_vel_coverage():

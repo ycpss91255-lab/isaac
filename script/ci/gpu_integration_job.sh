@@ -25,7 +25,6 @@ gpu_job_cache_dirs
 # _app_cleanup (project-wide `compose down --remove-orphans`) can never reap a
 # co-hosted manual stream stack on this shared GPU host (owv#55). base's
 # self-test.yaml convention -- run_id + run_attempt: unique per re-run.
-# The container uses a nonzero domain derived from the run ID.
 gpu_job_group "GPU integration pytest + aggregate gate (M2)"
 BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}" \
   GPU_ROS_DOMAIN_ID="$(( (GITHUB_RUN_ID % 99) + 1 ))" \

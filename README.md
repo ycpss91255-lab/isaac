@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker development environment, built on top of [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) (previously `ycpss91255-lab/template`).
 
-Image scope covers Isaac Sim itself plus the env wiring needed for its bundled ROS 2 bridge to talk cross-container. NVIDIA Isaac Lab 3.0 (`v3.0.0`) is also baked in as the scene-spawn backend (`sim_utils` spawners, `AppLauncher`; ADR-0018). Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
+Image scope covers Isaac Sim itself plus the env wiring needed for its bundled ROS 2 bridge to talk cross-container. NVIDIA Isaac Lab 3.0 (`v3.0.0`) is also baked in as the scene-spawn backend (`sim_utils` spawners; ADR-0018). `IsaacDriver` starts Kit with `isaacsim.SimulationApp`. Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
 
 The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-lab/isaac` and `ycpss91255-lab/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-lab/isaac/issues/78).
 
@@ -113,21 +113,42 @@ Every checkout of this repo on a host used to resolve the same image tag (`<hub>
 - `./script/checkout_identity.sh isolate` writes `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) into the gitignored `setup.local.toml`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
 - The pre build / run / stop hooks refuse to act on the shared names. `ISAAC_ALLOW_SHARED_IDENTITY=1` overrides that; CI's build steps use it.
 - `just docker run` does not rebuild an image that already exists (base#1552). After pulling changes, run `just docker build -t <stage>` before `just docker run -t <stage>`.
-- Disk cost: every checkout or worktree that builds owns its own image set (`<hub>/isaac-<dir>-<hash>:<stage>`), about 31 GB nominal per stage tag. They are not shared, and deleting the checkout directory does not remove them from the Docker daemon.
-- Cleaning up a deleted checkout: take the `isaac-<dir>-<hash>` name from `./script/checkout_identity.sh show` (run it before deleting the directory; it needs `.env.generated`) or from `docker images`, then list first and remove second:
+- Disk cost: each checkout or worktree that builds has its own image tags (`<hub>/isaac-<dir>-<hash>:<stage>`). The nominal size shown by `docker images` is about 31 GB per stage tag. Shared layers mean removing a tag reclaims less disk space. Deleting the checkout directory leaves the images in the Docker daemon.
+- Cleaning up a deleted checkout: take the `isaac-<dir>-<hash>` name from `./script/checkout_identity.sh show` (run it before deleting the directory; it needs `.env.generated`) or from `docker images`. A custom `PROJECT_NAME` can differ from `<hub>-<slug>`. Copy the project from the label output on the row for the deleted checkout's image.
 
   ```bash
-  SLUG=isaac-<dir>-<hash>   # exact name, e.g. from "image: <hub>/<SLUG>:<stage>"
-  HUB=<hub>                 # the <hub> part of that image name
-  docker ps -a --filter "label=com.docker.compose.project=${HUB}-${SLUG}" --format '{{.Names}}'
-  docker ps -aq --filter "label=com.docker.compose.project=${HUB}-${SLUG}" | xargs -r docker rm -f
+  SLUG='isaac-<dir>-<hash>'   # exact name, e.g. from "image: <hub>/<SLUG>:<stage>"
+  docker ps -a --format '{{.Label "com.docker.compose.project"}}  {{.Image}}  {{.Names}}'
+  PROJECT='<project>'
+  docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format '{{.Names}}'
+  docker ps -aq --filter "label=com.docker.compose.project=${PROJECT}" | xargs -r docker rm -f  # kills running containers. Use only for a checkout that no longer exists, never a live one
   docker images --filter "reference=*/${SLUG}:*"
-  docker images -q --filter "reference=*/${SLUG}:*" | xargs -r docker rmi
+  docker images --filter "reference=*/${SLUG}:*" --format '{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
   ```
 
-  The filters match the exact slug only. Do not widen them to `isaac*` and do not run `docker image prune -a`: the shared `test-tools:<base version>` image (next bullet) must not be removed by this procedure.
+  Untagging an image with `docker rmi` frees nothing from shared layers another checkout still uses until the last tag referencing them is gone. The filters match the exact project and image slug. Do not widen them to `isaac*` and do not run `docker image prune -a`: the shared `test-tools:<base version>` image (next bullet) must not be removed by this procedure.
 - One image stays shared: every build also builds the lint/bats tool image `test-tools:<base version>` (now `test-tools:v0.42.0`), named by the pinned base version only. Every checkout and every repo on the host that pins the same base version writes the same tag, so do not delete it while another checkout may be building. `just docker build --clean-tools` removes it for all of them. It comes from base's `build.sh` and is tracked upstream on [base#1551](https://github.com/ycpss91255-lab/base/issues/1551).
 - Containers started before isolating stay in the shared project. List them with `docker compose -p <hub>-isaac ps -a` and stop yours by name. `ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` stops the whole shared project, other checkouts' containers included.
+
+### Running multiple instances
+
+One instance per checkout is the deliberate default. This repo removed its built-in support for running several instances from one checkout ([ADR-0019](src/doc/adr/0019-remove-same-repo-multi-instance.md)). To run N instances, use multi_run to launch this repo's `compose.yaml` N times. The design is recorded in [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15).
+
+- Give each instance a unique compose project name with `-p <name>`. This keeps `just docker stop` scoped to its own instance and prevents a new run from adopting a stale instance.
+- Each instance needs its own isolated `isaac-sim/` cache and data tree. Sharing writable cache directories silently corrupts the Kit cache of an already running instance. See [Cache layout](#cache-layout).
+- Parallel headless runs need no port overrides. Override ports only for streaming.
+
+Available GPU memory sets the practical instance count. On a 32607 MiB card, each running Isaac instance used about 3.9 GiB, enough for 6–7 instances. Divide your card's available memory in GiB by 3.9 for an estimate. The instances share GPU compute, so each runs more slowly.
+
+## Mounting local USD models
+
+Isaac ships no example models. Use USD models from `sim_asset` or the output of `asset_converter`.
+
+1. Run `cp setup.isaac_sample.toml setup.local.toml` to create the gitignored local configuration. If you already have a local configuration, merge the sample into it to keep your checkout settings.
+2. Edit the model mount’s `source` to point to your models. Keep its read-only target at `/home/${USER_NAME}/models/sim_asset` so scenes resolve the same paths on every machine. If you add model mounts, add their container paths to `MODEL_PATH`, separated by colons.
+3. Start the container with `just docker run -t headless -d`.
+
+Base replaces the entire `[[volumes]]` list when it applies the local configuration. Keep every mount from `setup.toml` in your copy and update it whenever the repo adds a mount.
 
 ## Connecting to the WebRTC livestream
 
@@ -286,7 +307,7 @@ ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 
 ### Python output API (isaac#365)
 
-`isaac_devkit.output.setup_output` delivers simulation data to Python callbacks without ROS. Kinds: `rgb` (uint8 `(H, W, 3)`), `depth` (float32 `(H, W)`), `joint_state` (`names` / `positions` / `velocities` / `efforts`) and `imu` (`lin_acc` / `ang_vel` / `orientation`, order `w, x, y, z`). The GPU to CPU copy happens only for kinds that have a registered consumer. The mode comes from `ISAAC_OUTPUT_MODE` (default `python`; `ros` is not wired yet, see ADR-0025).
+`isaac_devkit.output.setup_output` delivers simulation data to Python callbacks without ROS. Kinds: `rgb` (uint8 `(H, W, 3)`), `depth` (float32 `(H, W)`), `joint_state` (`names` / `positions` / `velocities` / `efforts`) and `imu` (`lin_acc` / `ang_vel` / `orientation`, order `w, x, y, z`). The GPU to CPU copy happens only for kinds that have a registered consumer. `ISAAC_OUTPUT_MODE` supports only `python` (the default). Any other value, including `ros`, raises `ValueError`. The `isaac_ros_io` plugin provides ROS output through `ISAAC_IO_PLUGIN` (ADR-0025 has been superseded).
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output

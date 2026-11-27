@@ -86,9 +86,7 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
 用法相同：`ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`。
 
-完整的 Isaac <-> ament 跨容器來回（節點真的收到 live 的 sim topic）由
-GPU 整合測試（#132）斷言；這裡的範本以 `colcon build` + `ament_lint`
-做 hosted 驗證，不需要 GPU。
+CI 在 hosted ROS 容器內以 `colcon build` 與 `ament_lint` 驗證這些範本。
 
 ## 改成你自己的
 

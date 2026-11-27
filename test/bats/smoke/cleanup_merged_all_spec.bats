@@ -115,3 +115,17 @@ EOF
   [[ "${output}" == *"removed=0 skipped=1"* ]]
   [ -d "${T}/repo/worktree/a" ]
 }
+
+@test "cleanup-merged-all: passes --fix-owner and the PR number to the cleanup script" {
+  add_wt a 11 MERGED
+  export CLEANUP_SCRIPT="${T}/cleanup-stub.sh" CLEANUP_LOG="${T}/cleanup.log"
+  cat >"${CLEANUP_SCRIPT}" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >>"${CLEANUP_LOG}"
+EOF
+  chmod +x "${CLEANUP_SCRIPT}"
+  cd "${MAIN}"
+  run "${SCRIPT}" --fix-owner
+  [ "${status}" -eq 0 ]
+  diff -u <(printf '%s\n' --fix-owner 11) "${CLEANUP_LOG}"
+}

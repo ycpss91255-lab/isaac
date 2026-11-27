@@ -6,7 +6,8 @@ name: Main CI/CD
 #
 #   - a change to a shared layer (Dockerfile, compose, setup.toml, config,
 #     the base subtree, this file) runs every group;
-#   - push to main, a release tag and a manual dispatch run every group;
+#   - pushes to main, release tags and merge groups run every group;
+#     manual dispatch runs every group by default;
 #   - docs always runs (cheap lint), so a docs-only PR never reaches the
 #     build or the GPU runner.
 #
@@ -21,6 +22,9 @@ on:
     tags:
       - 'v*'
   pull_request:
+  # Run the required `gate` check when the merge queue requests checks.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
     inputs:
       groups:
@@ -130,7 +134,13 @@ jobs:
         uses: actions/checkout@v7
       - name: Stale naming scan
         run: python3 script/ci/check_stale_naming.py
+      - name: Forbidden names scan
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
+        run: python3 script/ci/check_forbidden_names.py --allow-unset
       - name: Hosted core-group pytest + group floor + coverage gate
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
         run: ./test/assert_pytest_baseline.sh --group core
 
   stream-unit:
@@ -167,6 +177,10 @@ jobs:
       # opt-in step from base#470 removes ~30 GB of Android SDK / .NET /
       # GHC tool-cache before buildx starts.
       free_disk_space: true
+      # Image layers far exceed the 10 GB GHA cache limit (isaac#364).
+      # In measured runs, cache export took ~20 of the devel-test step's ~32 min
+      # and the cache never hit (isaac#411).
+      disable_cache: true
       extra_stages: ${{ needs.changes.outputs.stages }}
       build_args: |
         BATS_SKIP_GROUPS=${{ needs.changes.outputs.bats_skip }}

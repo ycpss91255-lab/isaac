@@ -17,20 +17,22 @@ cd isaac_ws/src/docker
 just docker build                # 第一次或改 Dockerfile 後
 ```
 
-### 2. 把 `headless` container 起來(porting:host 8011 → container WebRTC)
+### 2. 把 `stream` container 起來(porting:host 8011 → container WebRTC)
+
+把下面的 `<user>` 換成啟動 container 時使用的 `USER_NAME`。
 
 ```bash
 just docker run -t stream -d
-docker ps --filter name=yunchien-isaac-headless --format '{{.Names}} {{.Status}}'
+docker ps --filter 'name=<user>-isaac-stream' --format '{{.Names}} {{.Status}}'
 ```
 
-預期看到 `yunchien-isaac-headless Up ...`。
+預期看到 `<user>-isaac-stream Up ...`。
 
 ### 3.(可選)用 smoke driver 驗 livestream 通了
 
 ```bash
 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/standalone_livestream_smoke.py
+    /home/<user>/work/src/script/standalone_livestream_smoke.py
 ```
 
 預期:30 秒內印 `[smoke] tick ...`、最後 `[smoke] DONE`、`Simulation App Shutting Down`,exit 0。
@@ -45,7 +47,7 @@ just docker exec -t stream /isaac-sim/python.sh \
 ```bash
 cd isaac_ws/src/docker
 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py
+    /home/<user>/work/src/script/<your_driver>.py
 ```
 
 - Kit 起動約 5–10 秒(看到 `<your_driver> 的 stage opened log` 表示 USD 載完)。
@@ -57,7 +59,7 @@ just docker exec -t stream /isaac-sim/python.sh \
 
 ```bash
 nohup just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py \
+    /home/<user>/work/src/script/<your_driver>.py \
     > /tmp/forklift.out 2>&1 &
 echo $! > /tmp/forklift.pid
 ```
@@ -68,7 +70,7 @@ echo $! > /tmp/forklift.pid
 
 ```bash
 timeout 75 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py
+    /home/<user>/work/src/script/<your_driver>.py
 ```
 
 `timeout` 到時送 SIGTERM,driver 同樣攔到 → 乾淨退場。exit code 124(timeout)或 143(SIGTERM)都算 "timeout 結束",不代表 fail。
@@ -154,7 +156,7 @@ sys.exit(exit_code)
 關鍵點:
 
 - `SimulationApp(...)` **一定要先於**任何 `omni.*` / `pxr.*` import。
-- 所有 path 用 `Path(__file__).resolve().parent` 推算,**不要硬編** `/home/yunchien/work/src/...`。容器 mount 路徑、host 路徑、worktree 路徑都可能不同。
+- 所有 path 用 `Path(__file__).resolve().parent` 推算,**不要硬編** `/home/<user>/work/src/...`。容器 mount 路徑、host 路徑、worktree 路徑都可能不同。
 - SIGINT / SIGTERM handler **必裝**,否則 `Ctrl-C` 會半路死掉,Kit 留半開檔。
 - `tl.play()` 只在要 PhysX 模擬時呼叫。純 visual demo 可以不呼叫,sim_app.update() 仍會 tick render。
 
@@ -168,7 +170,7 @@ sys.exit(exit_code)
 
 ### `[Warning] [carb.scenerenderer-rtx.plugin] Failed to create NGX context`
 
-無害。headless container 沒 NGX driver feature,livestream 仍能跑。
+無害。stream container 沒 NGX driver feature，livestream 仍能跑。
 
 ### 瀏覽器看到一片黑
 
@@ -197,7 +199,8 @@ else:
 
 | 步驟 | 舊 in-kit | 新 standalone-livestream |
 |---|---|---|
-| 起 Kit | `just docker run -t stream -d`(舊 SOP 寫 headless,實測會撞 runheadless.sh 兩 Kit port 衝突,改 standalone)| `just docker run -t stream -d` |
+| 啟動待命容器 | `just docker run -t stream -d` | `just docker run -t stream -d` |
+| 啟動 Kit | `just docker exec -t stream /isaac-sim/runheadless.sh -v --/app/livestream/nvcf/quitOnSessionEnded=false` | 下一列的 driver 透過 `SimulationApp` 啟動 Kit |
 | 載 driver | 瀏覽器 GUI 開 Script Editor 拖 `.py` 進去 | `just docker exec -t stream /isaac-sim/python.sh <script>` |
 | 跑 | Ctrl+Enter on Script Editor | enter 在 terminal |
 | 看畫面 | 同一個 Kit GUI 瀏覽器 tab | Isaac Sim WebRTC Streaming Client(桌面 app)連 `127.0.0.1`(可關可開) |

@@ -91,10 +91,7 @@ applies to the chassis. The C++ package is identical:
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`.
 
-The full Isaac <-> ament cross-container round-trip (a node actually
-receiving the live sim topic) is asserted by the GPU integration test
-(#132); the templates here are verified hosted with `colcon build` +
-`ament_lint`, no GPU required.
+CI checks these templates with `colcon build` and `ament_lint` in the hosted ROS container.
 
 ## Make it yours
 

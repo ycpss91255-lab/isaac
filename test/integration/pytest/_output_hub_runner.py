@@ -72,12 +72,16 @@ def _main():
         setup_output,
     )
 
-    sys.argv = ["runner", "--enable", "isaacsim.core.nodes",
-                "--enable", "isaacsim.sensors.experimental.physics"]
-    from isaaclab.app import AppLauncher
+    from isaacsim import SimulationApp
 
     try:
-        app = AppLauncher({"headless": True, "enable_cameras": True}).app
+        app = SimulationApp({
+            "headless": True,
+            "extra_args": [
+                "--enable", "isaacsim.core.nodes",
+                "--enable", "isaacsim.sensors.experimental.physics",
+            ],
+        })
         import omni.timeline
         from isaacsim.sensors.experimental.physics import IMU
 

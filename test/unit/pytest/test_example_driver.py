@@ -4,16 +4,11 @@ Pure surface only -- no Isaac Sim. Covers:
 
 * the three-file scene merge (scene.yaml imports robot.yaml + object.yaml
   -> one validated scene dict the framework lifecycle consumes);
-* the expected robot/base_link prim-path string the L1 GPU assertions
-  (separate issue #132) check;
+* the expected robot/base_link prim-path string;
 * the cmd_vel -> chassis-velocity controller mapping;
 * the SCENE class attr shape + the run() lifecycle call ORDER, verified
   with a pure-side spy and a fake isaacsim module (the Kit-touching
   internals are overridden with recorders).
-
-The Kit-side end-to-end behavior (camera frame on the ROS 2 topic, the
-/cmd_vel OmniGraph round-trip on a live stage) is the GPU integration
-issue (#132); this file is the hosted, no-GPU half.
 """
 
 import sys
