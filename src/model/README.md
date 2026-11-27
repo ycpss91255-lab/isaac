@@ -16,9 +16,3 @@ SolidWorks source files and object assets respectively.
 | omwr | `urdf/omwr/` | `usd/omwr/` |
 | openbase | `urdf/openbase/` | `usd/openbase/` |
 | forklift_blocky | -- | `usd/forklift_blocky/` |
-
-## Test fixtures
-
-The `openbase_minimal` URDF fixture used by the GPU model-import
-integration test lives at `test/fixtures/urdf/openbase_minimal/` and is
-self-contained (no dependency on the sim_asset repository).

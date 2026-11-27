@@ -20,17 +20,6 @@
 前置条件:
 
 - `just docker run -t stream -d` 跑得起来(container 没起时 smoke 会自动带起)
-- 仓内已 track `isaac_ws/src/model/usd/robot/openbase/openbase.usda`,USD 相关 case 直接吃。如果该档不见了(checkout 不完整 / 意外删掉),从 repo 内 URDF 源档重新产:
-
-  ```bash
-  cd isaac_ws/src/docker
-  just docker exec -t stream /isaac-sim/python.sh \
-      /home/yunchien/work/src/script/import_urdf.py \
-      /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
-      /tmp/openbase_generated.usda
-  ```
-
-  真的要覆写 in-repo USD,再把 `openbase_generated.usda` 搬到 `model/usd/robot/openbase/openbase.usda`。in-repo USD 不在的话相关 case 会 SKIP(`--strict` 下会 FAIL)。
 
 ## Cases
 

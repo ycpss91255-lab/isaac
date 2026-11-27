@@ -2,8 +2,8 @@
 
 Proves the baked Isaac Lab base tool is importable inside the built GPU
 container: launches `AppLauncher` headless, imports `isaaclab.sim`, and
-confirms the spawner + URDF-converter surfaces and the pinned 2.3 version
-the re-base (MR-2..MR-6) builds on. Pass criterion is the runner's stdout
+checks the spawner configuration classes and the Isaac Lab package version.
+Pass criterion is the runner's stdout
 marker line, not the return code (Kit `_exit(0)` swallows it, same
 convention as the other integration runners).
 
@@ -56,16 +56,13 @@ def test_isaaclab_importable_in_container():
 
     assert "[EXIT CLEAN]" in out, "runner did not reach a clean Kit shutdown."
     m = re.search(
-        r"\[ISAACLAB OK\] version=(\S+) spawn=(\S+) urdf_converter=(\S+)", out
+        r"\[ISAACLAB OK\] version=(\S+) spawn=(\S+)", out
     )
     assert m, "Isaac Lab availability marker missing -- import failed inside the container."
-    version, spawn, urdf_converter = m.group(1), m.group(2), m.group(3)
+    version, spawn = m.groups()
     assert version not in ("", "unknown"), (
         "isaaclab.__version__ did not resolve (package not properly installed)."
     )
     assert spawn == "True", (
         "isaaclab.sim spawner surface (UsdFileCfg / GroundPlaneCfg) missing."
-    )
-    assert urdf_converter == "True", (
-        "isaaclab.sim.converters.UrdfConverterCfg surface missing."
     )
