@@ -96,6 +96,33 @@ def test_stream_script_change_is_stream(cg):
     assert _pr(cg, "src/script/stream_source_producer.py") == ["stream", "docs"]
 
 
+@pytest.mark.parametrize(
+    "path, groups",
+    [
+        ("apps/isaacsim.exp.base.python.streaming.kit", {"stream"}),
+        ("src/script/standalone_livestream_smoke.py", {"stream"}),
+        ("script/entrypoint.sh", set(ALL)),
+        ("script/hooks/pre/run.sh", set(ALL)),
+        ("script/hooks/post/run.sh", {"stream"}),
+        ("script/runheadless-host-config.sh", {"stream"}),
+    ],
+)
+def test_each_stream_smoke_input_selects_stream_for_a_pr(cg, path, groups):
+    assert "stream" in _pr(cg, path)
+    assert cg.classify(path) == groups
+
+
+@pytest.mark.parametrize(
+    "path, groups",
+    [
+        ("apps/another.kit", {"stream"}),
+        ("script/hooks/pre/build.sh", set(ALL)),
+    ],
+)
+def test_scope_rules_cover_other_experiences_and_pre_hooks(cg, path, groups):
+    assert cg.classify(path) == groups
+
+
 def test_a_stream_spec_follows_its_declared_group(cg):
     # Not a path pattern: the spec's own `# bats file_tags=stream` decides.
     assert _pr(cg, "test/bats/smoke/post_run_hook_spec.bats") == ["stream", "docs"]
