@@ -69,6 +69,9 @@ _DOCS = (
     "LICENSE",
     ".github/CODEOWNERS",
     ".github/dependabot.yml",
+    # This scheduled version monitor affects neither the image nor the tests.
+    # The workflow-name lint in docs-unit still covers it.
+    ".github/workflows/base-version-monitor.yaml",
 )
 
 # Stage-specific files include Kit experiences and the standalone stream smoke
