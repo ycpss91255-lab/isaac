@@ -50,36 +50,20 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless: bring Isaac up and run a scene
 
-The `example/` camera_bot scene runs headless, publishes a ROS 2 camera topic and subscribes to `/cmd_vel`. The container's working directory is the repo root (mounted at `~/work`), so script paths are repo-relative. This sequence was verified on Isaac Sim 6.2.0 (RTX 5090):
+This repository does not ship a simulation example. Choose a headless script from the [official Isaac Sim examples](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples). Replace `path/to/your_scene.py` with the script’s path inside the container. Relative paths start at the repository root (`~/work`).
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 EXAMPLE_TICK_BUDGET=100000 exec /isaac-sim/python.sh example/sim/example_driver.py'
-# prints [CAMERA GRAPH OK] and [BOOT OK] in about 30 s
-
-# In a second terminal: the camera topic, from a sibling ROS 2 container on the same domain
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash && ros2 topic echo --once /camera_bot/camera/color/image_raw sensor_msgs/msg/Image --field header'
-# frame_id: camera_bot_camera_color_optical_frame
+  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh path/to/your_scene.py'
 
 just docker stop
 ```
 
-The example runs on a private ROS domain (`77`) on purpose. A shared host can have other `/cmd_vel` publishers on the default domain 0, and they would drive the robot too. Pick any free domain (0 to 101), and use the same `ROS_DOMAIN_ID` on both sides.
+For a ROS 2 scene, use the same free `ROS_DOMAIN_ID` in the scene and its ROS 2 clients (here, `77`).
 
-**On the first launch, expect the camera topic about 2 minutes after `[BOOT OK]`.** The camera publisher only appears once the first frame has rendered, and with empty caches the renderer compiles its shaders first. In one cold run the topic appeared 1 min 52 s after `[BOOT OK]`, and `ros2 topic echo --once` returned 2 s later. With the caches from that run, the topic was there within 3 s of `[BOOT OK]`. The wait is not DDS discovery: a new sibling container saw the topic at once while Isaac was publishing. To watch for it instead of waiting on `echo`:
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash &&
-   until ros2 topic list | grep -q image_raw; do sleep 1; done &&
-   ros2 topic hz /camera_bot/camera/color/image_raw'
-# average rate: ~30
-```
-
-Without `EXAMPLE_TICK_BUDGET`, the driver stops by itself after 1800 updates (about 2 minutes headless) and prints `[EXIT CLEAN]`. Kit writes its session log to `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` on the host. To follow the newest one:
+Kit writes its session log to `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` on the host. To follow the newest one:
 
 ```bash
 tail -f "$(ls -t isaac-sim/kit/logs/Kit/*/*/kit_*.log | head -1)"
@@ -93,7 +77,7 @@ tail -f "$(ls -t isaac-sim/kit/logs/Kit/*/*/kit_*.log | head -1)"
 
 Kit prints a few warnings on every launch that do not affect the run:
 
-- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`, about 40 lines in the first 2 seconds. OmniHub is an optional local cache service for Nucleus assets. Its helper (`/usr/local/bin/hub`) exits with `Permission denied` inside the container, so Kit loads assets directly. The examples here use only local files.
+- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`, about 40 lines in the first 2 seconds. OmniHub is an optional local cache service for Nucleus assets. Its helper (`/usr/local/bin/hub`) exits with `Permission denied` inside the container, so Kit loads assets directly.
 - `Extensions config 'extension.toml' doesn't exist '/home/<user>/work/<dir>'`, one per top-level directory of the repo (about 15). These came from images built before this fix: the experience file's `extsUser` extension folder was missing from the image, the container user could not create it, and Kit searched the working directory for extensions instead. The image now creates the folder. If you still see these warnings, rebuild the stage with `just docker build -t <stage>`.
 
 ### Stopping a driver script
@@ -205,7 +189,7 @@ Notes:
 
 ### Deterministic stream-source producer (GHCR image, isaac#223)
 
-For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48), consumed by the Tier B browser-frames smoke isaac#173), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, camera framed at `eye=[15,-15,11]` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
+For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, camera framed at `eye=[15,-15,11]` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
 
 - **Image**: `ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>` (pinned, immutable tag — not `:latest`). Built from the `producer` Dockerfile stage.
 - **Driver**: `src/script/stream_source_producer.py`, baked at `/opt/isaac-producer/stream_source_producer.py` and launched by the image `CMD`.
@@ -288,7 +272,7 @@ The kit terminal should print `[ros2_test_sub] /host/test <- 'hello-from-host'`.
 
 #### Extra Kit arguments (`ISAAC_KIT_EXTRA_ARGS`)
 
-`IsaacDriver.run` reads `ISAAC_KIT_EXTRA_ARGS`, splits it on whitespace, and appends the tokens to the Kit arguments it boots with (after the built-in boot arguments). Unset, empty or whitespace-only leaves behaviour unchanged. Only `IsaacDriver` reads this variable; `example_driver.py`, `stream_source_producer` and the scripts under `src/script/` do not support it.
+`IsaacDriver.run` reads `ISAAC_KIT_EXTRA_ARGS`, splits it on whitespace, and appends the tokens to the Kit arguments it boots with (after the built-in boot arguments). Unset, empty or whitespace-only leaves behaviour unchanged. Only `IsaacDriver` reads this variable; `stream_source_producer` and the scripts under `src/script/` do not support it.
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -299,7 +283,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### Startup plugin (`ISAAC_IO_PLUGIN`)
 
-`IsaacDriver.run` reads `ISAAC_IO_PLUGIN` (`module:function`). After the stage is built and before the timeline plays, it imports the module and calls `function(stage, robot_prim, config)` once. `config` is an opaque dict (currently `usd_path` and `robot_prim`, the stage's default prim path). Unset or empty calls nothing and imports no ROS module. A malformed value, a module that cannot be imported, or a missing function each fail at startup with an error naming the cause. Only `IsaacDriver.run` supports it; `example_driver.py`, `stream_source_producer` and the scripts under `src/script/` do not.
+`IsaacDriver.run` reads `ISAAC_IO_PLUGIN` (`module:function`). After the stage is built and before the timeline plays, it imports the module and calls `function(stage, robot_prim, config)` once. `config` is an opaque dict (currently `usd_path` and `robot_prim`, the stage's default prim path). Unset or empty calls nothing and imports no ROS module. A malformed value, a module that cannot be imported, or a missing function each fail at startup with an error naming the cause. Only `IsaacDriver.run` supports it; `stream_source_producer` and the scripts under `src/script/` do not.
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
@@ -380,6 +364,8 @@ The container runs as a host-UID-aligned non-root user (`USER_NAME` from `.env`,
 See [doc/test/TEST.md](doc/test/TEST.md).
 
 Every test belongs to exactly one scope group (`core`, `gui`, `stream`, `headless`, `docs`): a pytest module sets `pytestmark = pytest.mark.<group>` (run one group with `pytest -m <group>`), a bats spec carries `# bats file_tags=<group>`. A test with no group fails collection. `test/pytest-baseline.txt` keeps one floor per group. See the group table in TEST.md.
+
+The stream group’s `stream-visual-e2e` GPU job boots the stream stage and checks that Chromium receives advancing frames showing the red test cube.
 
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 
