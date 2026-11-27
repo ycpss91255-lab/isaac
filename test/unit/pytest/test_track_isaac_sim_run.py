@@ -20,6 +20,7 @@ _OVERRIDE = "6.0.1"
 _DOCKERFILE = f'ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:{_PIN}"\n'
 _BRANCH = f"bot/isaac-sim-{_LATEST}"
 _REF = f"refs/heads/{_BRANCH}"
+_COMMIT = "b" * 40
 _LS_REMOTE = ("git", "ls-remote", "--heads", "origin", _REF)
 _GH_API = ("gh", "api", "--paginate", "--slurp")
 _DISPATCH = ("gh", "workflow", "run", "main.yaml", "--ref", _BRANCH, "-f", "groups=all")
@@ -44,6 +45,8 @@ class FakeRepository:
         self.remote_head = ""
         self.open_items = {"pulls": [], "issues": []}
         self.pr_body = ""
+        self.fail_pr_create = False
+        self.pr_appears_on_failure = False
         self.fail_dispatch = False
 
     def command(self, *args):
@@ -52,6 +55,8 @@ class FakeRepository:
             raise subprocess.CalledProcessError(1, args)
         if args[:2] == ("git", "ls-remote"):
             return self.remote_head
+        if args == ("git", "rev-parse", "HEAD"):
+            return _COMMIT
         if args[:4] == _GH_API:
             for endpoint, items in self.open_items.items():
                 if args[4] == f"repos/{{owner}}/{{repo}}/{endpoint}?state=open&per_page=100":
@@ -60,6 +65,10 @@ class FakeRepository:
         if args[:2] == ("gh", "api"):
             pytest.fail(f"Expected a paginated, slurped GitHub API request: {args!r}")
         if args[:3] == ("gh", "pr", "create"):
+            if self.fail_pr_create:
+                if self.pr_appears_on_failure:
+                    self.open_items["pulls"].append({"head": {"ref": _BRANCH}, "title": "更新映像"})
+                raise subprocess.CalledProcessError(1, args)
             # The tracker removes the temporary body file after creating the PR.
             path = Path(args[args.index("--body-file") + 1])
             self.pr_body = path.read_text(encoding="utf-8")
@@ -98,13 +107,23 @@ def test_current_pin_skips_writes(tracker, repo):
     _assert_no_writes(repo)
 
 
+def test_older_override_at_latest_pin_skips_writes(tracker, repo):
+    tracker.stable_release.return_value = _PIN
+    tracker.run(_OVERRIDE)
+
+    tracker.inventory_diff.assert_not_called()
+    _assert_no_writes(repo)
+
+
 def test_new_release_pushes_bump_and_opens_pr_and_inventory_issue(tracker, repo):
     tracker.run("")
 
     assert ("git", "switch", "-c", _BRANCH) in repo.calls
     assert Path("Dockerfile").read_text(encoding="utf-8") == _DOCKERFILE.replace(_PIN, _LATEST)
     assert any(call[0] == "git" and "commit" in call for call in repo.calls)
-    assert any(call[:2] == ("git", "push") for call in repo.calls)
+    [push] = [call for call in repo.calls if call[:2] == ("git", "push")]
+    assert f"--force-with-lease={_REF}:" in push
+    assert "--force" not in push
     [pr] = [call for call in repo.calls if call[:3] == ("gh", "pr", "create")]
     assert pr[pr.index("--title") + 1] == f"更新 Isaac Sim 至 {_LATEST}"
     assert pr[pr.index("--head") + 1] == _BRANCH
@@ -112,6 +131,38 @@ def test_new_release_pushes_bump_and_opens_pr_and_inventory_issue(tracker, repo)
     assert [call for call in repo.calls if call[:3] == ("gh", "workflow", "run")] == [_DISPATCH]
     assert repo.calls.index(pr) < repo.calls.index(_DISPATCH)
     assert sum(call[:3] == ("gh", "issue", "create") for call in repo.calls) == 1
+
+
+def test_unchanged_inventory_opens_pr_without_issue(tracker, repo):
+    tracker.inventory_diff.return_value = ({"added": {}, "removed": {}, "renamed": {}}, False)
+    tracker.run("")
+
+    assert any(call[:3] == ("gh", "pr", "create") for call in repo.calls)
+    assert not any(call[:3] == ("gh", "issue", "create") for call in repo.calls)
+
+
+def test_pr_create_failure_deletes_orphan_branch_and_raises(tracker, repo):
+    repo.fail_pr_create = True
+    repo.open_items["pulls"].append({"head": {"ref": "another-branch"}, "title": "其他更新"})
+    with pytest.raises(subprocess.CalledProcessError) as error:
+        tracker.run("")
+
+    assert error.value.cmd[:3] == ("gh", "pr", "create")
+    after_create = repo.calls[repo.calls.index(error.value.cmd) + 1:]
+    [cleanup] = [call for call in after_create if call[:2] == ("git", "push")]
+    assert f"--force-with-lease={_REF}:{_COMMIT}" in cleanup
+    assert f":{_REF}" in cleanup
+    assert "--force" not in cleanup
+
+
+def test_pr_create_failure_keeps_branch_when_pr_appears(tracker, repo):
+    repo.fail_pr_create = True
+    repo.pr_appears_on_failure = True
+    tracker.run("")
+
+    [pr] = [call for call in repo.calls if call[:3] == ("gh", "pr", "create")]
+    after_create = repo.calls[repo.calls.index(pr) + 1:]
+    assert not any(call[:2] == ("git", "push") for call in after_create)
 
 
 def test_dispatch_failure_keeps_created_pr_and_prints_recovery_steps(tracker, repo, capsys):
@@ -143,10 +194,25 @@ def test_existing_remote_branch_skips_writes(tracker, repo):
     "endpoint,item",
     [
         ("pulls", {"head": {"ref": "another-branch"}, "title": f"更新映像至 {_LATEST}"}),
-        ("issues", {"title": f"追蹤 {_LATEST} 官方測試清單"}),
+        ("issues", {"title": f"追蹤 Isaac Sim {_LATEST} 官方測試清單的討論"}),
     ],
 )
-def test_open_item_with_version_in_title_skips_writes(tracker, repo, endpoint, item):
+def test_unrelated_open_item_with_version_in_title_allows_bump(tracker, repo, endpoint, item):
+    repo.open_items[endpoint].append(item)
+    tracker.run("")
+
+    assert any(call[:2] == ("git", "push") for call in repo.calls)
+    assert any(call[:3] == ("gh", "pr", "create") for call in repo.calls)
+
+
+@pytest.mark.parametrize(
+    "endpoint,item",
+    [
+        ("pulls", {"head": {"ref": _BRANCH}, "title": "更新映像"}),
+        ("issues", {"title": f"追蹤 Isaac Sim {_LATEST} 官方測試清單"}),
+    ],
+)
+def test_existing_bot_pr_or_issue_skips_writes(tracker, repo, endpoint, item):
     repo.open_items[endpoint].append(item)
     tracker.run("")
     _assert_no_writes(repo)

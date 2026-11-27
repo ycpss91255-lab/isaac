@@ -146,13 +146,15 @@ def test_pr_body_describes_the_inventory_diff_in_traditional_chinese(tracker, mo
     "prs,issues,expected",
     [
         ([{"headRefName": "bot/isaac-sim-6.2.1", "title": "更新映像"}], [], False),
-        ([{"headRefName": "update-sim", "title": "更新 Isaac Sim 至 6.2.1"}], [], False),
         ([], [{"title": "追蹤 Isaac Sim 6.2.1 官方測試清單"}], False),
-        ([{"headRefName": "bot/isaac-sim-6.2.10", "title": "更新至 6.2.10"}],
-         [{"title": "追蹤 6.2.1.1 測試清單"}], True),
+        ([{"headRefName": "update-sim", "title": "更新 Isaac Sim 至 6.2.1"}], [], True),
+        ([], [{"title": "Dockerfile 仍寫 6.2.1"}], True),
+        ([], [{"title": "追蹤 6.2.1.1 測試清單"}], True),
+        ([{"headRefName": "bot/isaac-sim-6.2.10", "title": "更新至 6.2.10"}], [], True),
         ([], [], True),
     ],
-    ids=["same-pr-branch", "same-pr-title", "same-issue", "distinct-versions", "first-run"],
+    ids=["bot-branch", "bot-issue", "pr-title-only", "unrelated-issue",
+         "other-issue-version", "other-branch-version", "first-run"],
 )
 def test_should_open_checks_open_prs_and_issues_for_exact_version(tracker, prs, issues, expected):
     assert tracker.should_open("6.2.1", open_prs=prs, open_issues=issues) is expected

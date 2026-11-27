@@ -66,11 +66,15 @@ def update_base_version(path, version):
     path.write_text(content)
 
 
+def issue_title_for(version):
+    return f"追蹤 Isaac Sim {version} 官方測試清單"
+
+
 def should_open(version, open_prs, open_issues):
     branch = f"bot/isaac-sim-{version}"
-    exact = re.compile(rf"(?<![\w.]){re.escape(version)}(?!\w|\.[0-9])")
+    issue_title = issue_title_for(version)
     return not (any(pr["headRefName"] == branch for pr in open_prs)
-                or any(exact.search(item["title"]) for item in [*open_prs, *open_issues]))
+                or any(issue["title"] == issue_title for issue in open_issues))
 
 
 def parse_test_config(config, scripts):
@@ -283,7 +287,8 @@ def open_items(endpoint):
     # The issues endpoint includes PRs. Both endpoints paginate to exhaustion.
     pages = command("gh", "api", "--paginate", "--slurp",
                     f"repos/{{owner}}/{{repo}}/{endpoint}?state=open&per_page=100")
-    return [item for page in json.loads(pages) for item in page]
+    return [item for page in json.loads(pages) for item in page
+            if endpoint != "issues" or "pull_request" not in item]
 
 
 def planned_pr_body(pin, current, latest, diff, runner_changed):
@@ -292,7 +297,9 @@ def planned_pr_body(pin, current, latest, diff, runner_changed):
         body = body.replace("## 官方測試清單", f"## 官方測試清單（比較 `{current}` 與 `{latest}`）")
     if runner_changed:
         body += "\n官方測試執行器 `run_tests.py` 有變更，請確認分組規則。\n"
-    return body
+    return (body + "\n## 人工確認\n\n"
+            "本次自動更新僅修改 Dockerfile 的 `ARG BASE_IMAGE`。\n\n"
+            "- [ ] 請核對 `README.md` 與 Dockerfile 註解，將其中寫死的舊版號同步更新為新版號。\n")
 
 
 def run(override, dry_run=False):
@@ -312,14 +319,14 @@ def run(override, dry_run=False):
     branch = "bot/isaac-sim-" + latest
     if command("git", "ls-remote", "--heads", "origin", "refs/heads/" + branch):
         return
-    prs = [dict(headRefName=p["head"]["ref"], title=p["title"]) for p in open_items("pulls")]
+    prs = [dict(headRefName=p["head"]["ref"]) for p in open_items("pulls")]
     if not should_open(latest, prs, open_items("issues")):
         return
 
     diff, runner_changed = inventory_diff(current, latest, token)
     body = planned_pr_body(pin, current, latest, diff, runner_changed)
     title = f"更新 Isaac Sim 至 {latest}"
-    issue_title = f"追蹤 Isaac Sim {latest} 官方測試清單" if diff and any(diff.values()) else None
+    issue_title = issue_title_for(latest) if diff and any(diff.values()) else None
     if dry_run:
         print(title)
         print(body, end="")
