@@ -10,7 +10,7 @@ The hosted pytest floors match the counts collected in Docker. The GPU column sh
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 667 | 30 | 816 |
+| core | 119 | 667 | 31 | 817 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
@@ -443,7 +443,7 @@ The hosted suite has a floor of **775 tests** and runs without Isaac Sim. CI run
 
 ## test/integration/ — GPU integration (pytest, not in the bats count above)
 
-The GPU suite has a floor of **30 tests** in the GPU-enabled `test` service. Run the full suite with `./script/run.sh -t test -- /isaac-sim/python.sh -m pytest test/integration/`.
+The GPU suite has a floor of **31 tests** in the GPU-enabled `test` service. Run the full suite with `./script/run.sh -t test -- /isaac-sim/python.sh -m pytest test/integration/`.
 
 The `core-gpu` job runs `test/assert_pytest_baseline.sh --gpu`. It checks the in-container JUnit report for failures, errors, at least one pass, and a collection count at or above `GPU_INTEGRATION_BASELINE`. The gate adds that collection count to the hosted floor and checks the sum against `AGGREGATE_TARGET` (126).
 

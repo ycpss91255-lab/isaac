@@ -410,7 +410,7 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 # isaac#429: the GPU floor drops 35 -> 30 with the ROS smoke and cross-container
 #   tests retired. The in-container suite includes the I/O plugin checks in
 #   test/integration/no_ros/ and both wheel motion cases from #479.
-GPU_INTEGRATION_BASELINE = 30
+GPU_INTEGRATION_BASELINE = 31
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
