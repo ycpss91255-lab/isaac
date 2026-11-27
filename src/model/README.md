@@ -11,11 +11,14 @@ SolidWorks source files and object assets respectively.
 
 ## Moved models
 
+Paths are relative to the sim_asset repository root. See “分層與規則” and
+“Repository 結構” in the [sim_asset README](https://github.com/ycpss91255-lab/sim_asset/blob/main/README.md).
+
 | Model | URDF | USD |
 |-------|------|-----|
-| omwr | `urdf/omwr/` | `usd/omwr/` |
-| openbase | `urdf/openbase/` | `usd/openbase/` |
-| forklift_blocky | -- | `usd/forklift_blocky/` |
+| omwr | `model/robot/custom/omwr/` | `usd/robot/custom/omwr/` |
+| openbase | `model/robot/guiritter/openbase/` | `usd/robot/guiritter/openbase/` |
+| forklift_blocky | -- | `usd/temp/forklift_blocky/` |
 
 ## Test fixtures
 

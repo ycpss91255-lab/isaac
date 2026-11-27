@@ -46,9 +46,8 @@ def openbase_usd_path() -> Path:
     if not p.is_file():
         raise FileNotFoundError(
             f"OpenBase USD not found at {p}. "
-            "Robot models have moved to the sim_asset repository "
-            "(ycpss91255-lab/sim_asset). Clone it and regenerate the "
-            "USD from URDF, or copy the USD into this path."
+            "The model lives in ycpss91255-lab/sim_asset at "
+            "usd/robot/guiritter/openbase/openbase.usda. Copy it to the path above."
         )
     return p
 
