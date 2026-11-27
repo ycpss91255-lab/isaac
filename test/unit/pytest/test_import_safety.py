@@ -36,7 +36,7 @@ _ISAAC_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab")
 _DEVKIT_MODULES = (
     "isaac_devkit",
     "isaac_devkit.exceptions",
-    "isaac_devkit.model_import",
+    "isaac_devkit.usd_model",
     "isaac_devkit.materials",
     "isaac_devkit.sensors",
     "isaac_devkit.ros_io",
@@ -97,13 +97,9 @@ def test_scene_has_no_isaaclab_imports():
 
 
 def test_joint_drive_reexport_is_host_safe_and_independent_of_isaaclab():
-    from isaac_devkit import model_import
+    from isaac_devkit import scene, usd_model
 
-    apply_joint_drive = model_import.apply_joint_drive
-    assert callable(apply_joint_drive)
-    owner = importlib.import_module(apply_joint_drive.__module__)
-    assert owner.__name__.startswith("isaac_devkit.")
-    assert owner is not model_import, "model_import must re-export the scene-side helper"
-    assert owner.apply_joint_drive is apply_joint_drive
+    assert usd_model.apply_joint_drive is scene.apply_joint_drive
+    assert callable(usd_model.apply_joint_drive)
     assert _leaked_isaac_modules() == []
-    _assert_no_isaaclab_imports(owner)
+    _assert_no_isaaclab_imports(usd_model)

@@ -86,17 +86,14 @@ def _model_search_roots(repo_root):
 def _resolve_package_uri(uri, roots):
     """Resolve a ``package://<pkg>/<rel>`` URI under the MODEL_PATH roots.
 
-    For each root, checks whether ``<root>/<pkg>/package.xml`` exists (the
-    same ``package.xml``-required convention as
-    ``model_import._resolve_package_dir`` from #267). The first root whose
-    ``<pkg>/`` carries a ``package.xml`` **and** the target file is used.
+    Use the first root containing both the package manifest and the target file.
 
     PURE apart from filesystem existence checks -- no Isaac import.
 
     Raises:
         FileNotFoundError: naming the package and listing the searched roots.
     """
-    # "package://my_pkg/urdf/robot.usd" -> pkg="my_pkg", rel="urdf/robot.usd"
+    # "package://my_pkg/usd/robot.usd" -> pkg="my_pkg", rel="usd/robot.usd"
     stripped = uri[len("package://"):]
     pkg, _, rel = stripped.partition("/")
     if not pkg or not rel:
@@ -127,8 +124,7 @@ def resolve_model_path(model_rel, repo_root):
     * **absolute path** -- returned as-is if it exists.
     * **package:// URI** -- ``package://<pkg>/<rel>`` is resolved by
       scanning each MODEL_PATH root for a ``<pkg>/`` directory that
-      carries a ``package.xml`` (the same convention as
-      ``model_import._resolve_package_dir`` from #267).
+      carries a ``package.xml``.
     * **relative path** -- searched under each MODEL_PATH root (or the
       legacy ``<repo_root>/model/usd/`` fallback).
 
@@ -667,17 +663,36 @@ def build_scene(scene, stage, repo_root):
             setup_sensor(load_config(path), stage)
 
 
+def resolve_joint_drive_gains(stiffness, damping):
+    """Return a validated pair of gains, or None when both are omitted."""
+    if stiffness is None and damping is None:
+        return None
+    if stiffness is None or damping is None:
+        raise ValueError(
+            "joint drive needs BOTH stiffness and damping (got "
+            f"stiffness={stiffness!r}, damping={damping!r}); supply both for "
+            "a position drive or neither for the fixed-joint-safe default"
+        )
+    stiffness = float(stiffness)
+    damping = float(damping)
+    if stiffness < 0.0 or damping < 0.0:
+        raise ValueError(
+            f"joint drive gains must be non-negative (got stiffness="
+            f"{stiffness}, damping={damping})"
+        )
+    return (stiffness, damping)
+
+
 def apply_joint_drive(prim_path, stiffness, damping, *, drive_type="force", stage=None):
     """Set a joint's drive and verify its authored gains on the resolved stage.
 
     Revolute gains are supplied per radian and stored per degree. Prismatic
     gains use linear units. Return False for a missing stage or undriveable joint.
     """
-    if stiffness is None or damping is None:
+    gains = resolve_joint_drive_gains(stiffness, damping)
+    if gains is None:
         raise ValueError("apply_joint_drive needs both stiffness and damping")
-    stiffness, damping = float(stiffness), float(damping)
-    if stiffness < 0 or damping < 0:
-        raise ValueError("joint drive gains must be non-negative")
+    stiffness, damping = gains
 
     if stage is None:
         import omni.usd

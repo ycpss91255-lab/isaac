@@ -4,9 +4,9 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
-イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。シーンビルダーは `to_scene_specs` が返す仕様から OpenUSD（`pxr`）で prim を直接作成する。イメージには `UrdfConverter` と `AppLauncher` 用に NVIDIA Isaac Lab 3.0（`v3.0.0`）を同梱する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
+イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。シーンビルダーは `to_scene_specs` が返す仕様から OpenUSD（`pxr`）で prim を直接作成する。イメージには `AppLauncher` 用に NVIDIA Isaac Lab 3.0（`v3.0.0`）を同梱する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
-本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD / URDF モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
+本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 
 ## 前提条件
 
@@ -294,7 +294,7 @@ kit terminal に `[ros2_test_sub] /host/test <- 'hello-from-host'` と出力さ�
 
 #### 追加の Kit 引数（`ISAAC_KIT_EXTRA_ARGS`）
 
-`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`example_driver.py`、`model_import`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -305,7 +305,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### 起動プラグイン（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`example_driver.py`、`model_import`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
