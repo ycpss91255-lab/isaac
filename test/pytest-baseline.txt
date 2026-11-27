@@ -150,6 +150,7 @@
 #   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
+#   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
 #   test_repo_config.py (2): .dockerignore keeps isaac-sim/ out of the
 #   build context, and setup.toml [deploy] uses gpu_runtime. Pure -- AST,
 #   file reads and a fake clock. Live count was then 388.
@@ -288,8 +289,8 @@
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
 # isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
-# isaac#363: test_model_readme_layout.py adds 12 docs cases (687 -> 699, docs 44 -> 56).
-HOSTED_UNIT_BASELINE = 699
+# isaac#363: test_model_readme_layout.py adds 11 docs cases (687 -> 698, docs 44 -> 55).
+HOSTED_UNIT_BASELINE = 698
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -320,7 +321,7 @@ HOSTED_UNIT_BASELINE_CORE = 618
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 56
+HOSTED_UNIT_BASELINE_DOCS = 55
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
