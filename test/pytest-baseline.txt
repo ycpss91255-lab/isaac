@@ -290,7 +290,8 @@
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
 # isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
 # isaac#289: test_readme_multi_instance.py adds 24 docs cases (687 -> 711, docs 44 -> 68).
-HOSTED_UNIT_BASELINE = 711
+# isaac#453: merge queue wiring adds 2 workflow and 2 scope-selection cases (711 -> 715, core 618 -> 622).
+HOSTED_UNIT_BASELINE = 715
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -317,7 +318,8 @@ HOSTED_UNIT_BASELINE = 711
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
 #   isaac#338 adds 16 core cases (core 602 -> 618).
-HOSTED_UNIT_BASELINE_CORE = 618
+#   isaac#453 adds 4 core cases (core 618 -> 622).
+HOSTED_UNIT_BASELINE_CORE = 622
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
