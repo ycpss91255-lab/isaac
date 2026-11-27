@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- 官方 `startuptests` 現在會在容器結束前，將 `$HOME/.nvidia-omniverse/logs/` 下各個 Kit app 的記錄複製到 `artifacts/startuptests/kit-logs/`。測試成功或失敗都會收集 log，並保留官方測試的結束碼（isaac#436）。
 - **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 

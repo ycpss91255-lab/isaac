@@ -273,13 +273,13 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 
 ## test/bats/smoke/gpu_job_scripts_spec.bats (9)
 
-Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. A Docker stub checks the official suite command and writes fixture output through its bind mounts. The spec runs without Docker or a GPU.
+Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. The Docker stub executes the mounted startup script with a temporary home directory. Its fixture `run_tests.py` writes JUnit to `/tmp/r.xml` and a Kit log under `$HOME/.nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)/6.2/`. The spec runs without Docker or a GPU.
 
 | Test | Description |
 |------|-------------|
 | `gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline, official startuptests -- in order` | The job runs the official suite once after a successful GPU baseline. A baseline failure stops the job before the suite. |
-| `gpu integration job: successful startuptests leave JUnit in the artifact directory` | The workspace artifact directory contains the XML produced by the runner. |
-| `gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log` | A nonzero container exit fails the job. The workspace artifact directory contains the failing report and the Kit log from that run. |
+| `gpu integration job: successful startuptests retain JUnit and the Kit log` | Checks the passing JUnit report in `artifacts/startuptests/r.xml` and the Kit log under `kit-logs/` with its app and version directories preserved. |
+| `gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log` | Checks that the job returns the fixture's exit code 23 and retains both the failing JUnit report and that run's Kit log. |
 | `gpu integration job: works from any cwd (resolves the repo root itself)` | Invoked from `/`, the script resolves its own repo root. |
 | `gpu integration job: a failed build fails the job before the GPU suite` | A build failure (`BUILD_RC=3`) exits non-zero and does not reach the baseline step. |
 | `stream smoke job: apply, pin WS_PATH, build stream, caches, smoke -- in order` | The five steps fire in the expected order with the expected env. |

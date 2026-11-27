@@ -31,8 +31,9 @@ setup() {
   for f in gpu_job_lib.sh gpu_integration_job.sh stream_smoke_job.sh; do
     cp "${scripts}/${f}" "${FAKE}/script/ci/${f}"
   done
-  if [ -f "${scripts}/official_startuptests.sh" ]; then
-    cp "${scripts}/official_startuptests.sh" "${FAKE}/script/ci/"
+  cp "${scripts}/official_startuptests.sh" "${FAKE}/script/ci/"
+  if [ -f "${scripts}/startuptests_in_container.sh" ]; then
+    cp "${scripts}/startuptests_in_container.sh" "${FAKE}/script/ci/"
   fi
   cp "${BATS_TEST_DIRNAME}/startuptests_docker_stub.py" "${FAKE}/bin/docker"
   chmod +x "${FAKE}/script/ci/"*.sh "${FAKE}/bin/docker"
@@ -112,21 +113,25 @@ teardown() {
   [ "${output}" = "0" ]
 }
 
-@test "gpu integration job: successful startuptests leave JUnit in the artifact directory" {
+assert_startuptests_artifacts() {
+  local failures="$1" rc="$2"
+  local artifacts="${FAKE}/artifacts/startuptests"
+  local app_dir="${artifacts}/kit-logs/Kit/Isaac-Sim Streaming (Newton)/6.2"
+  grep -Fxq "<testsuite name=\"startup-fixture\" failures=\"${failures}\"/>" "${artifacts}/r.xml"
+  grep -Fxq "Kit startup fixture rc=${rc}" "${app_dir}/kit_20261127_162941.log"
+}
+
+@test "gpu integration job: successful startuptests retain JUnit and the Kit log" {
   run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
-  grep -Rlx --include='*.xml' '<testsuite name="startup-fixture" failures="0"/>' \
-    "${FAKE}/artifacts/startuptests"
+  assert_startuptests_artifacts 0 0
 }
 
 @test "gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log" {
   STARTUP_RC=23 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
-  [ "${status}" -ne 0 ]
+  [ "${status}" -eq 23 ]
   grep -q '^docker run ' "${CALLS}"
-  grep -Rlx --include='*.xml' '<testsuite name="startup-fixture" failures="1"/>' \
-    "${FAKE}/artifacts/startuptests"
-  grep -Rlx --include='*.log' 'Kit startup failure from this run' \
-    "${FAKE}/artifacts/startuptests"
+  assert_startuptests_artifacts 1 23
 }
 
 @test "gpu integration job: works from any cwd (resolves the repo root itself)" {

@@ -16,9 +16,10 @@ docker run --rm --gpus all \
   --label "com.docker.compose.project=${BASELINE_PROJECT:?}" \
   -e ACCEPT_EULA=Y -e PRIVACY_CONSENT=Y \
   -v "${PWD}/isaac-sim/kit/cache:/isaac-sim/kit/cache" \
-  -v "${artifacts}/kit-logs:/isaac-sim/kit/logs" \
+  -v "${artifacts}/kit-logs:/artifacts/kit-logs" \
   -v "${artifacts}/r.xml:/tmp/r.xml" \
+  -v "${PWD}/script/ci/startuptests_in_container.sh:/tmp/startuptests_in_container.sh:ro" \
   "${DOCKER_HUB_USER:?}/${IMAGE_NAME:?}:test" \
-  bash -c 'cd /isaac-sim && python3 run_tests.py --suite startuptests --output /tmp/r.xml'
+  bash /tmp/startuptests_in_container.sh
 
 test -s "${artifacts}/r.xml"
