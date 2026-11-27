@@ -50,6 +50,21 @@ def test_skipped_jobs_pass(gate):
     assert ok
 
 
+def test_docs_only_pr_passes_with_all_gpu_jobs_skipped(gate):
+    needs = _needs(**{
+        "changes": "success",
+        "docs-unit": "success",
+        "core-unit": "skipped",
+        "stream-unit": "skipped",
+        "core-build": "skipped",
+        "core-gpu": "skipped",
+        "stream-smoke": "skipped",
+        "headless-smoke": "skipped",
+    })
+    ok, lines = gate.evaluate(needs)
+    assert ok, lines
+
+
 @pytest.mark.parametrize("bad", ["failure", "cancelled"])
 def test_a_failed_or_cancelled_job_fails(gate, bad):
     ok, lines = gate.evaluate(
