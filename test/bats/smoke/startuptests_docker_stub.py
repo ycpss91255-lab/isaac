@@ -103,6 +103,10 @@ def main(args):
     assert {"ACCEPT_EULA=Y", "PRIVACY_CONSENT=Y"} <= set(options.env), options.env
 
     workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+    # The shader cache is a link to a persistent directory outside the workspace.
+    cache_root = Path(
+        os.environ.get("ISAAC_CI_CACHE_ROOT") or Path(os.environ["HOME"]) / "isaac-ci-cache"
+    ).resolve()
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
         for directory in ("isaac-sim", "tmp", "home/kit"):
@@ -112,7 +116,9 @@ def main(args):
         init.write_text(BASH_ENV)
 
         for source, target, readonly in bind_mounts(options):
-            assert workspace in source.resolve().parents and source.exists(), source
+            resolved = source.resolve()
+            assert source.exists(), source
+            assert workspace in resolved.parents or cache_root in resolved.parents, source
             dest = root / target.relative_to("/")
             dest.parent.mkdir(parents=True, exist_ok=True)
             if source.suffix == ".sh":
