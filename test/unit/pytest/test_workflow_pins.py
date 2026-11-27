@@ -25,6 +25,7 @@ _PINNED_TAG = "v0.4.0"
 _EXPECTED_CALLERS = {
     "main.yaml",
     "ci-stream-smoke.yaml",
+    "ci-stream-visual-e2e.yaml",
     "ci-headless-smoke.yaml",
     "publish-stream-source.yaml",
 }
@@ -59,7 +60,7 @@ def test_every_gpu_reusable_caller_is_pinned_to_v040():
     assert not bad, f"callers not pinned to @{_PINNED_TAG}: {bad}"
 
 
-def test_gpu_reusable_callers_are_the_known_four():
+def test_gpu_reusable_callers_are_the_known_five():
     assert set(_callers()) == _EXPECTED_CALLERS
 
 

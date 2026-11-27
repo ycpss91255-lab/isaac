@@ -184,7 +184,7 @@ post-run hook 同时也把 `network.public_ip` 当 `SIGNALING_SERVER` env 传给
 
 ### 确定性 stream-source producer（GHCR image，isaac#223）
 
-给 CI 与浏览器版视觉 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)，由 Tier B browser-frames smoke isaac#173 消费）用的一个可 pull、pin 版号的 producer image，不需要开一个桌面 Isaac session 就能提供*保证非全黑*的 WebRTC 来源。开机时它渲染一个确定性的空但打光的场景 — dome + distant key light 打在 12×12 棋盘格地板上，相机取景在 `eye=[15,-15,11]` — 并永久 livestream，所以浏览器随时连上都看到可重现的画面。整个场景以程序化方式生成（无外部 asset），image 自给自足。
+给 CI 与浏览器版视觉 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)）用的一个可 pull、pin 版号的 producer image，不需要开一个桌面 Isaac session 就能提供*保证非全黑*的 WebRTC 来源。开机时它渲染一个确定性的空但打光的场景 — dome + distant key light 打在 12×12 棋盘格地板上，相机取景在 `eye=[15,-15,11]` — 并永久 livestream，所以浏览器随时连上都看到可重现的画面。整个场景以程序化方式生成（无外部 asset），image 自给自足。
 
 - **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin 的 immutable tag — 非 `:latest`）。由 `producer` Dockerfile stage build。
 - **Driver**：`src/script/stream_source_producer.py`，baked 在 `/opt/isaac-producer/stream_source_producer.py`，由 image `CMD` 启动。
@@ -386,6 +386,8 @@ out.step(sim_time_seconds)
 详见 [doc/test/TEST.md](test/TEST.md)。
 
 每个测试只属于一个范围组别（`core`、`gui`、`stream`、`headless`、`docs`）：pytest 模块设置 `pytestmark = pytest.mark.<组别>`（用 `pytest -m <组别>` 只跑一组），bats spec 写 `# bats file_tags=<组别>`。没有组别的测试会让收集失败。`test/pytest-baseline.txt` 每组各有一个下限。各组数量见 TEST.md 的组别表。
+
+stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromium 持续收到能看到红色测试方块的视频帧。
 
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 

@@ -328,18 +328,19 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-HOSTED_UNIT_BASELINE = 705
+# isaac#173: 31 stream visual cases and one core workflow-scope case (705 -> 737).
+HOSTED_UNIT_BASELINE = 737
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
 #   hosted unit test belongs to exactly one group (pytestmark at module level,
 #   enforced at collection by test/group_markers.py and statically by
-#   script/ci/scope_groups.py), so the six floors below sum to
+#   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
 #   collects each group with `-m <group>` and checks it against its own floor.
-#   A group with no tests yet (gui / headless) has floor 0.
+#   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
-#   stream   -- test_stream_source_producer.py
+#   stream   -- test_stream_source_producer.py and test_stream_visual_*.py
 #   docs     -- test_producer_versions.py, test_no_ai_attribution.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
@@ -351,9 +352,10 @@ HOSTED_UNIT_BASELINE = 705
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 664
+#   GPU visual E2E (#173) raises stream 19 -> 50 and core 664 -> 665.
+HOSTED_UNIT_BASELINE_CORE = 665
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 19
+HOSTED_UNIT_BASELINE_STREAM = 50
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 HOSTED_UNIT_BASELINE_DOCS = 16
 
@@ -511,10 +513,7 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 GPU_INTEGRATION_BASELINE = 40
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
-#   126). Recorded for traceability; after the ingestion work + the owv#55
-#   cross-container compose-project isolation + the isaac#223 producer the
-#   live aggregate is 357 (326 hosted-unit + 31 GPU-integration), well past the
-#   PRD's 126 floor. The aggregate is asserted at M2 where the GPU runner
+#   126). The current floors sum to 777 (737 hosted-unit + 40 GPU-integration). The aggregate is asserted at M2 where the GPU runner
 #   runs (see assert_pytest_baseline.sh --gpu); a SKIPPED GPU job does not
 #   count toward it.
 AGGREGATE_TARGET = 126
@@ -527,8 +526,9 @@ AGGREGATE_TARGET = 126
 #   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
+#   The detached stream post-run skip test raises the stream floor from 81 to 82.
 BATS_BASELINE_CORE = 114
 BATS_BASELINE_GUI = 0
-BATS_BASELINE_STREAM = 81
+BATS_BASELINE_STREAM = 82
 BATS_BASELINE_HEADLESS = 13
 BATS_BASELINE_DOCS = 0
