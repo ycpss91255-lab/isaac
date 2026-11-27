@@ -7,14 +7,14 @@ that whole compose project (``docker compose -p <project> down`` /
 ``run.sh`` EXIT ``_app_cleanup`` / ``stop.sh`` ``_compose_project down
 --remove-orphans``). If ``COMPOSE_PROJECT`` coincides with the DEFAULT manual
 stream stack's compose project -- ``${DOCKER_HUB_USER}-${IMAGE_NAME}`` (e.g.
-``yunchien-isaac``, from ``compose.yaml`` ``name:``) -- then a CI cross-container
+``alice-isaac``, from ``compose.yaml`` ``name:``) -- then a CI cross-container
 run (or its cleanup) removes EVERY container in that project, killing a
 long-lived, manually-run ``stream`` container it never intended to touch.
 
 The fix is a DEDICATED default project name distinct from any real stream
 stack. Note that *deriving* the default from ``.env.generated``
 (``${DOCKER_HUB_USER}-${IMAGE_NAME}``) -- as floated in the owv#55 thread --
-would STILL resolve to ``yunchien-isaac`` and therefore still coincide with the
+would STILL resolve to the manual project name and therefore coincide with the
 default stream stack, giving no isolation. Only a distinct name restores the
 invariant. ``XC_COMPOSE_PROJECT`` remains an override seam for CI to inject a
 per-run-unique project when it wants concurrency isolation.
@@ -45,7 +45,7 @@ DEDICATED_PROJECT = "xc-isaac-roundtrip"
 # The default manual stream stack's compose project (compose.yaml `name:` ->
 # ${DOCKER_HUB_USER}-${IMAGE_NAME}). The cross-container test must NOT default
 # to this, nor to anything a `${user}-${image}` derivation would produce.
-STREAM_STACK_PROJECT = "yunchien-isaac"
+STREAM_STACK_PROJECT = "alice-isaac"
 
 
 def _load_xc_default(monkeypatch) -> str:
@@ -70,16 +70,14 @@ def test_default_compose_project_is_isolated_from_the_stream_stack(monkeypatch):
     """The default is distinct from any real stream-stack compose project.
 
     Asserts the ISOLATION INTENT, not just the literal: it must not equal the
-    default stream stack (``yunchien-isaac``) and must not equal a
+    default stream stack (``alice-isaac``) and must not equal a
     ``${DOCKER_HUB_USER}-${IMAGE_NAME}``-style derivation (which would still
     coincide with the stream stack and defeat the fix).
     """
+    monkeypatch.setenv("DOCKER_HUB_USER", "alice")
+    monkeypatch.setenv("IMAGE_NAME", "isaac")
     default = _load_xc_default(monkeypatch)
     assert default != STREAM_STACK_PROJECT
-    # A `${user}-${image}` derivation for this repo would resolve to
-    # `yunchien-isaac`; guard against any such coinciding default.
-    for user in ("yunchien", "alice"):
-        assert default != f"{user}-isaac"
 
 
 def test_xc_compose_project_env_override_still_wins(monkeypatch):

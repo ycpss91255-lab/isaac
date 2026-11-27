@@ -47,7 +47,7 @@ just docker build         # 第一次 / 改 Dockerfile 後跑
 ### 2. OpenBase USD 在 `isaac_ws/src/model/usd/robot/openbase/openbase.usda`
 
 ```bash
-ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openbase/openbase.usda
+ls src/model/usd/robot/openbase/openbase.usda
 ```
 
 不存在的話 (從 `openbase_minimal.urdf` 走 import_urdf.py 規 SW → URDF → openUSD pipeline)：
@@ -55,10 +55,10 @@ ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openbase/ope
 ```bash
 just docker run -t standalone -d
 just docker exec -t standalone /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/import_urdf.py \
+    /home/<user>/work/src/script/import_urdf.py \
     --no-fix-base \
-    /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
-    /home/yunchien/work/src/model/usd/robot/openbase/openbase.usda
+    /home/<user>/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
+    /home/<user>/work/src/model/usd/robot/openbase/openbase.usda
 just docker stop
 ```
 
@@ -67,7 +67,7 @@ just docker stop
 ### 3. fastdds.xml 設定檔存在
 
 ```bash
-ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.xml
+ls config/ros2/fastdds.xml
 ```
 
 跨 container DDS 需要這個 profile。
@@ -79,11 +79,11 @@ ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.x
 ### Step 1 — 啟 headless kit
 
 ```bash
-cd /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker
+cd "$(git rev-parse --show-toplevel)"
 
 just docker stop                # 收掉殘留
 just docker run -t headless -d  # 起 runheadless.sh -v
-docker ps | grep headless       # 預期: yunchien-isaac-headless Up
+docker ps | grep headless       # 預期: <user>-isaac-headless Up
 ```
 
 kit + WebRTC ext 載完約 30-60 秒。等 `ss -tln | grep 8011` 出現 LISTEN 表示 WebRTC server ready。
@@ -111,7 +111,7 @@ WebRTC viewport 內：
 預期 Output：
 
 ```
-[setup] opened /home/yunchien/work/src/model/usd/robot/openbase/openbase.usda
+[setup] opened /home/<user>/work/src/model/usd/robot/openbase/openbase.usda
 [setup] sunlight added
 [setup] ground plane added (Isaac grid texture)
 [setup] back_rim_joint: drive disabled
@@ -137,7 +137,7 @@ viewport 內**點空白 → 按 Spacebar**（或左側 ▶ 按鈕）強制 timel
 ```bash
 docker run --rm --net=host --ipc=host \
     -e ROS_DOMAIN_ID=0 \
-    -v /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
+    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
     -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'source /opt/ros/humble/setup.bash && \
         ros2 topic pub /cmd_vel geometry_msgs/Twist \
@@ -162,7 +162,7 @@ docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
 ```bash
 docker run --rm -it --net=host --ipc=host \
     -e ROS_DOMAIN_ID=0 \
-    -v /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
+    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
     -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'apt update && apt install -y ros-humble-teleop-twist-keyboard && \
         source /opt/ros/humble/setup.bash && \
@@ -174,7 +174,7 @@ i/j/k/l/, 等鍵控 base 方向。
 ### Step 7 — 收尾
 
 ```bash
-cd /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker
+cd "$(git rev-parse --show-toplevel)"
 just docker stop
 ```
 

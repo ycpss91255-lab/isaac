@@ -25,8 +25,8 @@
   ```bash
   cd isaac_ws/src/docker
   just docker exec -t stream /isaac-sim/python.sh \
-      /home/yunchien/work/src/script/import_urdf.py \
-      /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
+      /home/<user>/work/src/script/import_urdf.py \
+      /home/<user>/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
       /tmp/openbase_generated.usda
   ```
 

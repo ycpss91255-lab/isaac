@@ -76,7 +76,7 @@ Live verification of the original PR-A / PR-B Acceptance Snapshot above exposed 
 
 ```bash
 ./run.sh -t standalone -d
-./exec.sh -t standalone /isaac-sim/python.sh /home/yunchien/work/src/script/<driver>.py [--config ...]
+./exec.sh -t standalone /isaac-sim/python.sh /home/<user>/work/src/script/<driver>.py [--config ...]
 ```
 
 with the driver passing:

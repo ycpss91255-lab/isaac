@@ -130,6 +130,10 @@ jobs:
         uses: actions/checkout@v7
       - name: Stale naming scan
         run: python3 script/ci/check_stale_naming.py
+      - name: Forbidden names scan
+        env:
+          FORBIDDEN_NAMES: ${{ vars.FORBIDDEN_NAMES }}
+        run: python3 script/ci/check_forbidden_names.py --allow-unset
       - name: Hosted core-group pytest + group floor + coverage gate
         run: ./test/assert_pytest_baseline.sh --group core
 

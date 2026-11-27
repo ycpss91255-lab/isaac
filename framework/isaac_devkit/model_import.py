@@ -3,10 +3,10 @@
 
 Run inside the Isaac Sim 5.1 / Isaac Lab 2.3 container:
 
-    PYTHONPATH=/home/yunchien/work/framework /isaac-sim/python.sh \\
+    PYTHONPATH=/home/<user>/work/framework /isaac-sim/python.sh \\
         -m isaac_devkit.model_import \\
-        --urdf /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \\
-        --output /home/yunchien/work/src/model/usd/robot/openbase/ \\
+        --urdf /home/<user>/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \\
+        --output /home/<user>/work/src/model/usd/robot/openbase/ \\
         --name openbase
 
 Output (ADR-0018 decision 6 -- a single self-contained USD):

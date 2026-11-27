@@ -6,7 +6,7 @@ scripts under ``src/script/``. A README-only onboarding run on Isaac Sim
 
   - ``ros2_test_pub_standalone.py`` claimed ~1 Hz but published every 60
     Kit updates, i.e. 3.5-7.5 Hz depending on load;
-  - all of them hard-coded ``/home/yunchien/work/...``.
+  - all of them hard-coded a developer's workspace path.
 
 The runtime behaviour needs the GPU and is verified in the container (see
 the PR); these hosted tests pin the shape that makes it hold: a pure helper
@@ -17,6 +17,7 @@ module-top Isaac import. Pure -- file reads, AST parses and a fake clock.
 
 import ast
 import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -143,9 +144,8 @@ def test_script_does_not_use_removed_dynamic_control(name):
 
 @pytest.mark.parametrize("name", _README_SCRIPTS)
 def test_script_has_no_hard_coded_home(name):
-    assert "/home/yunchien" not in (_SCRIPT_DIR / name).read_text(
-        encoding="utf-8"
-    )
+    source = (_SCRIPT_DIR / name).read_text(encoding="utf-8")
+    assert not re.search(r"/home/[^/\n]+/work", source)
 
 
 @pytest.mark.parametrize("name", _README_SCRIPTS)

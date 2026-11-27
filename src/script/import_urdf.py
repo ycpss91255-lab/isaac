@@ -4,7 +4,7 @@
 Run inside the Isaac Sim 5.1 container:
 
     /isaac-sim/python.sh import_urdf.py \\
-        /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \\
+        /home/<user>/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \\
         /tmp/openbase_generated.usda
 
 Note: the curated ``model/usd/robot/openbase/openbase.usda`` is already tracked in

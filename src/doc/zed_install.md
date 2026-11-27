@@ -115,8 +115,8 @@ After the four steps above, the dispatch in `script/camera_setup.py` should boot
 ```bash
 cd isaac_ws/src/docker
 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py \
-    --config /home/yunchien/work/src/config/camera/zed.yaml
+    /home/<user>/work/src/script/<your_driver>.py \
+    --config /home/<user>/work/src/config/camera/zed.yaml
 ```
 
 The driver log should show `camera graph created at /World/CameraGraphs/forklift_camera_zed`. Topics on a sibling ros:humble container should include `<topic_prefix>/left/image_rect_color`, `<topic_prefix>/depth/depth_registered`, etc.

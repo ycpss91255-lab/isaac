@@ -147,7 +147,7 @@ if [[ "${MODE}" == "gpu" ]]; then
   # `COMPOSE_PROFILES='*' compose down --remove-orphans` over the resolved
   # compose project. base v0.42.0 removed --instance (base#666); the project
   # is now the single resolved PROJECT_NAME. Left at the DEFAULT project
-  # (${DOCKER_HUB_USER}-${IMAGE_NAME}, e.g. yunchien-isaac) that teardown
+  # (${DOCKER_HUB_USER}-${IMAGE_NAME}, e.g. <user>-isaac) that teardown
   # would reap a co-hosted manually-run `stream` container living in the same
   # project on a shared GPU host, on every GPU pytest run. So pin a DISTINCT
   # PROJECT_NAME in the derived .env.generated (the --env-file the wrappers
