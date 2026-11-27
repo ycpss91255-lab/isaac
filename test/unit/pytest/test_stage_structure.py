@@ -69,6 +69,6 @@ def test_header_stage_list_matches_active_stages():
 def test_only_gui_stage_enables_gui_mount():
     conf = _setup_toml()
     assert conf["gui"]["mode"] == "off"
-    assert conf["stage:gui"]["gui.mode"] == "auto"
+    assert conf["stage:gui"]["gui.mode"] == "force"
     for stage in ("stream", "headless", "devel-test"):
         assert conf[f"stage:{stage}"]["gui.mode"] == "off", stage
