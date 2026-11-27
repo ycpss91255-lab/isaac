@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
 
-Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner；ADR-0018）。`IsaacDriver` 透過 `isaacsim.SimulationApp` 啟動 Kit。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
+映像檔包含 Isaac Sim 本體與 NVIDIA Isaac Lab 3.0（`v3.0.0`），後者用作 scene-spawn backend（`sim_utils` spawner；ADR-0018）。`IsaacDriver` 透過 `isaacsim.SimulationApp` 啟動 Kit。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
 
 本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
@@ -250,40 +250,13 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 必要條件：NVIDIA GPU runtime（`--gpus all`）做 NVENC 編碼、`--network=host`、非 localhost client 需要 `PUBLIC_IP`。`ISAAC_SIGNAL_PORT` 可選（預設 `49100`）。driver 也接受 `--public-ip` / `--port` / `--run-seconds N`（`N>0` 界定 smoke run；預設永久執行）。
 
-## ROS 2 bridge（內建，build-time distro）
+## ROS I/O
 
-Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 同時內建 Humble 與 Jazzy 兩套 ROS 2 libraries（5.1 時放在 `isaacsim.ros2.bridge/`；6.0 把單一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），皆走 Python 3.12 rclpy，與 kit 內嵌 interpreter 一致。**本 image 在 build-time hard-bake distro 選擇** — 透過 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 項目指定（預設 `value = "humble"`，CoreSAM 對齊）。
-
-Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
-
-`setup.toml [environment]` 內 distro-agnostic env wiring：
-
-| 變數 | 值 | 用途 |
-|------|----|------|
-| `ROS_DOMAIN_ID` | `0` | 小團隊預設值；多人共用 host 時調高 |
-| `RMW_IMPLEMENTATION` | `rmw_fastrtps_cpp` | 明確指定 FastDDS，不繼承 host |
-| `FASTRTPS_DEFAULT_PROFILES_FILE` | `/isaac-sim/fastdds.xml` | UDPv4-only profile（跨容器 DDS reliable，避開 SHM flakiness）|
-
-### Distro 選擇（build-time、hard-baked）
-
-Dockerfile 的 `ARG ROS_DISTRO=humble` 接到 `setup.toml [[build.args]]`。Build 時值會被寫進 `/etc/isaac/ros-distro`，且 `script/isaac-ros-env-wrapper.sh` 會 install 到 `/usr/local/bin/`。`headless` 與 `stream` 兩個 stage 把 `ENTRYPOINT` 設成這個 wrapper — 每次 container 啟動時 wrapper 從 baked file 讀取並無條件 re-export `ROS_DISTRO` 與 `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib`，因此 production paths 上的 runtime `-e ROS_DISTRO=...` flag **無效**。
-
-`devel` stage 透過 Dockerfile `ENV` soft-bake 同樣兩個值（互動 shell 預設拿到，devs 仍可 `export ROS_DISTRO=...` 實驗）。
-
-切到 jazzy：
-
-```bash
-just docker setup remove build.arg "ROS_DISTRO=humble"
-just docker setup add build.arg "ROS_DISTRO=jazzy"
-just docker build           # 重 build 帶上新 ARG（只有受影響 layer 重 build，~10s）
-just docker run -t headless -d
-```
-
-Jazzy 路徑跟 Isaac 24.04 自動預設對齊（LTS 至 2029）— 已知 caveat：jazzy on noble 有 Python 3.11/3.12 混搭與 Nav2 路徑粗糙的問題，目前在 NVIDIA 論壇追蹤中。本 repo 尚未在 Isaac Sim 6.2.0 上重新驗證 jazzy 路徑；humble 是已驗證的預設值。
+映像檔本身不提供 ROS 整合。將 `ISAAC_IO_PLUGIN` 設為外部插件的 `module:function` 即可啟用 ROS I/O。
 
 ### 驗證跨容器 DDS
 
-跑 `just docker run -t stream -d`（帶 humble 覆蓋 env）並用 WebRTC client 或瀏覽器 viewer 連線後，打開 Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（即 repo 的 `src/script/`，mount 在 container 內的位置）→ Run。腳本會自動按 Play（publisher 只在 timeline 播放時才發），開始往 `/isaac/test` 發 `std_msgs/String "hello N"`。
+跑 `just docker run -t stream -d`並用 WebRTC client 或瀏覽器 viewer 連線後，打開 Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（即 repo 的 `src/script/`，mount 在 container 內的位置）→ Run。腳本會自動按 Play（publisher 只在 timeline 播放時才發），開始往 `/isaac/test` 發 `std_msgs/String "hello N"`。
 
 從同一台 host 的另一個 terminal：
 
