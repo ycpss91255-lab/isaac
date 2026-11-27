@@ -31,7 +31,11 @@ gpu_job_cache_dirs
 # network's domain 0 cannot bleed into io.latest(). See the env-wrapper note
 # in assert_pytest_baseline.sh.
 gpu_job_group "GPU integration pytest + aggregate gate (M2)"
-BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}" \
-  GPU_ROS_DOMAIN_ID="$(( (GITHUB_RUN_ID % 99) + 1 ))" \
+export BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+GPU_ROS_DOMAIN_ID="$(( (GITHUB_RUN_ID % 99) + 1 ))" \
   ./test/assert_pytest_baseline.sh --gpu
+gpu_job_endgroup
+
+gpu_job_group "Official Isaac Sim startuptests"
+./script/ci/official_startuptests.sh
 gpu_job_endgroup

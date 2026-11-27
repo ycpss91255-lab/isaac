@@ -14,7 +14,7 @@
 # writable cache dirs, and that a failing step fails the job.
 #
 # Hermetic: the real job scripts run from a fake repo root against stub
-# setup.sh / build.sh / assert_pytest_baseline.sh / stream_smoke.sh that
+# setup.sh / build.sh / assert_pytest_baseline.sh / stream_smoke.sh / docker that
 # record what they receive. No docker, no GPU.
 #
 # Baked into /smoke_test/ next to the job scripts by the devel-test stage.
@@ -23,11 +23,21 @@ bats_require_minimum_version 1.5.0
 
 setup() {
   FAKE="$(mktemp -d)"
-  mkdir -p "${FAKE}/script/ci" "${FAKE}/test"
+  local scripts="${BATS_TEST_DIRNAME}"
+  if [ ! -f "${scripts}/gpu_integration_job.sh" ]; then
+    scripts="${BATS_TEST_DIRNAME}/../../../script/ci"
+  fi
+  mkdir -p "${FAKE}/script/ci" "${FAKE}/test" "${FAKE}/bin"
   for f in gpu_job_lib.sh gpu_integration_job.sh stream_smoke_job.sh; do
-    cp "${BATS_TEST_DIRNAME}/${f}" "${FAKE}/script/ci/${f}"
+    cp "${scripts}/${f}" "${FAKE}/script/ci/${f}"
   done
-  chmod +x "${FAKE}/script/ci/"*.sh
+  if [ -f "${scripts}/official_startuptests.sh" ]; then
+    cp "${scripts}/official_startuptests.sh" "${FAKE}/script/ci/"
+  fi
+  cp "${BATS_TEST_DIRNAME}/startuptests_docker_stub.py" "${FAKE}/bin/docker"
+  chmod +x "${FAKE}/script/ci/"*.sh "${FAKE}/bin/docker"
+  export PATH="${FAKE}/bin:${PATH}"
+  unset DOCKER_HUB_USER STARTUP_RC BASELINE_RC
 
   export CALLS="${FAKE}/calls.log"
   export GITHUB_WORKSPACE="${FAKE}"
@@ -41,7 +51,7 @@ setup() {
   cat > "${FAKE}/script/setup.sh" <<'STUB'
 #!/usr/bin/env bash
 echo "setup $*" >> "${CALLS}"
-printf 'IMAGE_NAME=isaac\nWS_PATH=/wrong/parent\nPROJECT_NAME=alice-isaac\n' \
+printf 'IMAGE_NAME=isaac\nDOCKER_HUB_USER=alice\nWS_PATH=/wrong/parent\nPROJECT_NAME=alice-isaac\n' \
   > .env.generated
 STUB
 
@@ -59,6 +69,7 @@ STUB
   [ -w isaac-sim/kit/cache ] && [ -w isaac-sim/nvidia/computecache ] \
     && [ -w isaac-sim/documents ] && echo "caches=writable"
 } >> "${CALLS}"
+exit "${BASELINE_RC:-0}"
 STUB
 
   cat > "${FAKE}/script/ci/stream_smoke.sh" <<'STUB'
@@ -81,7 +92,7 @@ teardown() {
   rm -rf "${FAKE}"
 }
 
-@test "gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline -- in order" {
+@test "gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline, official startuptests -- in order" {
   run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
   run cat "${CALLS}"
@@ -90,7 +101,32 @@ teardown() {
   [ "${lines[2]}" = "baseline --gpu project=isaac-baseline-1234-2 domain=47 shared=unset" ]
   [ "${lines[3]}" = "WS_PATH=${FAKE}" ]
   [ "${lines[4]}" = "caches=writable" ]
-  [ "${#lines[@]}" -eq 5 ]
+  [[ "${lines[5]}" == "docker run "* ]]
+  [ "${#lines[@]}" -eq 6 ]
+
+  # The baseline gate must finish successfully before starting another Isaac.
+  : > "${CALLS}"
+  BASELINE_RC=3 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -ne 0 ]
+  run grep -c '^docker ' "${CALLS}"
+  [ "${output}" = "0" ]
+}
+
+@test "gpu integration job: successful startuptests leave JUnit in the artifact directory" {
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  grep -Rlx --include='*.xml' '<testsuite name="startup-fixture" failures="0"/>' \
+    "${FAKE}/artifacts/startuptests"
+}
+
+@test "gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log" {
+  STARTUP_RC=23 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -ne 0 ]
+  grep -q '^docker run ' "${CALLS}"
+  grep -Rlx --include='*.xml' '<testsuite name="startup-fixture" failures="1"/>' \
+    "${FAKE}/artifacts/startuptests"
+  grep -Rlx --include='*.log' 'Kit startup failure from this run' \
+    "${FAKE}/artifacts/startuptests"
 }
 
 @test "gpu integration job: works from any cwd (resolves the repo root itself)" {
