@@ -287,8 +287,9 @@
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
-# isaac#491 adds 19 core cases (core 602 -> 621, hosted 671 -> 690).
-HOSTED_UNIT_BASELINE = 690
+# isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
+# isaac#491 adds 19 core cases (core 618 -> 637, hosted 687 -> 706).
+HOSTED_UNIT_BASELINE = 706
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -314,7 +315,8 @@ HOSTED_UNIT_BASELINE = 690
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
-HOSTED_UNIT_BASELINE_CORE = 621
+#   isaac#338 adds 16 core cases (core 602 -> 618).
+HOSTED_UNIT_BASELINE_CORE = 637
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
