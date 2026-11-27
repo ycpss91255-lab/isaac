@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **修正 GPU 共用工作流程的版本檢查（isaac#405、#406）。** pytest 統一從 `gpu_pin.py` 的 `GPU_REUSABLE_TAG` 讀取版本，並確認 Dependabot 註解標示目前的 `v0.4.0`。呼叫端清單不符時，錯誤訊息會列出缺少或多出的工作流程，並提示更新清單與文件。版本與呼叫端結構以 pytest 的檢查為準，Bats 的版本檢查改為從 `gpu_pin.py` 讀取同一個 `GPU_REUSABLE_TAG`，並涵蓋全部 4 個呼叫端（含 `ci-headless-smoke.yaml`）。devel-test 映像把 `gpu_pin.py` 一併放進 `/smoke_test/`。升級 tag 需改 4 個工作流程檔、`gpu_pin.py` 與 Dependabot 註解，沒有其他副本。
 - **合併佇列能取得必要的 `gate` 檢查結果（isaac#453）。** `main.yaml` 收到 `merge_group` 的 `checks_requested` 事件時會執行所有測試組別，再由 `gate` 回報結果。
 - **修正四種語言 README 中已刪除 checkout 的清理步驟（isaac#381）。** 從容器標籤確認 compose project，並在強制移除容器的指令旁註明僅限 checkout 已不存在時使用。補充每個 stage tag 的名義大小，以及共用層對實際回收空間的影響。
 - **`core-build` 不再匯出或匯入 GHA buildx cache（isaac#411）。** Isaac 映像層超過儲存庫的 10 GB 快取上限，導致快取無法命中（isaac#364）。停用快取可避免重複傳輸這些映像層，預期每次建置可縮短 20 到 40 分鐘。

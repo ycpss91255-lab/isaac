@@ -1,6 +1,6 @@
 # TEST.md
 
-**213 tests** total (bats). Hosted pytest collects **715 tests**.
+**213 tests** total (bats). Hosted pytest collects **716 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 622 | 34 | 775 |
+| core | 119 | 623 | 34 | 776 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
@@ -335,13 +335,15 @@ Behavioral guard for `script/git/merge-train.sh` (#368). Hermetic: stub `gh` (ca
 
 ## test/bats/smoke/workflow_pin_spec.bats (4)
 
+The Bats pin checks scan text and read the expected tag from `GPU_REUSABLE_TAG` in `test/unit/pytest/gpu_pin.py` (no hard-coded tag in the spec). The authoritative structural guard is `test_workflow_pins.py`, which parses each workflow's jobs.
+
 Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must be pinned to a release tag, never `@main`. When `.github`'s main branch is broken, every isaac push/PR that reaches `gpu-integration` or `stream-smoke` fails with "workflow file issue" and 0 jobs (run 42776185240, 2026-11-10). The base `build-worker.yaml` and `release-worker.yaml` are already pinned (e.g. `@v0.42.0`); this spec covers `gpu-self-hosted.yml`. Hermetic -- greps (pin tests) or PyYAML-parses (isaac#344 tests) `.github/workflows/` files, no docker or network.
 
 | Test | Description |
 |------|-------------|
 | `no workflow references gpu-self-hosted.yml@main` | Greps every workflow YAML under `.github/workflows/` and fails if any references `gpu-self-hosted.yml@main`. |
-| `every gpu-self-hosted.yml caller is pinned to @v0.4.0` | main.yaml, ci-stream-smoke.yaml and publish-stream-source.yaml must each exist and reference `gpu-self-hosted.yml@v0.4.0`; any other `gpu-self-hosted.yml@` tag fails. The spec's `setup` fails when the workflows directory is absent (the devel-test image now bakes `.github/workflows/`). |
-| `gpu-integration passes the run-scoped reap-container-filter` | Parses main.yaml with PyYAML (never greps) and asserts the `core-gpu` job uses `gpu-self-hosted.yml@v0.4.0` and its `with:` carries `reap-container-filter` equal to `label=com.docker.compose.project=isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}` (isaac#344). |
+| `every gpu-self-hosted.yml caller uses the pinned tag` | main.yaml, ci-stream-smoke.yaml, ci-headless-smoke.yaml and publish-stream-source.yaml must each exist and reference `gpu-self-hosted.yml@<GPU_REUSABLE_TAG>`; any other `gpu-self-hosted.yml@` tag fails. The spec's `setup` fails when the workflows directory is absent (the devel-test image now bakes `.github/workflows/`). |
+| `gpu-integration passes the run-scoped reap-container-filter` | Parses main.yaml with PyYAML (never greps) and asserts the `core-gpu` job uses `gpu-self-hosted.yml@<GPU_REUSABLE_TAG>` and its `with:` carries `reap-container-filter` equal to `label=com.docker.compose.project=isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}` (isaac#344). |
 | `reap-container-filter names the BASELINE_PROJECT gpu_integration_job.sh runs` | Runs the real `gpu_integration_job.sh` against stubs with `GITHUB_RUN_ID=111 GITHUB_RUN_ATTEMPT=2`, captures the `BASELINE_PROJECT` it exports, renders the workflow filter with the same values and asserts they name the same compose project (isaac#344). |
 
 ## test/bats/smoke/run_bats_spec.bats (8)
@@ -375,7 +377,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **715 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **716 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -409,7 +411,7 @@ The hosted suite collects **715 tests** on a host without Isaac Sim. CI runs `te
 | `test_main_workflow_scope.py` | 21 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
 | `test_workflow_naming.py` | 42 | `core`. Workflow naming rule and lint (isaac#443), `script/ci/lint_workflow_names.py` + `doc/workflow-naming.md`: the real `.github/workflows/` follows the rule (and the glob finds `main.yaml` and `ci-stream-smoke.yaml`, no vacuous pass; the pre-rename stream smoke file is gone); detector self-tests on temp trees for bad file names (`.yml`, no category, uppercase, underscores), bad display names (parenthesised note, wrong case, wrong category), non-kebab job ids, a CI job with no group prefix, job-level `name:`; the allowed CI ids (`changes` / `gate` / `release` / `<group>-...`) and a bot job needing only kebab-case; exemptions are by exact file name and each carries a reason; `main.yaml` is exempt from file and display name but not from the job rule; base's `init.sh` still generates `base-version-monitor.yaml` under that name and only creates it when absent (the reason it keeps its name); the doc lists every category, group and exemption; retired names (`RETIRED_NAMES` in the lint: the old job ids, the old stream smoke file name and display name) are reported in docs while the new file name and history (changelog, ADRs) are not. |
 | `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only `base-version-monitor.yaml` (an upstream-release bot that runs no tests) may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
-| `test_workflow_pins.py` | 4 | Parses every `.github/workflows/*.y*ml` and asserts each job calling the org `gpu-self-hosted.yml` reusable is pinned to exactly `@v0.4.0` (isaac#402), and that the discovered caller set is exactly main.yaml, ci-stream-smoke.yaml, publish-stream-source.yaml (no vacuous pass). No docker/GPU. |
+| `test_workflow_pins.py` | 3 pin + 2 reap | Three guards cover the GPU workflow pin (isaac#402, isaac#405). The workflow jobs and the Dependabot comment must match `GPU_REUSABLE_TAG` in `gpu_pin.py`, the single source of truth for pytest. The expected callers are `main.yaml`, `ci-stream-smoke.yaml`, `ci-headless-smoke.yaml`, and `publish-stream-source.yaml`. A mismatch lists missing and extra callers and directs maintainers to update `_EXPECTED_CALLERS` and this row. Two tests cover the run-scoped reap filter (isaac#344). |
 | `test_readme_cleanup_text.py` | 4 | `docs`. One case per README language (isaac#381) checks the inline force-removal warning, the compose project label lookup, the nominal per-tag size and when shared layers can be reclaimed. |
 | `test_stream_source_producer.py` | 19 | Hosted import/CLI-contract for the deterministic WebRTC stream-source producer driver `src/script/stream_source_producer.py` (isaac#223 / owv#48 / isaac#173): the module imports on a non-Isaac host without pulling `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (every Isaac import function-local), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env vars (the `docker run -e` container contract) with an explicit flag overriding the env, and `python stream_source_producer.py --help` exits 0 on a bare host (argparse exits before any Isaac import). Loads the driver by file path; no docker/GPU. |
 | `test_xc_compose_project_isolation.py` | 3 | Hosted guard for the isaac-side root cause of `ycpss91255-lab/omniverse_web_viewer#55`: the cross-container round-trip's default `COMPOSE_PROJECT` is the dedicated `xc-isaac-roundtrip` (not the `${DOCKER_HUB_USER}-${IMAGE_NAME}` stream-stack project, e.g. `yunchien-isaac`), so its project-level teardown can never reach a co-hosted manual `stream` container; asserts the dedicated literal, the isolation intent (distinct from any `${user}-${image}` derivation, which would still coincide), and that the `XC_COMPOSE_PROJECT` env override still wins. Loads the integration module by file path with env cleaned -- pure, no docker/GPU. |
