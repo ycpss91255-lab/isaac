@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Fixed
+- **修正 GPU 共用工作流程的版本檢查（isaac#405、#406）。** pytest 統一從 `gpu_pin.py` 的 `GPU_REUSABLE_TAG` 讀取版本，並確認 Dependabot 註解標示目前的 `v0.4.0`。呼叫端清單不符時，錯誤訊息會列出缺少或多出的工作流程，並提示更新清單與文件。版本與呼叫端結構以 pytest 的檢查為準，Bats 的版本檢查改為從 `gpu_pin.py` 讀取同一個 `GPU_REUSABLE_TAG`，並涵蓋全部 4 個呼叫端（含 `ci-headless-smoke.yaml`）。devel-test 映像把 `gpu_pin.py` 一併放進 `/smoke_test/`。升級 tag 需改 4 個工作流程檔、`gpu_pin.py` 與 Dependabot 註解，沒有其他副本。
+- **合併佇列能取得必要的 `gate` 檢查結果（isaac#453）。** `main.yaml` 收到 `merge_group` 的 `checks_requested` 事件時會執行所有測試組別，再由 `gate` 回報結果。
 - **修正四種語言 README 中已刪除 checkout 的清理步驟（isaac#381）。** 從容器標籤確認 compose project，並在強制移除容器的指令旁註明僅限 checkout 已不存在時使用。補充每個 stage tag 的名義大小，以及共用層對實際回收空間的影響。
 - **`core-build` 不再匯出或匯入 GHA buildx cache（isaac#411）。** Isaac 映像層超過儲存庫的 10 GB 快取上限，導致快取無法命中（isaac#364）。停用快取可避免重複傳輸這些映像層，預期每次建置可縮短 20 到 40 分鐘。
 - **修正 Dockerfile 與 ADR-0005、ADR-0007 對串流啟動的描述（isaac#473、#485）。** 透過 `SimulationApp` 載入 `full.streaming.kit` 後發生 segfault 是 Isaac Sim 5.1.0 的觀察。在 6.2.0.1 上，3/3 次非 root 測試皆成功啟動伺服器並正常結束，Kit 記錄 `Started primary stream server on signal port 49521`。未測試用戶端連線或預設連接埠 49100。
@@ -12,7 +14,7 @@
 
 ### Added
 
-- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 711 增至 745（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 81 增至 82。
+- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 716 增至 750（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 81 增至 82。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
 - **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。

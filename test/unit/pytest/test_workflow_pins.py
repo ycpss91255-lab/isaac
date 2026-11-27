@@ -9,6 +9,7 @@ isaac#344 adds two tests for the run-scoped reap filter of core-gpu.
 """
 
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -16,12 +17,12 @@ import yaml
 
 import pytest
 
+from gpu_pin import GPU_REUSABLE, GPU_REUSABLE_PATH, GPU_REUSABLE_TAG
+
 pytestmark = pytest.mark.core
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
-_REUSABLE = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml"
-_PINNED_TAG = "v0.4.0"
 _EXPECTED_CALLERS = {
     "main.yaml",
     "ci-stream-smoke.yaml",
@@ -38,7 +39,7 @@ def _callers():
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for job in (doc.get("jobs") or {}).values():
             uses = (job or {}).get("uses") or ""
-            if uses.startswith(_REUSABLE + "@"):
+            if uses.startswith(GPU_REUSABLE_PATH + "@"):
                 found.setdefault(path.name, []).append(uses)
     return found
 
@@ -51,23 +52,45 @@ def _gpu_integration_job():
     return doc["jobs"]["core-gpu"]
 
 
-def test_every_gpu_reusable_caller_is_pinned_to_v040():
+def test_every_gpu_reusable_caller_uses_the_pinned_tag():
     bad = {
         name: refs
         for name, refs in _callers().items()
-        if any(ref != f"{_REUSABLE}@{_PINNED_TAG}" for ref in refs)
+        if any(ref != GPU_REUSABLE for ref in refs)
     }
-    assert not bad, f"callers not pinned to @{_PINNED_TAG}: {bad}"
+    assert not bad, (
+        f"callers not pinned to @{GPU_REUSABLE_TAG}: {bad}. "
+        "A Dependabot bump must update the 4 caller workflows, the dependabot.yml comment and GPU_REUSABLE_TAG in "
+        "gpu_pin.py (the bats pin spec reads the tag from there); the tag has no other copy."
+    )
 
 
 def test_gpu_reusable_callers_are_the_known_five():
-    assert set(_callers()) == _EXPECTED_CALLERS
+    callers = set(_callers())
+    assert callers == _EXPECTED_CALLERS, (
+        f"missing={_EXPECTED_CALLERS - callers}, extra={callers - _EXPECTED_CALLERS}. "
+        "When adding or removing a caller, update _EXPECTED_CALLERS and the "
+        "doc/test/TEST.md row."
+    )
+
+
+def test_dependabot_comment_matches_gpu_reusable_tag():
+    text = (_REPO_ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    tags = {
+        tag
+        for line in text.splitlines() if line.lstrip().startswith("#")
+        for tag in re.findall(r"gpu-self-hosted\.yml@([\w./+-]+)", line)
+    }
+    assert tags == {GPU_REUSABLE_TAG}, (
+        f".github/dependabot.yml comments must mention gpu-self-hosted.yml@{GPU_REUSABLE_TAG}; "
+        f"found tags {tags}"
+    )
 
 
 def test_gpu_integration_passes_run_scoped_reap_filter():
     """isaac#344: the cancel-safe reap step only runs when the input is set."""
     job = _gpu_integration_job()
-    assert job["uses"] == f"{_REUSABLE}@{_PINNED_TAG}"
+    assert job["uses"] == GPU_REUSABLE
     assert job["with"]["reap-container-filter"] == (
         "label=com.docker.compose.project="
         "isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}"
