@@ -6,7 +6,7 @@ import one stable namespace::
 
     from isaac_devkit import load_scene, build_scene, IsaacDriver
 
-The six modules (``model_import`` / ``materials`` / ``sensors`` /
+The six modules (``usd_model`` / ``materials`` / ``sensors`` /
 ``ros_io`` / ``scene`` / ``driver``) remain importable directly for the
 fuller per-module surface; this ``__init__`` exposes the A7 contract
 shapes plus the exception hierarchy.
@@ -32,10 +32,10 @@ from isaac_devkit.exceptions import (
     SensorConfigError,
     SensorNotFoundError,
 )
-from isaac_devkit.model_import import PrimSummary, import_urdf
 from isaac_devkit.ros_io import Msg, RosIo, setup_ros2_io
 from isaac_devkit.scene import build_scene, load_scene
 from isaac_devkit.sensors import setup_sensors
+from isaac_devkit.usd_model import PrimSummary
 
 # Tracks the repo git tag (ADR-0017 section 3); pre-release placeholder
 # until the first release (v1.0.0 at the MVP gate, PRD A6). Keep in
@@ -53,8 +53,7 @@ __all__ = [
     "setup_ros2_io",
     "RosIo",
     "Msg",
-    # Model import (L1 contract).
-    "import_urdf",
+    # USD model structure.
     "PrimSummary",
     # Driver lifecycle (ADR-0009 / A2).
     "IsaacDriver",

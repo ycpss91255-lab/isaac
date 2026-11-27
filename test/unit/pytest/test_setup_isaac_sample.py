@@ -14,6 +14,12 @@ pytestmark = pytest.mark.core
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SETUP = _REPO_ROOT / "setup.toml"
 _SAMPLE = _REPO_ROOT / "setup.isaac_sample.toml"
+_READMES = [
+    "README.md",
+    "doc/README.zh-TW.md",
+    "doc/README.zh-CN.md",
+    "doc/README.ja.md",
+]
 _MODEL_SOURCE = "${WS_PATH}/sim_asset"
 _MODEL_TARGET = "/home/${USER_NAME}/models/sim_asset"
 
@@ -90,9 +96,11 @@ def test_sample_documents_each_table_and_key():
             )
 
 
-@pytest.mark.parametrize(
-    "readme",
-    ["README.md", "doc/README.zh-TW.md", "doc/README.zh-CN.md", "doc/README.ja.md"],
-)
+@pytest.mark.parametrize("readme", _READMES)
 def test_readme_mentions_sample(readme):
     assert _SAMPLE.name in (_REPO_ROOT / readme).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("readme", _READMES)
+def test_readme_omits_unavailable_scene_recipe(readme):
+    assert "just run scene" not in (_REPO_ROOT / readme).read_text(encoding="utf-8")

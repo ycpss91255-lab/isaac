@@ -4,9 +4,9 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
 
-Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner、`UrdfConverter`、`AppLauncher`；ADR-0018）。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
+Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
 
-本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD / URDF 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
+本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
 ## 前置需求
 
@@ -135,7 +135,7 @@ Isaac 不附範例模型。請使用 `sim_asset` 中的 USD 模型或 `asset_con
 
 1. 執行 `cp setup.isaac_sample.toml setup.local.toml`，建立 Git 會忽略的本機設定檔。若已有本機設定檔，請將範例合併進去，以保留這個 checkout 的設定。
 2. 將模型掛載的 `source` 改成模型所在的目錄。唯讀掛載的目標保持為 `/home/${USER_NAME}/models/sim_asset`，讓場景在每台機器上都能解析相同的路徑。若新增模型掛載，請將對應的容器內路徑加入 `MODEL_PATH`，並以冒號分隔。
-3. 執行 `just docker run -t headless -d` 啟動容器。每次執行時用 `just run scene` 指定場景。
+3. 執行 `just docker run -t headless -d` 啟動容器。
 
 Base 套用本機設定時會取代整份 `[[volumes]]` 清單。請在本機設定檔中保留 `setup.toml` 的所有掛載，並在專案新增掛載時同步更新。
 
@@ -304,7 +304,7 @@ Kit terminal 應印出 `[ros2_test_sub] /host/test <- 'hello-from-host'`。
 
 #### 額外 Kit 參數（`ISAAC_KIT_EXTRA_ARGS`）
 
-`IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`example_driver.py`、`model_import`、`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
+`IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`example_driver.py`、`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -315,7 +315,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### 啟動插件（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`example_driver.py`、`model_import`、`stream_source_producer` 與 `src/script/` 下的腳本不支援。
+`IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`example_driver.py`、`stream_source_producer` 與 `src/script/` 下的腳本不支援。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
