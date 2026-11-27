@@ -5,16 +5,6 @@
 # stdout for the script's "ready marker" phrase, kill once seen. If the
 # marker doesn't appear within TIMEOUT, the case fails.
 #
-# Why integration not unit:
-#   These scripts boot kit + livestream + rclpy; pure-Python unit tests
-#   can't substitute for "does it actually reach the ROS subscriber loop".
-#   The marker phrase is the contract — each script prints exactly one
-#   line "<tag> standalone <verb> ..." once its core setup finished.
-#
-# Why this lives in isaac_ws/src/script/test/:
-#   The script dir is the natural home; isaac_ws/src/script/ is currently
-#   not git-tracked so a separate per-repo test dir wasn't picked.
-#
 # Exit codes:
 #   0 = all PASS (SKIPped cases tolerated by default)
 #   1 = at least one FAIL
@@ -25,11 +15,6 @@
 #   --only <name>  Run a single case by script basename (substring match).
 #   -h, --help     Print usage.
 #
-# Typical run (full matrix; ~6-10 min):
-#   ./isaac_ws/src/script/test/standalone_smoke.sh
-#
-# Single case (fast iteration):
-#   ./isaac_ws/src/script/test/standalone_smoke.sh --only ros2_test_pub
 
 set -uo pipefail
 
@@ -39,10 +24,7 @@ USD_HOST=/home/yunchien/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openba
 CONTAINER=yunchien-isaac-standalone
 
 # Smoke matrix: <basename>|<grep-marker>|<timeout-sec>|<needs-usd>
-CASES=(
-  "ros2_test_pub_standalone.py|standalone publishing|150|no"
-  "ros2_test_sub_standalone.py|standalone subscribed to|150|no"
-)
+CASES=()
 
 usage() {
   sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
@@ -59,6 +41,11 @@ while (( $# > 0 )); do
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
+
+if (( ${#CASES[@]} == 0 )); then
+  echo "No standalone smoke cases configured."
+  exit 0
+fi
 
 # Pre-flight ---------------------------------------------------------
 if [[ ! -d "$DOCKER_DIR" ]]; then

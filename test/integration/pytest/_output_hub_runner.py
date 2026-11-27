@@ -1,7 +1,6 @@
 """Kit-side runner for the OutputHub GPU delivery test (isaac#365).
 
-Not a pytest test (leading underscore; same pattern as
-``_camera_headless_runner.py``). Run with Isaac's python:
+Run with Isaac's python:
 
     /isaac-sim/python.sh _output_hub_runner.py \\
         --repo-root <repo> --robot-usd <official jetbot.usd>

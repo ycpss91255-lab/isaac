@@ -28,18 +28,11 @@ only the scene (and so the expected prim paths / counts / topic) changed:
   is not needed; this asserts the live runner honors the same SIGINT
   path.
 
-The in-process ``/cmd_vel`` round-trip here publishes the Twist from an
-in-process rclpy node (no second container) to verify the OmniGraph
-Subscribe attribute path. The genuine Isaac<->ament cross-container
-round-trip (PRD Pre-Publish item 1 -- a real message crossing the
-container boundary in both directions) lives in
-``test_cross_container_roundtrip.py``, host-orchestrated against a
-sibling ``ros:humble`` container running the ``example/ros2/`` ament
-nodes.
+The in-process rclpy publisher sends a Twist on ``/cmd_vel`` to verify
+the OmniGraph Subscribe attribute path.
 
-Pass criterion is stdout marker lines, not the return code: Kit's
-``app.close`` calls ``_exit(0)`` and swallows ``sys.exit`` (same
-convention as ``test_camera_ros2_headless.py``).
+The tests assert on stdout markers because Kit's ``app.close`` calls
+``_exit(0)`` and swallows ``sys.exit``.
 
 GPU CI policy (PRD Testing & Acceptance): headless; timeout = boot budget
 x 1.5; retry <= 1, logged. A skipped GPU job does NOT count as green.
@@ -334,13 +327,3 @@ def test_l4_injected_sigint_runs_shutdown(example_run):
         "the lifecycle-order assertion; the pure-side ORDER spy is in "
         "hosted unit suite)."
     )
-
-
-# The Isaac<->ament cross-container round-trip (PRD Pre-Publish item 1)
-# is now IMPLEMENTED in test_cross_container_roundtrip.py: it
-# host-orchestrates a sibling ros:humble container running the
-# example/ros2/ ament nodes and asserts a real message crosses the
-# container boundary in both directions (sim->ament camera receipt,
-# ament->sim /cmd_vel receipt). The previously-skipped placeholder that
-# deferred it to #133 has been removed now that example/ros2/ is on this
-# branch.

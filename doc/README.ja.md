@@ -260,37 +260,7 @@ just docker run -t headless -d
 
 jazzy パスは Isaac の 24.04 自動デフォルト（2029 年まで LTS）に揃う — 既知の caveat：jazzy on noble は Python 3.11/3.12 mix と Nav2 paths まわりが NVIDIA forum で追跡中。本 repo では jazzy パスを Isaac Sim 6.2.0 で再検証していない；検証済みのデフォルトは humble。
 
-### コンテナ間 DDS の検証
-
-`just docker run -t headless -d`（humble override env 付き）後、WebRTC client で接続し、Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（container 内に mount された repo の `src/script/`）→ Run。スクリプトは Play を自動押下し（publisher は timeline が再生中のみ発火）、`/isaac/test` に `std_msgs/String "hello N"` を publish 開始。
-
-同一 host の別 terminal で：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic list &&
-             ros2 topic echo /isaac/test --once'
-```
-
-期待動作：`/isaac/test` が topic list に現れ、`echo` で hello メッセージが出力される。
-
-host → Isaac の方向は、Script Editor で `ros2_test_sub.py` を実行し、隣接コンテナから pub：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic pub /host/test std_msgs/String "{data: hello-from-host}" --once'
-```
-
-kit terminal に `[ros2_test_sub] /host/test <- 'hello-from-host'` と出力されるはず。
-
-> jazzy に整合した Isaac インスタンスを動かす場合は、両側を `ros:jazzy` + `/opt/ros/jazzy/setup.bash` に切り替える — IDL hash を一致させるため、両側の distro を揃える必要がある。
-
-### Standalone Python workflow（Script Editor 代替手段）
-
-`src/script/` には M1 / M2 デモの in-kit Script Editor 版と standalone 版が同梱されている。standalone 版は `SimulationApp` で独自の Kit を boot し、stage の `ISAAC_LIVESTREAM`（`headless` は 0、`stream` は 2）に従う。各 standalone スクリプトは `--run-seconds N` を受け付け、エラー時は exit 1 で終了する（以前は exit 0 だった）。
-
+### Standalone Python ドライバー
 
 #### 追加の Kit 引数（`ISAAC_KIT_EXTRA_ARGS`）
 
@@ -313,24 +283,6 @@ export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
 # 1 行で書く場合：
 ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 ```
-
-| In-kit（Script Editor → File → Open → Run） | Standalone（`just docker exec -t headless /isaac-sim/python.sh src/script/<name>`） | 6.2.0 で検証（headless） |
-|---|---|---|
-| `ros2_test_pub.py` | `ros2_test_pub_standalone.py`：`/isaac/test` を毎秒 1 回 publish | `ros2 topic hz` 1.000 |
-| `ros2_test_sub.py` | `ros2_test_sub_standalone.py`：受信した `/host/test` メッセージを毎回出力 | 3/3 受信 |
-
-使用 pattern：
-
-```bash
-just docker run -t headless -d
-./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh src/script/<name>_standalone.py'
-# stop it (see "Stopping a driver script"):
-./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
-just docker stop                           # cleanup
-```
-
-共有 host では ROS domain 0 上に他の `/cmd_vel` publisher が存在することがあり、それらも OpenBase を動かしてしまう。自分の run には専用の domain を割り当てること。例えば `bash -c 'ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh ...'` とし、隣接 container にも同じ `-e ROS_DOMAIN_ID=77` を指定する。
 
 ### Python 出力 API（isaac#365）
 
@@ -403,11 +355,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 システムの `python3` ではこれらのパッケージはインストールできない（Isaac base image の PEP 668 が `pip` をブロック）— 必ず `/isaac-sim/python.sh -m pytest ...` を使い、`pytest ...` は使わない。
 
-GPU integration test（Isaac Sim の実起動が必要なもの、例: camera → ROS 2 headless smoke、#127）は `test` compose service で実行する。この service の NVIDIA GPU reservation は `setup.conf` の `[stage:devel-test]` override（`deploy.gpu_mode = force`、base #493）に由来する:
+GPU integration test（Isaac Sim の実起動が必要なもの、例: ヘッドレスの Jetbot 統合テスト）は `test` compose service で実行する。この service の NVIDIA GPU reservation は `setup.conf` の `[stage:devel-test]` override（`deploy.gpu_mode = force`、base #493）に由来する:
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_example_gpu_integration.py
 ```
 
-合否判定は stdout の marker 行（`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`）であり、return code ではない — Kit の `app.close` は `_exit(0)` を呼ぶ。詳細は [doc/test/TEST.md](test/TEST.md) を参照。
+合否判定は stdout の marker 行（`[BOOT OK]` / `[L3 CAMERA OK]` / `[EXIT CLEAN]`）であり、return code ではない — Kit の `app.close` は `_exit(0)` を呼ぶ。詳細は [doc/test/TEST.md](test/TEST.md) を参照。

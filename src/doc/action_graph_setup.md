@@ -31,8 +31,6 @@ Isaac Sim 5.1 在 standalone `python.sh` 流程下，**同 process 同時啟用 
 
 `just docker run -t headless -d` 跑的是 `runheadless.sh -v`，**不是** `python.sh` 啟動腳本。它載入 `isaacsim.exp.full.streaming.kit` experience 檔，這個 experience 把 bridge 列在預載清單 — kit 從一開始就把 bridge 拉起來，跟 USD load 順序對得上，**不撞**。
 
-M1 階段 `ros2_test_pub.py` / `ros2_test_sub.py` 走 Script Editor 在這條 kit 上跑，跨 container DDS 都通，就是同一條穩定路徑。
-
 ### 解法策略
 
 把 ROS 2 訂閱 + 速度套用邏輯**寫進 USD 的 Action Graph**：

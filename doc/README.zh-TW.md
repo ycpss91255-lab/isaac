@@ -260,37 +260,7 @@ just docker run -t headless -d
 
 Jazzy 路徑跟 Isaac 24.04 自動預設對齊（LTS 至 2029）— 已知 caveat：jazzy on noble 有 Python 3.11/3.12 混搭與 Nav2 路徑粗糙的問題，目前在 NVIDIA 論壇追蹤中。本 repo 尚未在 Isaac Sim 6.2.0 上重新驗證 jazzy 路徑；humble 是已驗證的預設值。
 
-### 驗證跨容器 DDS
-
-跑 `just docker run -t stream -d`（帶 humble 覆蓋 env）並用 WebRTC client 或瀏覽器 viewer 連線後，打開 Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（即 repo 的 `src/script/`，mount 在 container 內的位置）→ Run。腳本會自動按 Play（publisher 只在 timeline 播放時才發），開始往 `/isaac/test` 發 `std_msgs/String "hello N"`。
-
-從同一台 host 的另一個 terminal：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic list &&
-             ros2 topic echo /isaac/test --once'
-```
-
-預期：topic list 出現 `/isaac/test`，`echo` 印出 hello message。
-
-反向（host → Isaac）測試：在 Script Editor 跑 `ros2_test_sub.py`，從旁邊容器發訊息：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic pub /host/test std_msgs/String "{data: hello-from-host}" --once'
-```
-
-Kit terminal 應印出 `[ros2_test_sub] /host/test <- 'hello-from-host'`。
-
-> 跑 jazzy-aligned 的 Isaac instance 時，把兩端都換成 `ros:jazzy` + `/opt/ros/jazzy/setup.bash` — 兩端 distro 必須一致，IDL hash 才能對齊。
-
-### Standalone Python workflow（Script Editor 替代方案）
-
-`src/script/` 同時放 M1 / M2 demo 的 in-kit Script Editor 版本與 standalone 版本。standalone 版本透過 `SimulationApp` 啟動自己的 Kit，並依 stage 的 `ISAAC_LIVESTREAM` 決定模式（`headless` 為 0、`stream` 為 2）。每支 standalone 腳本都接受 `--run-seconds N`，遇到任何錯誤會以 exit 1 結束（以前是 exit 0）。
-
+### Standalone Python 驅動程式
 
 #### 額外 Kit 參數（`ISAAC_KIT_EXTRA_ARGS`）
 
@@ -313,24 +283,6 @@ export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
 # 或寫成同一行：
 ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 ```
-
-| In-kit（Script Editor → File → Open → Run） | Standalone（`just docker exec -t headless /isaac-sim/python.sh src/script/<name>`） | 6.2.0 驗證結果（headless） |
-|---|---|---|
-| `ros2_test_pub.py` | `ros2_test_pub_standalone.py`：每秒發布一次 `/isaac/test` | `ros2 topic hz` 1.000 |
-| `ros2_test_sub.py` | `ros2_test_sub_standalone.py`：印出每則 `/host/test` 訊息 | 3/3 收到 |
-
-使用 pattern：
-
-```bash
-just docker run -t headless -d
-./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh src/script/<name>_standalone.py'
-# stop it (see "Stopping a driver script"):
-./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
-just docker stop                           # cleanup
-```
-
-共用 host 上 ROS domain 0 可能有其他 `/cmd_vel` publisher，它們也會讓 OpenBase 移動。請給你的執行一個私有 domain，例如 `bash -c 'ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh ...'`，旁邊的 container 也要帶同樣的 `-e ROS_DOMAIN_ID=77`。
 
 ### Python 輸出 API（isaac#365）
 
@@ -403,11 +355,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 系統的 `python3` 無法安裝這些套件（Isaac base image 的 PEP 668 擋 `pip`）— 一律走 `/isaac-sim/python.sh -m pytest ...`，不要用 `pytest ...`。
 
-GPU integration test（需要 Isaac Sim 真的開機，例如 camera → ROS 2 headless smoke，#127）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.conf` 的 `[stage:devel-test]` override（`deploy.gpu_mode = force`，base #493）：
+GPU integration test（需要 Isaac Sim 真的開機，例如 Jetbot 的無頭整合測試）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.conf` 的 `[stage:devel-test]` override（`deploy.gpu_mode = force`，base #493）：
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_example_gpu_integration.py
 ```
 
-判定標準是 stdout marker 行（`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 會呼叫 `_exit(0)`。詳見 [doc/test/TEST.md](test/TEST.md)。
+判定標準是 stdout marker 行（`[BOOT OK]` / `[L3 CAMERA OK]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 會呼叫 `_exit(0)`。詳見 [doc/test/TEST.md](test/TEST.md)。

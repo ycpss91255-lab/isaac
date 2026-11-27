@@ -105,10 +105,8 @@ remains the same.
 - **Existing public API unchanged.** `from isaac_devkit.sensors import
   load_config, setup_sensor` works exactly as before.  `scene.py` and
   the example driver do not need changes.
-- **Integration tests unchanged.** The GPU integration tests
-  (`test_sensor_setup_integration.py`, `test_camera_ros2_headless.py`)
-  exercise the full prim+ROS path and continue to pass because the sensor
-  configs in those tests include `ros:`.
+- **GPU integration coverage.** `test_sensor_setup_integration.py` exercises
+  sensor setup with ROS-enabled configurations.
 - **New unit tests.** `test_sensor_prim.py` (host-runnable) covers config
   loading, the `ros:` optional path, and host-pure helpers.
   `test_sensor_ros.py` covers the graph topology builder.

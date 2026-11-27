@@ -260,37 +260,7 @@ just docker run -t headless -d
 
 The jazzy path aligns with Isaac's auto-default on 24.04 (LTS until 2029) — known caveat: jazzy on noble has a Python 3.11/3.12 mix and rough Nav2 paths still under NVIDIA forum tracking. The jazzy path has not been re-verified on Isaac Sim 6.2.0 in this repo; humble is the verified default.
 
-### Verify cross-container DDS
-
-After `just docker run -t stream -d` (with the humble override env) and connecting via the WebRTC client or browser viewer, open Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py` (the repo's `src/script/`, as mounted in the container) → Run. The script auto-presses Play (publishers only fire while the timeline is playing) and starts publishing `std_msgs/String "hello N"` on `/isaac/test`.
-
-From a separate terminal on the same host:
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic list &&
-             ros2 topic echo /isaac/test --once'
-```
-
-Expected: `/isaac/test` appears in the topic list, and `echo` prints the hello message.
-
-For the host → Isaac direction, run `ros2_test_sub.py` in Script Editor and pub from a sibling container:
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic pub /host/test std_msgs/String "{data: hello-from-host}" --once'
-```
-
-The kit terminal should print `[ros2_test_sub] /host/test <- 'hello-from-host'`.
-
-> Swap both sides to `ros:jazzy` + `/opt/ros/jazzy/setup.bash` when running a jazzy-aligned Isaac instance — distros must match across both sides for IDL hashes to align.
-
-### Standalone Python workflow (alternative to Script Editor)
-
-`src/script/` ships in-kit Script Editor versions of the M1 / M2 demos and standalone equivalents. The standalone ones boot their own Kit through `SimulationApp`, following the stage's `ISAAC_LIVESTREAM` (`headless` 0, `stream` 2). Each standalone script takes `--run-seconds N`, and it exits 1 on any error (it used to exit 0).
-
+### Standalone Python drivers
 
 #### Extra Kit arguments (`ISAAC_KIT_EXTRA_ARGS`)
 
@@ -313,24 +283,6 @@ export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
 # or, on one line:
 ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 ```
-
-| In-kit (Script Editor → File → Open → Run) | Standalone (`just docker exec -t headless /isaac-sim/python.sh src/script/<name>`) | Verified on 6.2.0 (headless) |
-|---|---|---|
-| `ros2_test_pub.py` | `ros2_test_pub_standalone.py`: publishes `/isaac/test` once per second | `ros2 topic hz` 1.000 |
-| `ros2_test_sub.py` | `ros2_test_sub_standalone.py`: prints each `/host/test` message | 3/3 received |
-
-Pattern:
-
-```bash
-just docker run -t headless -d
-./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh src/script/<name>_standalone.py'
-# stop it (see "Stopping a driver script"):
-./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
-just docker stop                           # cleanup
-```
-
-A shared host can have other `/cmd_vel` publishers on ROS domain 0, and they move the OpenBase too. Give your run a private domain, for example `bash -c 'ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh ...'`, with the same `-e ROS_DOMAIN_ID=77` on the sibling container.
 
 ### Python output API (isaac#365)
 
@@ -403,11 +355,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 System `python3` cannot install these packages (PEP 668 blocks `pip` on the Isaac base image) — always invoke `/isaac-sim/python.sh -m pytest ...` instead of `pytest ...`.
 
-GPU integration tests (Isaac Sim must boot, e.g. the camera → ROS 2 headless smoke, #127) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `[stage:devel-test]` override in `setup.conf` (`deploy.gpu_mode = force`, base #493):
+GPU integration tests (Isaac Sim must boot, e.g. the headless Jetbot integration test) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `[stage:devel-test]` override in `setup.conf` (`deploy.gpu_mode = force`, base #493):
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_example_gpu_integration.py
 ```
 
-Pass criterion is stdout marker lines (`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).
+Pass criterion is stdout marker lines (`[BOOT OK]` / `[L3 CAMERA OK]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).
