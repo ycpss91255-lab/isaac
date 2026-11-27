@@ -27,9 +27,9 @@ Isaac Sim 5.1 在 standalone `python.sh` 流程下，**同 process 同時啟用 
 
 任何「standalone python.sh + bridge ext + non-trivial USD」組合都炸。
 
-### 為什麼 `just docker run -t headless -d` 不撞
+### 為什麼 `just docker run -t stream -d` 不撞
 
-`just docker run -t headless -d` 跑的是 `runheadless.sh -v`，**不是** `python.sh` 啟動腳本。它載入 `isaacsim.exp.full.streaming.kit` experience 檔，這個 experience 把 bridge 列在預載清單 — kit 從一開始就把 bridge 拉起來，跟 USD load 順序對得上，**不撞**。
+`just docker run -t stream -d` 跑的是 `runheadless.sh -v`，**不是** `python.sh` 啟動腳本。它載入 `isaacsim.exp.full.streaming.kit` experience 檔，這個 experience 把 bridge 列在預載清單 — kit 從一開始就把 bridge 拉起來，跟 USD load 順序對得上，**不撞**。
 
 M1 階段 `ros2_test_pub.py` / `ros2_test_sub.py` 走 Script Editor 在這條 kit 上跑，跨 container DDS 都通，就是同一條穩定路徑。
 
@@ -39,7 +39,7 @@ M1 階段 `ros2_test_pub.py` / `ros2_test_sub.py` 走 Script Editor 在這條 ki
 
 - Bridge 由 kit experience 啟動（穩定路徑）
 - Graph 跑在 kit C++ pipeline，**不需要任何 Python 在 standalone 啟動 bridge**
-- 日常 run 只要 `just docker run -t headless -d`，零 GUI 互動
+- 日常 run 只要 `just docker run -t stream -d`，零 GUI 互動
 
 代價：Action Graph 第一次需要在 GUI 內手拉 + 存進 USD。**僅一次**。
 
@@ -65,7 +65,7 @@ async def add_carter_ros(assets_root_path, prim_path="/Carter"):
 
 NVIDIA 的測試套件直接 `add_reference_to_stage` 載入這個 USD，**不需要任何 Python 端建 graph**。整個 ROS 2 訂閱 / 發佈鏈條都已經 baked-in。NVIDIA 內部測試走的就是「pre-built USD + 加進 stage」這條路。
 
-我們的本流程做的事情完全一樣，只是針對 OpenBase 做一次：把 cmd_vel 訂閱 + base velocity 套用的 graph 烤進 `openbase.usda`，之後 `just docker run -t headless -d` 載入跟 NVIDIA 載 Carter_ROS.usd 同一個 pattern。
+我們的本流程做的事情完全一樣，只是針對 OpenBase 做一次：把 cmd_vel 訂閱 + base velocity 套用的 graph 烤進 `openbase.usda`，之後 `just docker run -t stream -d` 載入跟 NVIDIA 載 Carter_ROS.usd 同一個 pattern。
 
 #### 2. Isaac Sim 6.0 官方 standalone tutorial 也走 OmniGraph
 
@@ -75,7 +75,7 @@ NVIDIA 的測試套件直接 `add_reference_to_stage` 載入這個 USD，**不�
 
 NVIDIA 在 6.0 文件直接告訴 standalone user：**不要在 Python while-loop 裡 spin rclpy；用 OmniGraph 節點驅動**。
 
-我們現在做的「graph baked into USD + 純 `just docker run -t headless -d` 載入跑」是 6.0 標準 pattern 的 5.1 對應實現 — graph 烤進 USD（5.1 階段沒程式化建 graph 的乾淨 API），run-time 跟 6.0 一樣是 kit C++ pipeline 跑 graph。
+我們現在做的「graph baked into USD + 純 `just docker run -t stream -d` 載入跑」是 6.0 標準 pattern 的 5.1 對應實現 — graph 烤進 USD（5.1 階段沒程式化建 graph 的乾淨 API），run-time 跟 6.0 一樣是 kit C++ pipeline 跑 graph。
 
 #### 3. Action Graph 是 Isaac Sim 官方的多 backend 訊息整合機制
 
@@ -144,8 +144,8 @@ GA 後可重評：拿掉本 MD 的 GUI 步驟 → 改純腳本路徑。本 MD �
 ```bash
 cd isaac_ws/src/docker
 just docker stop                 # 收掉殘留
-just docker run -t headless -d   # 啟 runheadless.sh -v
-docker ps | grep headless # 確認 Up
+just docker run -t stream -d   # 啟 runheadless.sh -v
+docker ps | grep stream # 確認 Up
 ```
 
 預期：`yunchien-isaac-headless` Up。kit 跟 bridge extension 都載完約需 30-60 秒。
@@ -282,7 +282,7 @@ Server 欄填 `localhost`（**不加** `:8011` 或任何 port 後綴）。Click 
 ```bash
 cd isaac_ws/src/docker
 just docker stop
-just docker run -t headless -d
+just docker run -t stream -d
 ```
 
 #### Step 10.2 — Browser 連 WebRTC
@@ -334,7 +334,7 @@ docker run --rm -it --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
 cd isaac_ws/src/docker
 
 # 起 kit（已含 graph 在 USD 內）
-just docker run -t headless -d
+just docker run -t stream -d
 
 # WebRTC client 連 localhost:8211 (純觀察, 也可不連)
 
