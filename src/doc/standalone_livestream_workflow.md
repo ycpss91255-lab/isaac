@@ -18,14 +18,16 @@ cd isaac_ws/src/docker
 just docker build                # 第一次或改 Dockerfile 後
 ```
 
-### 2. 把 `headless` container 起來(porting:host 8011 → container WebRTC)
+### 2. 把 `stream` container 起來(porting:host 8011 → container WebRTC)
+
+把下面的 `<user>` 換成啟動 container 時使用的 `USER_NAME`。
 
 ```bash
 just docker run -t stream -d
-docker ps --filter name=yunchien-isaac-headless --format '{{.Names}} {{.Status}}'
+docker ps --filter 'name=<user>-isaac-stream' --format '{{.Names}} {{.Status}}'
 ```
 
-預期看到 `yunchien-isaac-headless Up ...`。
+預期看到 `<user>-isaac-stream Up ...`。
 
 ### 3.(可選)用 smoke driver 驗 livestream 通了
 
@@ -198,7 +200,7 @@ else:
 
 | 步驟 | 舊 in-kit | 新 standalone-livestream |
 |---|---|---|
-| 起 Kit | `just docker run -t stream -d`(舊 SOP 寫 headless,實測會撞 runheadless.sh 兩 Kit port 衝突,改 standalone)| `just docker run -t stream -d` |
+| 起 Kit | `just docker run -t stream -d`（`headless` stage 的 `runheadless.sh` 會啟動另一個 Kit，造成 port 衝突，因此改用 `stream` stage） | `just docker run -t stream -d` |
 | 載 driver | 瀏覽器 GUI 開 Script Editor 拖 `.py` 進去 | `just docker exec -t stream /isaac-sim/python.sh <script>` |
 | 跑 | Ctrl+Enter on Script Editor | enter 在 terminal |
 | 看畫面 | 同一個 Kit GUI 瀏覽器 tab | Isaac Sim WebRTC Streaming Client(桌面 app)連 `127.0.0.1`(可關可開) |

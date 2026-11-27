@@ -139,16 +139,16 @@ GA 後可重評：拿掉本 MD 的 GUI 步驟 → 改純腳本路徑。本 MD �
 
 ## 一次性 GUI 設定流程
 
-### Step 1 — 啟 headless kit
+### Step 1 — 啟 stream kit
 
 ```bash
 cd isaac_ws/src/docker
 just docker stop                 # 收掉殘留
 just docker run -t stream -d   # 啟 runheadless.sh -v
-docker ps | grep stream # 確認 Up
+docker ps | grep stream         # 確認 Up
 ```
 
-預期：`yunchien-isaac-headless` Up。kit 跟 bridge extension 都載完約需 30-60 秒。
+預期：`<user>-isaac-stream` Up。kit 跟 bridge extension 都載完約需 30-60 秒。
 
 ![kit 啟動完成](image/01_kit_started.png)
 
