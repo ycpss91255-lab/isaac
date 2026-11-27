@@ -60,9 +60,19 @@ ENV
   # (contents irrelevant: docker is stubbed and never reads it).
   printf 'name: ${PROJECT_NAME}\n' > "${FAKE}/compose.yaml"
 
-  # Point the script's sourced libs at the baked copies (no host.yaml, so
-  # resolve_port no-ops and the signal port falls back to Kit's default).
-  export SMOKE_LIB="${BATS_TEST_DIRNAME}/stream_smoke_lib.sh"
+  # Stub only the port probe via SMOKE_LIB. smoke_port_in_use PORT returns
+  # success for a busy port. No listening socket, port race or nc is needed.
+  export SMOKE_LIB="${FAKE}/script/ci/stream_smoke_lib.sh"
+  cp "${BATS_TEST_DIRNAME}/stream_smoke_lib.sh" "${SMOKE_LIB}"
+  cat >> "${SMOKE_LIB}" <<'STUB'
+
+smoke_port_in_use() {
+  [[ "$1" == "${STUB_BUSY_PORT:-}" ]]
+}
+STUB
+  # Holder lookups see only the fixture's Docker port mappings.
+  printf '#!/bin/sh\nexit 0\n' > "${FAKE}/bin/ss"
+  chmod +x "${FAKE}/bin/ss"
   export HOST_YAML_LIB="${BATS_TEST_DIRNAME}/host_yaml.sh"
   # Keep the (fail-closed) wait short: the stub docker reports no live
   # container, so the very first liveness check ends the wait regardless.
@@ -118,6 +128,8 @@ case "$*" in
     fi ;;
   *"--format {{.Label \"com.docker.compose.project\"}}"*)
     printf '%s\n' "${STUB_PROJECTS:-}" ;;
+  "ps --format {{.Names}} {{.Ports}}")
+    printf '%s\n' "${STUB_PORT_MAPPINGS:-}" ;;
   *"--format {{.Names}}"*)
     printf '%s\n' "${STUB_NAMES:-}" ;;
   "ps -aq --filter label=com.docker.compose.project="*)
@@ -128,7 +140,8 @@ STUB
   chmod +x "${FAKE}/bin/docker"
   export PATH="${FAKE}/bin:${PATH}"
   unset SMOKE_REAP_PROJECT_PREFIX SMOKE_CLIENT_CMD STUB_ALIVE STUB_RESTARTS STUB_KIT_LOG \
-    STUB_PROJECTS STUB_NAMES ISAAC_STREAM_CONTAINER
+    STUB_PROJECTS STUB_NAMES ISAAC_STREAM_CONTAINER SMOKE_SKIP_PORT_PREFLIGHT \
+    STUB_BUSY_PORT STUB_PORT_MAPPINGS ISAAC_SIGNAL_PORT ISAAC_MEDIA_PORT
 }
 
 # A Kit 110 (Isaac Sim 6.0.1) stream-stage log, lines verbatim from the GPU
@@ -328,4 +341,92 @@ YAML
   run "${FAKE}/script/ci/stream_smoke.sh"
   [ "$status" -ne 0 ]
   [[ "${output}" != *"[smoke] PASS"* ]]
+}
+
+@test "stream_smoke: a busy signal port stops bring-up and names the holder (isaac#497)" {
+  export ISAAC_SIGNAL_PORT=49291 STUB_BUSY_PORT=49291
+  export STUB_PORT_MAPPINGS='other-stream 0.0.0.0:49291->49100/tcp'
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  [ "${status}" -ne 0 ]
+  [ ! -e "${RUN_ARGS_FILE}" ]
+  grep -Eq '^\[smoke\] FAIL: port 49291 already in use by .*other-stream' <<< "${output}"
+}
+
+@test "stream_smoke: a busy media port stops bring-up with an unknown holder (isaac#497)" {
+  export ISAAC_MEDIA_PORT=47291 STUB_BUSY_PORT=47291
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  [ "${status}" -ne 0 ]
+  [ ! -e "${RUN_ARGS_FILE}" ]
+  [[ "${output}" == *"[smoke] FAIL: port 47291 already in use by unknown"* ]]
+  [ "$(grep -c '^\[smoke\] load: ' <<< "${output}")" -ge 2 ]
+}
+
+@test "stream_smoke: a UDP-only media holder stops bring-up (isaac#497)" {
+  export SMOKE_LIB="${BATS_TEST_DIRNAME}/stream_smoke_lib.sh"
+  local port=47998
+  while (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null ||
+        (exec 3<>"/dev/tcp/127.0.0.1/$((port + 1))") 2>/dev/null; do
+    port=$((port + 2))
+  done
+  export ISAAC_MEDIA_PORT="${port}" ISAAC_SIGNAL_PORT="$((port + 1))"
+  cat > "${FAKE}/bin/ss" <<'STUB'
+#!/usr/bin/env bash
+if [[ " $* " == *" sport = :${ISAAC_MEDIA_PORT} "* &&
+      " $* " =~ [[:space:]](-[[:alpha:]]*u[[:alpha:]]*|--udp)[[:space:]] ]]; then
+  printf 'udp UNCONN 0 0 0.0.0.0:%s 0.0.0.0:*\n' "${ISAAC_MEDIA_PORT}"
+fi
+STUB
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"[smoke] FAIL: port ${ISAAC_MEDIA_PORT} already in use by udp UNCONN"* ]]
+  [ ! -e "${RUN_ARGS_FILE}" ]
+}
+
+@test "stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)" {
+  export ISAAC_SIGNAL_PORT=49291 STUB_BUSY_PORT=49291 SMOKE_SKIP_PORT_PREFLIGHT=1
+  export STUB_PORT_MAPPINGS='other-stream 0.0.0.0:49291->49100/tcp'
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  grep -qx -- 'stream' "${RUN_ARGS_FILE}"
+  [[ "${output}" == *"is no longer running"* ]]
+}
+
+@test "stream_smoke: reports load at startup and elapsed time and load at readiness (isaac#497)" {
+  write_kit110_log "${FAKE}/kit.log"
+  export STUB_KIT_LOG="${FAKE}/kit.log" STUB_ALIVE=1 SMOKE_CLIENT_CMD=true SMOKE_DWELL=1
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  [ "${status}" -eq 0 ]
+  local avg='[0-9]+([.][0-9]+)?'
+  local loads="${avg} ${avg} ${avg}"
+  local startup="${output%%\[smoke\] bring up*}"
+  local ready="${output#*\[smoke\] launch Isaac}"
+  ready="${ready%%\[smoke\] attach client*}"
+  grep -Ex "\\[smoke\\] load: ${loads}" <<< "${startup}"
+  grep -Ex "\\[smoke\\] load: ${loads}" <<< "${ready}"
+  grep -Ex "\\[smoke\\] ready after [0-9]+s \\(load ${loads}\\)" <<< "${ready}"
+}
+
+@test "stream_smoke: ready timeout reports load, marker progress and port holders (isaac#497)" {
+  printf '%s\n' 'Started primary stream server' > "${FAKE}/kit.log"
+  export STUB_KIT_LOG="${FAKE}/kit.log" STUB_ALIVE=1 SMOKE_SKIP_PORT_PREFLIGHT=1
+  export STUB_PORT_MAPPINGS=$'signal-owner 0.0.0.0:49100->49100/tcp\nmedia-owner 0.0.0.0:47998->47998/udp'
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  [ "${status}" -ne 0 ]
+  # Limit assertions to the failure diagnostic. The wait banner lists both
+  # expected markers and the Kit log tail repeats the one we supplied.
+  local failure="${output#*\[smoke\] FAIL:}"
+  failure="${failure%%---- kit log tail*}"
+  [[ "${output}" == *"[smoke] FAIL:"* ]]
+  [[ "${failure}" == *"timeout after ${SMOKE_TIMEOUT}s"* ]]
+  # A separate load sample does not supply load in the timeout message.
+  grep -v '^\[smoke\] load:' <<< "${failure}" | grep -w load
+  [[ "${failure}" == *"Started primary stream server"* ]]
+  [[ "${failure}" == *"App is loaded."* ]]
+  [[ "${failure}" == *49100* && "${failure}" == *signal-owner* ]]
+  [[ "${failure}" == *47998* && "${failure}" == *media-owner* ]]
 }
