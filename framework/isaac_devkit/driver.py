@@ -113,19 +113,21 @@ def parse_livestream_env(env_value: Optional[str]) -> Dict[str, Any]:
 def parse_livestream_simulation_app(
     env_value: Optional[str],
 ) -> tuple[Dict[str, Any], Optional[str]]:
-    """Return the headless launch config and optional streaming Kit experience."""
+    """Return the headless launch config and optional streaming Kit experience.
+
+    The experience file controls streaming in Isaac Sim 6.2. Modes 1 and 2
+    both select the same WebRTC experience. Mode 1 formerly used native streaming.
+    """
     if env_value not in (None, "", "0", "1", "2"):
         raise ValueError(
             f"unsupported ISAAC_LIVESTREAM value {env_value!r}; "
             "expected one of '', '0', '1', '2'"
         )
-    mode = int(env_value or 0)
     config = {
         "headless": True,
-        "livestream": mode,
         "disable_viewport_updates": False,
     }
-    if mode:
+    if env_value in ("1", "2"):
         return config, "/isaac-sim/apps/isaacsim.exp.base.python.streaming.kit"
     return config, None
 

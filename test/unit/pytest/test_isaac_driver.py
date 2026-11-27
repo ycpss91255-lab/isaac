@@ -60,9 +60,15 @@ class TestParseLivestreamSimulationApp:
     def test_launch_config_and_experience(self, value):
         config, experience = id_mod.parse_livestream_simulation_app(value)
         assert config["headless"] is True
-        assert config.get("livestream", 0) == int(value or 0)
-        assert config.get("disable_viewport_updates", False) is False
+        assert "livestream" not in config
+        assert config["disable_viewport_updates"] is False
         assert experience == (STREAM_EXPERIENCE if value in ("1", "2") else None)
+
+    def test_streaming_modes_return_identical_config_and_experience(self):
+        assert (
+            id_mod.parse_livestream_simulation_app("1")
+            == id_mod.parse_livestream_simulation_app("2")
+        )
 
     @pytest.mark.parametrize("value", ["3", "yes"])
     def test_unknown_value_raises(self, value):
@@ -225,6 +231,91 @@ class _HostedDriver(id_mod.IsaacDriver):
         pass
 
 
+class TestPlayTimeline:
+    def _play(self, monkeypatch, *, impl_missing=False, callbacks_available=True):
+        events = []
+
+        def module(name, parent=None):
+            full_name = f"{parent.__name__}.{name}" if parent else name
+            fake = types.ModuleType(full_name)
+            fake.__path__ = []
+            monkeypatch.setitem(sys.modules, full_name, fake)
+            if parent:
+                setattr(parent, name, fake)
+            return fake
+
+        settings = types.SimpleNamespace(
+            set=lambda key, value: events.append(("set", key, value)),
+        )
+        module("settings", module("carb")).get_settings = lambda: settings
+        timeline = types.SimpleNamespace(
+            set_looping=lambda flag: events.append(("set_looping", flag)),
+            set_end_time=lambda end: events.append(("set_end_time", end)),
+            play=lambda: events.append(("play",)),
+        )
+        module("timeline", module("omni")).get_timeline_interface = lambda: timeline
+
+        def manager(source):
+            class SimulationManager:
+                if callbacks_available:
+                    @staticmethod
+                    def enable_warm_start_callback(flag):
+                        events.append(("warm_start", source, flag))
+
+            return SimulationManager
+
+        core = module("core", module("isaacsim"))
+        package = module("simulation_manager", core)
+        package.SimulationManager = manager("package")
+        impl = module("impl", package)
+        if impl_missing:
+            monkeypatch.setitem(sys.modules, f"{impl.__name__}.simulation_manager", None)
+        else:
+            module("simulation_manager", impl).SimulationManager = manager("impl")
+
+        class TimelineDriver(id_mod.IsaacDriver):
+            pass
+
+        driver = TimelineDriver()
+        driver._app = types.SimpleNamespace(update=lambda: events.append(("update",)))
+        driver._play_timeline()
+        return events
+
+    def test_prefers_impl_warm_start(self, monkeypatch):
+        events = self._play(monkeypatch)
+        assert [e for e in events if e[0] == "warm_start"] == [
+            ("warm_start", "impl", True),
+        ]
+
+    def test_uses_package_warm_start_when_impl_missing(self, monkeypatch):
+        events = self._play(monkeypatch, impl_missing=True)
+        assert ("warm_start", "package", True) in events
+
+    def test_warns_and_plays_when_callbacks_unavailable(self, monkeypatch, capsys):
+        events = self._play(monkeypatch, callbacks_available=False)
+        output = capsys.readouterr().out
+        assert "[isaac_driver] Warning: warm-start callback unavailable" in output
+        assert ("play",) in events
+
+    def test_sets_fixed_time_stepping_and_rate_limit(self, monkeypatch):
+        events = self._play(monkeypatch)
+        settings = dict(event[1:] for event in events if event[0] == "set")
+        assert settings["/app/runLoops/main/rateLimitEnabled"] is True
+        assert settings["/app/runLoops/main/rateLimitFrequency"] == 60
+        assert settings["/app/player/useFixedTimeStepping"] is True
+
+    def test_configures_and_plays_timeline_before_updates(self, monkeypatch):
+        events = self._play(monkeypatch)
+        assert ("set_looping", False) in events
+        assert ("set_end_time", 1e10) in events
+        assert [e[0] for e in events] == [
+            "warm_start", "set", "set", "set", "set_looping", "set_end_time", "play",
+        ] + ["update"] * 10
+
+    def test_updates_app_ten_times(self, monkeypatch):
+        assert self._play(monkeypatch).count(("update",)) == 10
+
+
 class TestLifecycleOrderSpy:
     def test_run_walks_lifecycle_in_order(self, monkeypatch):
         calls = []
@@ -352,7 +443,7 @@ class TestSimulationAppLaunch:
         driver = _HostedDriver()
         driver.run()
         assert driver._app.config["headless"] is True
-        assert driver._app.config.get("livestream", 0) == int(mode)
+        assert "livestream" not in driver._app.config
         assert driver._app.experience == (STREAM_EXPERIENCE if mode != "0" else None)
 
     def test_invalid_livestream_fails_before_kit_starts(self, monkeypatch):

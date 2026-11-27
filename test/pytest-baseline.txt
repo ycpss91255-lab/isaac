@@ -329,7 +329,8 @@
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
 # isaac#479: SimulationApp launch coverage takes test_isaac_driver.py from 48 to 50.
-HOSTED_UNIT_BASELINE = 707
+#   Streaming-mode equivalence (1) and _play_timeline (6) bring the driver suite to 57.
+HOSTED_UNIT_BASELINE = 714
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -352,7 +353,7 @@ HOSTED_UNIT_BASELINE = 707
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 666
+HOSTED_UNIT_BASELINE_CORE = 673
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
