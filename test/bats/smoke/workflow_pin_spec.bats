@@ -3,6 +3,7 @@
 #
 # Guard: every reusable-workflow reference to the org's gpu-self-hosted.yml
 # must be pinned to a release tag, never @main.
+# test_workflow_pins.py is the authoritative structural guard for these pins.
 #
 # Motivation: when .github's main branch is broken even briefly, every isaac
 # push/PR that reaches core-gpu or stream-smoke fails with "workflow
@@ -28,6 +29,18 @@ setup() {
   [ -d "${WORKFLOW_DIR}" ]
 }
 
+_gpu_reusable_tag() {
+  local source="${BATS_TEST_DIRNAME}/../../../test/unit/pytest/gpu_pin.py" tag
+  if [ "${WORKFLOW_DIR}" = "${BATS_TEST_DIRNAME}/workflows" ]; then
+    source="${BATS_TEST_DIRNAME}/gpu_pin.py"
+  fi
+  if ! tag=$(sed -n 's/^GPU_REUSABLE_TAG[[:space:]]*=[[:space:]]*"\([^"]\{1,\}\)".*$/\1/p' "${source}") || [ -z "${tag}" ]; then
+    echo "Could not read GPU_REUSABLE_TAG from ${source}" >&2
+    return 1
+  fi
+  printf '%s\n' "${tag}"
+}
+
 @test "no workflow references gpu-self-hosted.yml@main" {
   # Collect every 'uses:' line that references gpu-self-hosted.yml@main.
   local hits
@@ -36,24 +49,27 @@ setup() {
     echo "Found unpinned gpu-self-hosted.yml@main references:"
     echo "${hits}"
     echo ""
-    echo "Pin to a release tag (e.g. @v0.4.0) instead."
+    echo "Use the release tag from GPU_REUSABLE_TAG in gpu_pin.py."
     return 1
   fi
 }
 
-@test "every gpu-self-hosted.yml caller is pinned to @v0.4.0" {
-  local f
-  for f in main.yaml ci-stream-smoke.yaml publish-stream-source.yaml; do
+@test "every gpu-self-hosted.yml caller uses the pinned tag" {
+  local f tag tag_pattern pinned_ref
+  tag=$(_gpu_reusable_tag)
+  tag_pattern=$(printf '%s\n' "${tag}" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
+  pinned_ref="gpu-self-hosted\\.yml@${tag_pattern}([[:space:]\"']|$)"
+  for f in main.yaml ci-stream-smoke.yaml ci-headless-smoke.yaml publish-stream-source.yaml; do
     [ -f "${WORKFLOW_DIR}/${f}" ] || { echo "missing caller: ${f}"; return 1; }
-    grep -q 'gpu-self-hosted\.yml@v0\.4\.0' "${WORKFLOW_DIR}/${f}" \
-      || { echo "${f} is not pinned to gpu-self-hosted.yml@v0.4.0"; return 1; }
+    grep -Eq "${pinned_ref}" "${WORKFLOW_DIR}/${f}" \
+      || { echo "${f} is not pinned to gpu-self-hosted.yml@${tag}"; return 1; }
   done
-  # No gpu-self-hosted.yml ref anywhere may be a tag other than v0.4.0.
+  # Check the remaining workflows for references to a different tag too.
   local other
   other=$(grep -rn 'gpu-self-hosted\.yml@' "${WORKFLOW_DIR}/" \
-    | grep -v 'gpu-self-hosted\.yml@v0\.4\.0' || true)
+    | grep -Ev "${pinned_ref}" || true)
   if [ -n "${other}" ]; then
-    echo "gpu-self-hosted.yml refs not at @v0.4.0:"
+    echo "gpu-self-hosted.yml refs not at @${tag}:"
     echo "${other}"
     return 1
   fi
@@ -89,9 +105,11 @@ print(job["uses"] if field == "uses" else job["with"][field])
 }
 
 @test "core-gpu passes the run-scoped reap-container-filter" {
+  local tag
+  tag=$(_gpu_reusable_tag)
   run _gpu_integration_field uses
   [ "${status}" -eq 0 ]
-  [ "${output}" = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0" ]
+  [ "${output}" = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@${tag}" ]
 
   run _gpu_integration_field reap-container-filter
   [ "${status}" -eq 0 ]
