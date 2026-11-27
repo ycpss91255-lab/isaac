@@ -1,6 +1,6 @@
 # TEST.md
 
-**222 tests** total (bats). Hosted pytest collects **787 tests**.
+**222 tests** total (bats). Hosted pytest collects **789 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 679 | 37 | 835 |
+| core | 119 | 681 | 37 | 837 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
@@ -386,7 +386,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **787 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **789 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -413,6 +413,7 @@ The hosted suite collects **787 tests** on a host without Isaac Sim. CI runs `te
 | `test_scene_collision_order.py` | 2 | Checks that referenced colliders on sibling branches receive the override, nested colliders are pruned, and a geometry-only reference receives the override on its root. |
 | `test_scene_joint_drive.py` | 12 | Checks that `scene.resolve_joint_drive_gains` accepts an omitted pair, converts valid gains to floats, and rejects incomplete or negative pairs. The `usd_model` delegate must return the same values and raise the same errors. `scene.apply_joint_drive` rejects missing or invalid gains before accessing the stage. |
 | `test_scene_spawn_overrides.py` | 5 | `core` (isaac#478). Pins the `spawn_overrides` contract: snake_case `*_props` keys are written to the matching physics or PhysX attribute, `None` values are skipped, an unknown key raises `ValueError` naming the key and prim, and `_spawn_prim` rejects an unsupported top-level option while accepting a legal `collision_props` key. |
+| `test_framework_config.py` | 2 | `core` (isaac#478). `framework/pyproject.toml` no longer bans `isaaclab` at module level (no `isaaclab` import remains), and functions that hosted tests reach directly are not coverage-excluded. |
 | `test_no_urdf_import.py` | 6 | Enforces the USD-only boundary and verifies that the USD helpers remain importable. |
 | `test_isaac_driver.py` | 57 | Tests both livestream helpers, USD resolution, boot extension ordering, Kit-free construction, and the `SCENE` class attribute. A fake `SimulationApp` records headless mode, streaming experience, and the boot arguments followed by whitespace-split `ISAAC_KIT_EXTRA_ARGS` in `extra_args`. The tests check caller `sys.argv` during and after construction, invalid livestream rejection before startup, signal registration and lifecycle order, traceback output before close, and `ISAAC_IO_PLUGIN` invocation and error handling before timeline play. `TestPlayTimeline` checks warm start callback preference, package fallback, and the warning when neither callback is available. It verifies all three settings (fixed time stepping, rate limiting enabled, and a 60 Hz limit) and the call order from disabling looping through setting the end time, starting playback, and running 10 warmup updates. |
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |

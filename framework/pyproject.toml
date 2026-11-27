@@ -39,7 +39,7 @@ include = ["isaac_devkit*"]
 extend-select = ["TID253"]
 
 [tool.ruff.lint.flake8-tidy-imports]
-banned-module-level-imports = ["omni", "pxr", "isaacsim", "isaaclab"]
+banned-module-level-imports = ["omni", "pxr", "isaacsim"]
 
 # ADR-0017 section 7: coverage counts the framework PURE surface;
 # Isaac-side function-local code is excluded via this config block
@@ -61,6 +61,7 @@ source = ["isaac_devkit"]
 # only execute against a live stage. The pure half of every module
 # (config parse / validate / path + string computation / freshness
 # bookkeeping / lifecycle order) stays counted.
+# Functions exercised directly by hosted tests count toward coverage.
 exclude_also = [
     # Standard non-runtime lines.
     "if __name__ == .__main__.:",
@@ -81,16 +82,12 @@ exclude_also = [
     "def _build_graph_topology\\(",
     "def _resolve_asset_url\\(",
     "def _set_xform_pose\\(",
-    # Scene and joint authoring run against a USD stage. The pure
-    # to_scene_specs adapter and quaternion conversion stay counted.
+    # Scene authoring functions that need a live USD stage.
     "def build_scene\\(",
     "def _spawn_light\\(",
     "def _spawn_reference\\(",
-    "def _spawn_prim\\(",
     "def _set_spawn_pose\\(",
     "def _bind_spawn_materials\\(",
-    "def _set_physics_properties\\(",
-    "def apply_joint_drive\\(",
     # output_python: Isaac-side readers (live stage only, GPU suite).
     "def make_sources\\(",
     "def _annotator_reader\\(",
