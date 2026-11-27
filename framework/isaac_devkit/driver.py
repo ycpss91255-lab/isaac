@@ -131,7 +131,8 @@ def parse_livestream_applauncher(env_value: Optional[str]) -> Dict[str, Any]:
     - ``"2"`` -> WebRTC streaming.
 
     ``enable_cameras=True`` is set in every mode so cameras render even
-    in headless runs (Isaac Lab issue #3250). Unknown values raise, same as ``parse_livestream_env``.
+    in headless runs (Isaac Lab issue #3250). Unknown values raise, same as
+    ``parse_livestream_env``.
     """
     if env_value is None or env_value == "" or env_value == "0":
         return {"headless": True, "enable_cameras": True}

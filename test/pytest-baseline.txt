@@ -173,7 +173,8 @@
 #   validation, ros: section optional (loads without ros:, validates ros:
 #   when present), host-pure helpers (fov_to_aperture, role_to_helper_type),
 #   get_category.
-#   test_sensor_ros.py (7): build_graph_topology (host-pure graph-spec
+#   test_sensor_ros.py (7 cases, removed in isaac#276) covered
+#   build_graph_topology (host-pure graph-spec
 #   builder with mocked pxr.Sdf), single/multi stream, overrides, topic and
 #   frame_id naming, module interface (setup_sensor_publish).
 #   test_sensors_dispatch.py (11): backward-compatible re-exports
@@ -278,8 +279,10 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
+# ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
+# isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#276 removes 29 net core cases for built-in ROS I/O and seven host-leg guards.
-HOSTED_UNIT_BASELINE = 606
+HOSTED_UNIT_BASELINE = 615
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -291,7 +294,7 @@ HOSTED_UNIT_BASELINE = 606
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py
-#   docs     -- test_producer_versions.py, test_no_ai_attribution.py
+#   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
 #   (9) and test_main_workflow_scope.py (15), all core: 565 -> 627 (core 592).
@@ -302,11 +305,15 @@ HOSTED_UNIT_BASELINE = 606
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 565
+#   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
+#   isaac#411 adds 1 core case (core 601 -> 602).
+#   isaac#381 adds 4 docs cases (docs 20 -> 24).
+#   isaac#276 removes 36 core cases net (29 for ROS I/O plus 7 host-leg guards, core 602 -> 566).
+HOSTED_UNIT_BASELINE_CORE = 566
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 16
+HOSTED_UNIT_BASELINE_DOCS = 24
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
