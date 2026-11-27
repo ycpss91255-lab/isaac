@@ -3,7 +3,11 @@
 # Covers both pinned actions (actions/checkout@v6, docker/login-action@v4,
 # etc.) and pinned reusable workflows (gpu-self-hosted.yml@v0.4.0,
 # build-worker.yaml@v0.42.0, release-worker.yaml@v0.42.0).
-# A Dependabot bump of gpu-self-hosted.yml must also update GPU_REUSABLE_TAG in test/unit/pytest/gpu_pin.py.
+# A Dependabot bump of gpu-self-hosted.yml must also update GPU_REUSABLE_TAG in
+# test/unit/pytest/gpu_pin.py (pytest and the bats pin spec both read the tag from
+# there). The 4 caller workflows (main, ci-stream-smoke, ci-headless-smoke,
+# publish-stream-source) and the tag in line 4 of this comment are the only other
+# places that carry it.
 #
 # The base subtree version (.base/.version vs the latest base release) is
 # tracked by base-version-monitor.yaml, NOT by dependabot -- they are

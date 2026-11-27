@@ -59,7 +59,8 @@ def test_every_gpu_reusable_caller_uses_the_pinned_tag():
     }
     assert not bad, (
         f"callers not pinned to @{GPU_REUSABLE_TAG}: {bad}. "
-        "A Dependabot bump must update GPU_REUSABLE_TAG in gpu_pin.py."
+        "A Dependabot bump must update the 4 caller workflows, the dependabot.yml comment and GPU_REUSABLE_TAG in "
+        "gpu_pin.py (the bats pin spec reads the tag from there); the tag has no other copy."
     )
 
 
