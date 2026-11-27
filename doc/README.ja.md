@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage ツリー：`devel-base` -> `devel`（共通層：isaac コードと共通設定）-> `gui` / `stream` / `headless`。X11 を mount するのは `gui` service のみ（`setup.toml` の `[stage:gui] gui.mode = "force"`。トップレベル `[gui]` は `off` なので `devel` と他の stage は mount しない）：`just docker run -t gui`。2 つの stage が [base #215](https://github.com/ycpss91255-lab/base/issues/215) により profile-gated compose service として auto-emit される：`headless`（pure sim、`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC、`ISAAC_LIVESTREAM=2`）。両者とも起動時は `CMD ["sleep","infinity"]` で idle（`runheadless.sh -v` ENTRYPOINT は無い）— container は起動したまま、`just docker exec -t <stage> <cmd>` で driver スクリプト（`/isaac-sim/python.sh <driver.py>`、`ISAAC_LIVESTREAM=2` を読んで stream を有効化）または一回限りの `/usr/local/bin/runheadless-host-config.sh` を送り込む；streaming 起動後は web-viewer が `:5173` で接続する。`just docker run -t <stage> -d` で起動。
+> Stage ツリー：`devel-base` -> `devel`（共通層：isaac コードと共通設定）-> `gui` / `stream` / `headless`。X11 を mount するのは `gui` service のみ（`setup.toml` の `["stage:gui"] "gui.mode" = "force"`。トップレベルの `[gui]` は `mode = "off"` なので `devel` と他の stage は mount しない）：`just docker run -t gui`。2 つの stage が [base #215](https://github.com/ycpss91255-lab/base/issues/215) により profile-gated compose service として auto-emit される：`headless`（pure sim、`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC、`ISAAC_LIVESTREAM=2`）。両者とも起動時は `CMD ["sleep","infinity"]` で idle（`runheadless.sh -v` ENTRYPOINT は無い）— container は起動したまま、`just docker exec -t <stage> <cmd>` で driver スクリプト（`/isaac-sim/python.sh <driver.py>`、`ISAAC_LIVESTREAM=2` を読んで stream を有効化）または一回限りの `/usr/local/bin/runheadless-host-config.sh` を送り込む；streaming 起動後は web-viewer が `:5173` で接続する。`just docker run -t <stage> -d` で起動。
 
 ### Headless：Isaac を起動してシーンを実行する
 
@@ -178,8 +178,8 @@ post-run hook はさらに `network.public_ip` を `SIGNALING_SERVER` env とし
 
 - streaming kit app は `8011`（NVCF signaling、FastAPI/uvicorn）、`49100`（self-host WebRTC）、`8211`（kit API / streaming viewer）を同時に listen。WebRTC Streaming Client が正しい方を選ぶので **port を書かないこと**
 - **同時に 1 つの client のみ接続可能**（NVIDIA 制限）。2 つ目の接続は拒否されます
-- `setup.conf` で `network_mode: host` が設定済みのため、コンテナ内の listen port = host の port。Host ファイアウォールで `8011/tcp` と `49100/tcp` を許可（`sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`）
-- `setup.conf [deploy] gpu_capabilities` に `video` が必須 — なければ nvidia-container-runtime が NVENC libs（`libnvidia-encode.so` / `libnvcuvid.so`）を mount せず、server 接続成功でも encode できない → 黒画面。現在の `setup.conf` には追加済み
+- `setup.toml` の `[network]` で `mode = "host"` が設定済みのため、コンテナ内の listen port = host の port。Host ファイアウォールで `8011/tcp` と `49100/tcp` を許可（`sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`）
+- `setup.toml` の `[deploy]` では `gpu_capabilities = "all"` により `video` が有効 — なければ nvidia-container-runtime が NVENC libs（`libnvidia-encode.so` / `libnvcuvid.so`）を mount せず、server 接続成功でも encode できない → 黒画面。
 - Server 側で listener を確認：`ss -tln | grep -E ':8011|:49100'` で 2 つの `LISTEN` が見えるはず
 
 ### 決定論的 stream-source producer（GHCR image、isaac#223）
@@ -231,11 +231,11 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 ## ROS 2 bridge（内蔵、build-time distro）
 
-Isaac Sim 6.2.0 は Humble と Jazzy 両方の内部 ROS 2 ライブラリを `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` に同梱しており（5.1 では `isaacsim.ros2.bridge/` に配置。6.0 で単一の bridge ext が `isaacsim.ros2.core` + `isaacsim.ros2.nodes` などに分割された）、両方とも kit 内蔵インタプリタと一致する Python 3.12 rclpy。**本イメージは build-time に distro を hard-bake する** — `setup.conf [build] arg_N=ROS_DISTRO=<value>` 経由で指定（デフォルト `humble`、CoreSAM 整合）。
+Isaac Sim 6.2.0 は Humble と Jazzy 両方の内部 ROS 2 ライブラリを `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` に同梱しており（5.1 では `isaacsim.ros2.bridge/` に配置。6.0 で単一の bridge ext が `isaacsim.ros2.core` + `isaacsim.ros2.nodes` などに分割された）、両方とも kit 内蔵インタプリタと一致する Python 3.12 rclpy。**本イメージは build-time に distro を hard-bake する** — `setup.toml` の `[[build.args]]` で `key = "ROS_DISTRO"` の項目を指定（デフォルトは `value = "humble"`、CoreSAM 整合）。
 
 bridge extension は base `IsaacDriver` が Kit BOOT 時に有効化する（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）。未ロードの場合は sensor setup が runtime に Kit extension manager 経由で有効化するため、BOOT 時の有効化は最適化であり必須ではない（isaac#248）。driver パスでは追加の launch flag は不要。
 
-`setup.conf [environment]` で配線済みの env（distro-agnostic）：
+`setup.toml [environment]` で配線済みの env（distro-agnostic）：
 
 | 変数 | 値 | 理由 |
 |------|-----|------|
@@ -245,7 +245,7 @@ bridge extension は base `IsaacDriver` が Kit BOOT 時に有効化する（`BO
 
 ### Distro 選択（build-time, hard-baked）
 
-Dockerfile の `ARG ROS_DISTRO=humble` は `setup.conf [build]` と配線されている。build 時にこの値が `/etc/isaac/ros-distro` に書き込まれ、`script/isaac-ros-env-wrapper.sh` が `/usr/local/bin/` に install される。`headless` / `stream` stage は `ENTRYPOINT` をその wrapper に設定し、コンテナ起動毎に baked file から `ROS_DISTRO` と `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib` を**無条件**で re-export する — そのため runtime の `-e ROS_DISTRO=...` flag は production path では無効。
+Dockerfile の `ARG ROS_DISTRO=humble` は `setup.toml [[build.args]]` と配線されている。build 時にこの値が `/etc/isaac/ros-distro` に書き込まれ、`script/isaac-ros-env-wrapper.sh` が `/usr/local/bin/` に install される。`headless` / `stream` stage は `ENTRYPOINT` をその wrapper に設定し、コンテナ起動毎に baked file から `ROS_DISTRO` と `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib` を**無条件**で re-export する — そのため runtime の `-e ROS_DISTRO=...` flag は production path では無効。
 
 `devel` stage は同じ値を Dockerfile `ENV` 経由で soft-bake する（interactive shell ではデフォルトで取得；開発者は `export ROS_DISTRO=...` で実験可能）。
 
@@ -379,7 +379,7 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 
 ## EULA
 
-`ACCEPT_EULA=Y` と `PRIVACY_CONSENT=Y` は `setup.conf [environment]` 経由で注入。注意：Isaac Sim 6.x は privacy consent を `OMNI_ENV_PRIVACY_CONSENT` から読む（この名前は 5.1 で採用され、5.1 より前の版とは異なる）；現在設定している `PRIVACY_CONSENT=Y` は無害だが実際には作用しません。telemetry opt-in したい場合は正しい変数名を設定してください。
+`ACCEPT_EULA=Y` と `PRIVACY_CONSENT=Y` は `setup.toml [environment]` 経由で注入。注意：Isaac Sim 6.x は privacy consent を `OMNI_ENV_PRIVACY_CONSENT` から読む（この名前は 5.1 で採用され、5.1 より前の版とは異なる）；現在設定している `PRIVACY_CONSENT=Y` は無害だが実際には作用しません。telemetry opt-in したい場合は正しい変数名を設定してください。
 
 ## Smoke Tests
 
@@ -403,7 +403,7 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 システムの `python3` ではこれらのパッケージはインストールできない（Isaac base image の PEP 668 が `pip` をブロック）— 必ず `/isaac-sim/python.sh -m pytest ...` を使い、`pytest ...` は使わない。
 
-GPU integration test（Isaac Sim の実起動が必要なもの、例: camera → ROS 2 headless smoke、#127）は `test` compose service で実行する。この service の NVIDIA GPU reservation は `setup.conf` の `[stage:devel-test]` override（`deploy.gpu_mode = force`、base #493）に由来する:
+GPU integration test（Isaac Sim の実起動が必要なもの、例: camera → ROS 2 headless smoke、#127）は `test` compose service で実行する。この service の NVIDIA GPU reservation は `setup.toml` の `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`、base #493）に由来する:
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \

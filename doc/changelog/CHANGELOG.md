@@ -4,6 +4,7 @@
 
 ### Fixed
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。
+- **四種語言的 README、操作文件與註解統一使用 rc7 命名（isaac#458）。** 設定範例對齊 `setup.toml` 的表格與欄位，本機覆寫檔為 `setup.local.toml`。建置、啟動、執行與停止容器的範例改用 `just docker` 指令。`core-unit` CI 在 checkout 後執行命名檢查，掃描 Git 追蹤的文字檔。
 - **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
