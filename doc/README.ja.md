@@ -359,7 +359,12 @@ GPU integration test（Isaac Sim の実起動が必要なもの、例: ヘッド
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_example_gpu_integration.py
+    test/integration/
 ```
 
-合否判定は stdout の marker 行（`[BOOT OK]` / `[L3 CAMERA OK]` / `[EXIT CLEAN]`）であり、return code ではない — Kit の `app.close` は `_exit(0)` を呼ぶ。詳細は [doc/test/TEST.md](test/TEST.md) を参照。
+GPU ジョブは `test/integration/` 配下の両方のディレクトリからテストを収集する。
+
+- [test/integration/pytest/](../test/integration/pytest/) — シーン、センサー、ドライバーの統合テスト。ヘッドレスの Jetbot サンプルも含む。
+- [test/integration/no_ros/](../test/integration/no_ros/README.md) — Isaac が ROS モジュールを読み込まずに動作することを確認するテスト。
+
+Kit は `app.close` 内でプロセスを直接終了することがあるため、Jetbot サンプルは stdout の `[BOOT OK]`、`[CAMERA PRIM OK]`、`[EXIT CLEAN]` などのマーカーを確認する。[テスト一覧](test/TEST.md)

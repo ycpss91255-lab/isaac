@@ -10,6 +10,14 @@ import argparse
 import sys
 
 
+def loaded_ros_modules():
+    """List the client and bridge modules currently loaded in this process."""
+    return sorted(
+        name for name in sys.modules
+        if name == "rclpy" or name.startswith(("rclpy.", "isaacsim.ros2"))
+    )
+
+
 def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--script-dir", required=True)
@@ -34,11 +42,7 @@ def _main() -> None:
             marker = stage.GetPrimAtPath(f"{root}/io_plugin_marker")
             print(f"[MARKER_PRIM] {bool(marker and marker.IsValid())}",
                   flush=True)
-            ros = sorted(
-                m for m in sys.modules
-                if m == "rclpy" or m.startswith(("rclpy.", "isaacsim.ros2"))
-            )
-            print(f"[ROS_MODULES] {ros}", flush=True)
+            print(f"[ROS_MODULES] {loaded_ros_modules()}", flush=True)
             self._should_quit = True
 
     _Driver().run()

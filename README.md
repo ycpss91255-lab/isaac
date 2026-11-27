@@ -359,7 +359,12 @@ GPU integration tests (Isaac Sim must boot, e.g. the headless Jetbot integration
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_example_gpu_integration.py
+    test/integration/
 ```
 
-Pass criterion is stdout marker lines (`[BOOT OK]` / `[L3 CAMERA OK]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).
+The GPU job collects both directories under `test/integration/`.
+
+- [test/integration/pytest/](test/integration/pytest/) — Scene, sensor, and driver integration tests, including the headless Jetbot example.
+- [test/integration/no_ros/](test/integration/no_ros/README.md) — Reverse tests that verify Isaac runs without loading ROS modules.
+
+The Jetbot example checks stdout markers such as `[BOOT OK]`, `[CAMERA PRIM OK]`, and `[EXIT CLEAN]` because Kit can exit directly in `app.close`. [Test inventory](doc/test/TEST.md)

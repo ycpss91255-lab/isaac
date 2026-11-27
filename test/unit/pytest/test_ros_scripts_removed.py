@@ -80,6 +80,35 @@ def test_integration_files_have_no_removed_module_references():
                 assert name.encode() not in content, f"{path.relative_to(REPO_ROOT)}: {name}"
 
 
+def test_no_ros_integration_layout():
+    pytest_dir = REPO_ROOT / INTEGRATION_DIR
+    no_ros = pytest_dir.with_name("no_ros")
+    assert no_ros.is_dir()
+    readme = no_ros / "README.md"
+    assert readme.is_file()
+    description = " ".join(readme.read_text(encoding="utf-8").lower().split())
+    assert "isaac" in description
+    assert re.search(
+        r"\b(?:loads no|(?:does not load|never loads)(?: any)?) ros modules?\b", description
+    )
+    assert (no_ros / "conftest.py").is_file()
+    for name in ("test_io_plugin_integration.py", "_io_plugin_runner.py", "_io_plugin_marker.py"):
+        assert (no_ros / name).is_file()
+        assert not os.path.lexists(pytest_dir / name)
+
+
+def test_integration_files_outside_no_ros_have_no_ros_references():
+    integration = REPO_ROOT / INTEGRATION_DIR.parent
+    no_ros = integration / "no_ros"
+    pattern = re.compile(rb"rclpy|ros2")
+    matches = sorted(
+        path.relative_to(REPO_ROOT)
+        for path in integration.rglob("*")
+        if no_ros not in path.parents and path.is_file() and pattern.search(path.read_bytes())
+    )
+    assert matches == []
+
+
 def test_cross_subnet_adr_points_to_ros_io():
     adr = REPO_ROOT / "src/doc/adr/0015-cross-subnet-ros2-viewing-tcp-dds.md"
     assert adr.is_file()

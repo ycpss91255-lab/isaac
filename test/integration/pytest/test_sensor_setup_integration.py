@@ -8,10 +8,6 @@ constraint).
 
 Scope for this PR (per #35 first L3 cut): Kit-side ``setup_sensor`` runs
 without raising on positive cases and raises on the IMU negative case.
-A follow-up PR will add rclpy subscribers to verify the ROS 2 messages
-actually publish (sensor_msgs/Image, CameraInfo, PointCloud2, LaserScan,
-Imu); that needs the bridge ext loaded + rclpy spin + timing tolerance
-and is non-trivial enough to land separately.
 
 Each test shells out to ``_sensor_setup_runner.py`` because
 ``SimulationApp`` is a process singleton.

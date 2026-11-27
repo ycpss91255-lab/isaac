@@ -359,7 +359,12 @@ GPU integration test（需要 Isaac Sim 真正启动，例如 Jetbot 的无头�
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_example_gpu_integration.py
+    test/integration/
 ```
 
-判定标准是 stdout marker 行（`[BOOT OK]` / `[L3 CAMERA OK]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 会调用 `_exit(0)`。详见 [doc/test/TEST.md](test/TEST.md)。
+GPU 作业会收集 `test/integration/` 下两个目录中的测试。
+
+- [test/integration/pytest/](../test/integration/pytest/) — 场景、传感器和驱动程序的集成测试，包括无头模式的 Jetbot 示例。
+- [test/integration/no_ros/](../test/integration/no_ros/README.md) — 反向测试，验证 Isaac 能在不加载 ROS 模块的情况下运行。
+
+Kit 可在 `app.close` 中直接结束进程，因此 Jetbot 示例会检查 stdout 中的 `[BOOT OK]`、`[CAMERA PRIM OK]` 和 `[EXIT CLEAN]` 等标记。[测试清单](test/TEST.md)

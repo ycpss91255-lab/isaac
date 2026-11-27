@@ -329,7 +329,8 @@
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#429: retire 9 standalone script checks and 7 cross-container guards.
 #   Add 20 ROS removal checks, all core: 691 -> 695 hosted (650 -> 654 core).
-HOSTED_UNIT_BASELINE = 695
+# isaac#429: add 2 integration layout and module-reference checks (both core).
+HOSTED_UNIT_BASELINE = 697
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -352,14 +353,14 @@ HOSTED_UNIT_BASELINE = 695
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 654
+HOSTED_UNIT_BASELINE_CORE = 656
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 HOSTED_UNIT_BASELINE_DOCS = 16
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
-#   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
+#   (test/integration/). NOT enforced at M1 (a skipped GPU job is
 #   not green, but hosted-only green is mergeable here). The full
 #   cross-runner aggregate (HOSTED_UNIT + GPU_INTEGRATION) is asserted at
 #   M2 with #132. #132 adds the example GPU integration test
@@ -511,11 +512,13 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#429: retire 1 headless ROS camera test and 2 host cross-container
 #   tests. The in-container suite now supplies the entire GPU count: 40 -> 37.
-GPU_INTEGRATION_BASELINE = 37
+# isaac#429: replace 2 example messaging checks with 1 module-load check
+#   (net -1, 37 -> 36). Both I/O plugin tests still run under no_ros/.
+GPU_INTEGRATION_BASELINE = 36
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). The M2 gate adds the hosted floor to the in-container GPU collection
-#   (687 + 37 = 724 at the current floors) and requires a passing GPU test.
+#   (697 + 36 = 733 at the current floors) and requires a passing GPU test.
 AGGREGATE_TARGET = 126
 
 # BATS_BASELINE_<GROUP> -- floors for the devel-test bats specs, per group

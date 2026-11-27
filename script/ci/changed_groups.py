@@ -117,7 +117,9 @@ def _declared_group(path, repo_root):
         groups = sg.bats_file_groups(full)
         return groups[0] if len(groups) == 1 else None
     if (
-        path.startswith(("test/unit/pytest/", "test/integration/pytest/"))
+        path.startswith(
+            ("test/unit/pytest/", "test/integration/pytest/", "test/integration/no_ros/")
+        )
         and Path(path).name.startswith("test_")
         and path.endswith(".py")
     ):

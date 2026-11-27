@@ -30,6 +30,7 @@ _BATS_DIR = _REPO_ROOT / "test" / "bats" / "smoke"
 _PYTEST_DIRS = (
     _REPO_ROOT / "test" / "unit" / "pytest",
     _REPO_ROOT / "test" / "integration" / "pytest",
+    _REPO_ROOT / "test" / "integration" / "no_ros",
 )
 _BASELINE = _REPO_ROOT / "test" / "pytest-baseline.txt"
 _TEST_MD = _REPO_ROOT / "doc" / "test" / "TEST.md"
@@ -63,6 +64,7 @@ def test_plugin_and_script_agree_on_the_groups(tg):
 
 
 def test_every_real_pytest_module_has_exactly_one_group(tg):
+    assert tg._PYTEST_DIRS == _PYTEST_DIRS
     assert tg.check_pytest_modules(_PYTEST_DIRS) == []
 
 

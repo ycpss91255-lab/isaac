@@ -46,8 +46,7 @@ def _main() -> None:
     robot_usd = str(Path(args.robot_usd).resolve())
     object_usd = str(Path(args.object_usd).resolve())
 
-    # Headless, no livestream (ROS 2 bridge + livestream in one Kit process
-    # segfaults randomly, IsaacSim#228); this runner does no ROS 2 anyway.
+    # Disable livestreaming for the headless scene check.
     os.environ["ISAAC_LIVESTREAM"] = "0"
 
     from isaacsim import SimulationApp

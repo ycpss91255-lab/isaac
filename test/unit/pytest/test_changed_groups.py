@@ -123,13 +123,19 @@ def test_scope_rules_cover_other_experiences_and_pre_hooks(cg, path, groups):
     assert cg.classify(path) == groups
 
 
-def test_a_stream_spec_follows_its_declared_group(cg):
+def test_a_stream_spec_follows_its_declared_group(cg, tmp_path):
     # Not a path pattern: the spec's own `# bats file_tags=stream` decides.
     assert _pr(cg, "test/bats/smoke/post_run_hook_spec.bats") == ["stream", "docs"]
     assert _pr(cg, "test/unit/pytest/test_stream_source_producer.py") == [
         "stream",
         "docs",
     ]
+
+    path = "test/integration/no_ros/test_plugin.py"
+    module = tmp_path / path
+    module.parent.mkdir(parents=True)
+    module.write_text("import pytest\npytestmark = pytest.mark.stream\n")
+    assert cg.classify(path, repo_root=tmp_path) == {"stream"}
 
 
 def test_a_core_spec_follows_its_declared_group(cg):
