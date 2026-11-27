@@ -331,7 +331,8 @@
 #   Add 20 ROS removal checks, all core: 691 -> 695 hosted (650 -> 654 core).
 # isaac#429: add 2 integration layout and module-reference checks (both core).
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-HOSTED_UNIT_BASELINE = 711
+#   Optional camera ros config adds 2 core cases in test_camera_setup.py (711 -> 713, core 670 -> 672).
+HOSTED_UNIT_BASELINE = 713
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -354,7 +355,7 @@ HOSTED_UNIT_BASELINE = 711
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 670
+HOSTED_UNIT_BASELINE_CORE = 672
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -519,7 +520,7 @@ GPU_INTEGRATION_BASELINE = 36
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). The M2 gate adds the hosted floor to the in-container GPU collection
-#   (711 + 36 = 747 at the current floors) and requires a passing GPU test.
+#   (713 + 36 = 749 at the current floors) and requires a passing GPU test.
 AGGREGATE_TARGET = 126
 
 # BATS_BASELINE_<GROUP> -- floors for the devel-test bats specs, per group

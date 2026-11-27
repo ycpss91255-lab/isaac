@@ -141,7 +141,9 @@ def validate_camera(cfg, source):
     """Validate camera-specific fields (host-pure; no Isaac Sim).
 
     Assumes shared mount/sensor checks already ran (_validate_shared).
+    Normalizes an omitted ros key to None.
     """
+    cfg.setdefault("ros", None)
     sensor_type = cfg["sensor"].get("type")
     if sensor_type not in _SUPPORTED_TYPES:
         raise ValueError(
