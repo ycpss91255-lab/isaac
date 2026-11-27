@@ -130,6 +130,16 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 - 有一個 image 仍然共用：每次 build 也會 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名稱只由 pin 住的 base 版本決定。host 上所有 pin 同一個 base 版本的 checkout 與 repo 都寫同一個 tag，所以別的 checkout 可能正在 build 時不要刪它。`just docker build --clean-tools` 會替所有人把它刪掉。它來自 base 的 `build.sh`，上游追蹤在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前啟動的 container 還留在共用 project 裡。用 `docker compose -p <hub>-isaac ps -a` 列出，按名稱停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 會停掉整個共用 project，包含別的 checkout 的 container。
 
+### 執行多個 instance
+
+本 repo 設計上預設每個 checkout 只跑一個 instance，已移除在同一個 checkout 內管理多個 instance 的機制（[ADR-0019](../src/doc/adr/0019-remove-same-repo-multi-instance.md)）。要跑 N 個 instance，請透過 multi_run 用本 repo 的 `compose.yaml` 啟動 N 次。設計記錄見 [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15)。
+
+- 用 `-p <name>` 為每個 instance 指定不同的 compose project 名稱，這樣 `just docker stop` 只會停止自己的 instance，啟動時也不會接手上次殘留的 instance。
+- 每個 instance 都必須有獨立的 `isaac-sim/` 快取與資料目錄樹。共用可寫入的快取目錄會破壞執行中 instance 的 Kit 快取，而且不會出現警告。詳見 [Cache 路徑](#cache-路徑)。
+- 平行執行 headless instance 不需覆寫連接埠。只有串流時才需要覆寫。
+
+實際能跑幾個 instance 取決於可用的 GPU 記憶體。以一張 32607 MiB 的顯示卡實測，每個執行中的 Isaac instance 約用 3.9 GiB，可同時跑 6–7 個。將顯示卡可用的記憶體換算成 GiB 再除以 3.9，即可估算數量。多個 instance 會共用 GPU 運算資源，因此每個都會跑得較慢。
+
 ## 掛載本機 USD 模型
 
 Isaac 不附範例模型。請使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的轉換輸出。
