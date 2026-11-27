@@ -15,8 +15,8 @@ gpu_job_endgroup() { echo "::endgroup::"; }
 # base detect_ws_path mis-detects the self-CI _work/<repo>/<repo> layout:
 # none of its strategies (docker_* sibling, *_ws ancestor) match, so the
 # parent-dir fallback returns _work/<repo> -- one level too high, leaving the
-# repo at ~/work/<repo>/ inside the container. .setup.conf ships mount_1 in
-# portable ${WS_PATH} form, so apply re-detects WS_PATH locally and ignores a
+# repo at ~/work/<repo>/ inside the container. The workspace [[volumes]] entry
+# in setup.toml uses source = "${WS_PATH}", so apply re-detects WS_PATH and ignores a
 # job-env override. Pin it in the derived .env.generated cache AFTER apply
 # (the --env-file the wrappers pass to compose) so the compose mounts the
 # repo root at ~/work. base follow-up: base#586.

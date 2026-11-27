@@ -141,7 +141,7 @@ WS_PATH=""
 # nor no-op on the stale pre-isaac#238 literal `owv` viewer name.
 #
 # We pin via a surgical sed of the PROJECT_NAME= line (the same post-apply sed
-# the CI WS_PATH pin uses) rather than `setup.sh apply` with a .setup.conf.local
+# the CI WS_PATH pin uses) rather than `setup.sh apply` with a setup.local.toml
 # override, because a second apply here would re-run detection and clobber the
 # CI WS_PATH pin the prior apply step wrote.
 _default_project="${DOCKER_HUB_USER:-local}-${IMAGE_NAME}"

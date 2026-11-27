@@ -2,11 +2,11 @@
 #
 # isaac-ros-env-wrapper.sh — hard-bake ROS env from build-time choice
 #
-# Reads /etc/isaac/ros-distro (written at build time from setup.conf
-# [build] arg_N=ROS_DISTRO=...) and exports ROS_DISTRO + LD_LIBRARY_PATH
-# unconditionally before exec'ing the wrapped command. Runtime
+# Reads /etc/isaac/ros-distro (written at build time from the [[build.args]]
+# entry with key = "ROS_DISTRO" in setup.toml) and exports ROS_DISTRO and
+# LD_LIBRARY_PATH unconditionally before exec'ing the wrapped command. Runtime
 # `-e ROS_DISTRO=...` flags are ignored — distro is a build-time choice
-# in this repo; rebuild the image (`./build.sh`) to switch.
+# in this repo; rebuild the image (`just docker build`) to switch.
 #
 # Wired in via headless / gui ENTRYPOINT:
 #   ENTRYPOINT ["/usr/local/bin/isaac-ros-env-wrapper.sh", "/isaac-sim/runheadless.sh"]
