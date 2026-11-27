@@ -3,6 +3,7 @@
 import argparse
 import math
 import sys
+import time
 from pathlib import Path
 
 WHEEL_JOINTS = ["left_wheel_joint", "right_wheel_joint"]
@@ -99,9 +100,19 @@ def _main() -> None:
             )
 
         def main(self):
+            import carb.settings
             import omni.graph.core as og
+            import omni.timeline
             from isaacsim.core.simulation_manager import SimulationManager
 
+            settings = carb.settings.get_settings()
+            timeline = omni.timeline.get_timeline_interface()
+            print(
+                f"[DRIVE SETTINGS] rate_limit_enabled={settings.get('/app/runLoops/main/rateLimitEnabled')} "
+                f"rate_limit_hz={settings.get('/app/runLoops/main/rateLimitFrequency')} "
+                f"fixed_step={settings.get('/app/player/useFixedTimeStepping')} looping={timeline.is_looping()}",
+                flush=True,
+            )
             active_engine = SimulationManager.get_active_physics_engine()
             for _ in range(5):
                 self._app.update()
@@ -119,14 +130,27 @@ def _main() -> None:
                 [COMMAND_RAD_S, COMMAND_RAD_S]
             )
             displacement = [0.0, 0.0]
+            sim_times = [timeline.get_current_time()]
+            wall_start = time.perf_counter()
             for _ in range(180):
                 self._app.update()
+                sim_times.append(timeline.get_current_time())
                 current = wheel_positions()
                 for i in range(len(WHEEL_JOINTS)):
                     # PhysX wraps revolute joint positions as the wheels turn.
                     displacement[i] += math.remainder(current[i] - previous[i], math.tau)
                 previous = current
 
+            wall_span = time.perf_counter() - wall_start
+            updates = len(sim_times) - 1
+            span_s = sim_times[-1] - sim_times[0]
+            sim_hz = updates / span_s if span_s > 0 else 0.0
+            monotonic = all(b > a for a, b in zip(sim_times, sim_times[1:]))
+            print(
+                f"[DRIVE CLOCK] sim_hz={sim_hz} wall_hz={updates / wall_span} "
+                f"monotonic={monotonic} span_s={span_s} updates={updates}",
+                flush=True,
+            )
             left, right = displacement
             print(f"[WHEEL MOTION] {active_engine} {left} {right}", flush=True)
 
