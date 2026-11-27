@@ -286,7 +286,16 @@ def open_items(endpoint):
     return [item for page in json.loads(pages) for item in page]
 
 
-def run(override):
+def planned_pr_body(pin, current, latest, diff, runner_changed):
+    body = render_pr_body(pin, latest, diff)
+    if current != pin:
+        body = body.replace("## 官方測試清單", f"## 官方測試清單（比較 `{current}` 與 `{latest}`）")
+    if runner_changed:
+        body += "\n官方測試執行器 `run_tests.py` 有變更，請確認分組規則。\n"
+    return body
+
+
+def run(override, dry_run=False):
     dockerfile = Path("Dockerfile")
     pin = read_base_version(dockerfile)
     current = override or pin
@@ -294,7 +303,9 @@ def run(override):
     with urlopen(AUTH, timeout=45) as response:
         token = json.load(response)["token"]
     latest = stable_release(token)
-    if not should_bump(current, latest) or not should_bump(pin, latest):
+    if not should_bump(current, latest) or (
+        not (dry_run and override) and not should_bump(pin, latest)
+    ):
         print("Dockerfile 無可套用的版本更新。")
         return
 
@@ -306,17 +317,21 @@ def run(override):
         return
 
     diff, runner_changed = inventory_diff(current, latest, token)
-    body = render_pr_body(pin, latest, diff)
-    if current != pin:
-        body = body.replace("## 官方測試清單", f"## 官方測試清單（比較 `{current}` 與 `{latest}`）")
-    if runner_changed:
-        body += "\n官方測試執行器 `run_tests.py` 有變更，請確認分組規則。\n"
+    body = planned_pr_body(pin, current, latest, diff, runner_changed)
+    title = f"更新 Isaac Sim 至 {latest}"
+    issue_title = f"追蹤 Isaac Sim {latest} 官方測試清單" if diff and any(diff.values()) else None
+    if dry_run:
+        print(title)
+        print(body, end="")
+        if issue_title:
+            print(issue_title)
+        return
+
     with tempfile.TemporaryDirectory() as tmp:
         body_file = Path(tmp) / "body.md"
         body_file.write_text(body)
         command("git", "switch", "-c", branch)
         update_base_version(dockerfile, latest)
-        title = f"更新 Isaac Sim 至 {latest}"
         command("git", "-c", "user.name=github-actions[bot]",
                 "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com",
                 "commit", "-m", title, "--", "Dockerfile")
@@ -333,9 +348,8 @@ def run(override):
             if not any(pr["head"]["ref"] == branch for pr in open_items("pulls")):
                 command("git", "push", f"--force-with-lease={ref}:{commit}", "origin", ":" + ref)
                 raise
-        if diff and any(diff.values()):
+        if issue_title:
             body_file.write_text(body + "\n請依差異核對 #435 的 Isaac Sim 測試項目。\n")
-            issue_title = f"追蹤 Isaac Sim {latest} 官方測試清單"
             args = ("gh", "issue", "create", "--title", issue_title, "--body-file", str(body_file))
             try:
                 command(*args)
@@ -344,14 +358,19 @@ def run(override):
                     command(*args)
 
 
-if __name__ == "__main__":
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(required=True).add_parser("run")
     sub.add_argument("--current-version", default="")
-    args = parser.parse_args()
+    sub.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
     try:
-        run(args.current_version)
+        run(args.current_version, dry_run=args.dry_run)
     except subprocess.CalledProcessError as error:
         sys.exit(f"{error.cmd[0]} {error.cmd[1]} 失敗（結束碼 {error.returncode}）。")
     except (OSError, ValueError, LookupError, http.client.HTTPException):
         sys.exit("讀取官方 Isaac Sim 版本或儲存庫設定失敗。")
+
+
+if __name__ == "__main__":
+    main()
