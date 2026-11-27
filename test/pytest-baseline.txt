@@ -331,8 +331,8 @@
 #   Nine cover sim-loop setup (3 in TestPlayTimelineSimLoop) and launcher args
 #   (6 in TestLauncherArgs: 4 default livestream values, 1 override, 1 default run).
 #   Two more in TestPlayTimelineSimLoop cover warm start when the package manager
-#   is rebound. Hosted total: 683 -> 694.
-HOSTED_UNIT_BASELINE = 694
+#   is rebound. Hosted total: 691 -> 702 after merging main.
+HOSTED_UNIT_BASELINE = 702
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -353,8 +353,10 @@ HOSTED_UNIT_BASELINE = 694
 #   all core: 627 -> 633 (core 598).
 #   The workflow naming lint (isaac#443) adds test_workflow_naming.py (42) and 1 in
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
-#   All 11 hosted cases from isaac#447 are core: 642 -> 653.
-HOSTED_UNIT_BASELINE_CORE = 653
+#   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
+#   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
+#   All 11 hosted cases from isaac#447 are core: 650 -> 661.
+HOSTED_UNIT_BASELINE_CORE = 661
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
