@@ -1,6 +1,6 @@
 # TEST.md
 
-**213 tests** total (bats). Hosted pytest collects **687 tests**.
+**213 tests** total (bats). Hosted pytest collects **703 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 618 | 34 | 771 |
+| core | 119 | 634 | 34 | 787 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
@@ -375,10 +375,11 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **687 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code. The hosted runner uses the `python:3.12` image with Git. The core group fails if any test is skipped.
+The hosted suite collects **703 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code. The hosted runner uses the `python:3.12` image with Git. The core group fails if any test is skipped.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
+| `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and sample references and no references to the unavailable `just run scene` recipe in all four READMEs (isaac#338). |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |
 | `test_check_forbidden_names.py` | 14 | `core`. Checks case-insensitive matches, redaction in filenames and matched lines, tracked-file scope, the skip reason when the secret is unavailable, Git errors, and the current checkout. Verifies that CI passes the secret to the standalone scan and hosted core tests, and checks the core runner’s image, skip gate, and per-test reporting (isaac#487). |
 | `test_import_safety.py` | 15 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
