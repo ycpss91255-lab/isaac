@@ -2,7 +2,13 @@
 
 ## Status
 
-Proposed (2026-11-18).
+Superseded (2026-11-27)
+
+The owner's decision of 2026-11-27 (#388, implemented in #514) supersedes
+this ADR. isaac does not touch ROS. `ISAAC_OUTPUT_MODE` supports only
+`python`, and `isaac_ros_io` provides ROS I/O through `ISAAC_IO_PLUGIN`.
+
+Previously: Proposed (2026-11-18).
 
 Records the parts of the owner's 2026-11-18 direction (isaac#366) that are
 already decided. One question is still open (see "Open question"); the ADR
