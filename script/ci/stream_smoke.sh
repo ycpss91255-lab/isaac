@@ -45,6 +45,8 @@
 #   SMOKE_DWELL            seconds to hold the connection (default 30)
 #   SMOKE_POLL             poll interval for both waits (default 5)
 #   SMOKE_LOG_TAIL         kit log lines printed on failure (default 60)
+#   SMOKE_SKIP_PORT_PREFLIGHT  set to 1 to skip the port checks before bring-up
+#   ISAAC_MEDIA_PORT       media port checked by the smoke (default 47998)
 #   SMOKE_READY_MARKERS    newline-separated ordered kit-log markers that
 #                          define "the stream server is up and the app booted"
 #   SMOKE_STREAM_MARKERS   newline-separated ordered kit-log markers that
@@ -93,6 +95,7 @@ browser_image="${SMOKE_BROWSER_IMAGE:-mcr.microsoft.com/playwright:v1.62.1-noble
 
 # shellcheck source=stream_smoke_lib.sh
 . "${SMOKE_LIB:-$(dirname "${BASH_SOURCE[0]}")/stream_smoke_lib.sh}"
+echo "[smoke] load: $(smoke_load_avg)"
 
 # Ordered kit-log markers of a booted stream server, as logged by Kit 110 on
 # the GPU host (isaac#291): server listening -> app fully loaded. Attaching
@@ -218,7 +221,9 @@ compose_smoke_down() {
 . "${HOST_YAML_LIB:-${repo_root}/script/host_yaml.sh}"
 signal_port="$(resolve_port "${repo_root}/config/host.yaml" signal)" || exit 1
 signal_port="${signal_port:-${ISAAC_SIGNAL_PORT:-49100}}"
+media_port="${ISAAC_MEDIA_PORT:-47998}"
 
+# shellcheck disable=SC2317 # Invoked by the trap below.
 cleanup() {
   echo "[smoke] teardown: down project ${smoke_project} + remove viewer ${viewer} + client"
   if [[ -n "${client_pid}" ]]; then
@@ -297,6 +302,7 @@ smoke_alive() {
 
 fail() {
   printf '[smoke] FAIL: %s\n' "$*"
+  echo "[smoke] load: $(smoke_load_avg)"
   smoke_log_tail "${smoke_log}" "${log_tail_n}"
   exit 1
 }
@@ -307,7 +313,7 @@ fail() {
 free_port() {
   local _p
   for (( _p = $1; _p <= $2; _p++ )); do
-    if ! (exec 3<>"/dev/tcp/127.0.0.1/${_p}") 2>/dev/null; then
+    if ! smoke_port_in_use "${_p}"; then
       printf '%s\n' "${_p}"
       return 0
     fi
@@ -332,7 +338,7 @@ start_default_client() {
     "${viewer_image}" >/dev/null \
     || fail "client viewer (${viewer_image}) did not start"
   for (( _i = 0; _i < 60; _i++ )); do
-    if (exec 3<>"/dev/tcp/127.0.0.1/${_serve}") 2>/dev/null; then
+    if smoke_port_in_use "${_serve}"; then
       break
     fi
     sleep 1
@@ -363,6 +369,14 @@ docker rm -f "${viewer}" "${client_browser}" "${client_viewer}" \
   >/dev/null 2>&1 || true
 rm -f "${smoke_log}" 2>/dev/null || true
 
+if [[ "${SMOKE_SKIP_PORT_PREFLIGHT:-0}" != 1 ]]; then
+  for port in "${signal_port}" "${media_port}"; do
+    if smoke_port_in_use "${port}"; then
+      fail "port ${port} already in use by $(smoke_port_holders "${port}")"
+    fi
+  done
+fi
+
 # Pull the default client's images up front so a cold pull never eats into
 # the connect budget.
 if [[ -z "${SMOKE_CLIENT_CMD:-}" ]]; then
@@ -388,6 +402,7 @@ echo "[smoke] launch Isaac (detached) in ${cid:-<unresolved>}"
 # Source the per-host livestream port env the post-run hook copied in when
 # host.yaml pins any port (#231); absent => no-op, runheadless-host-config.sh
 # (unchanged) falls back to its ISAAC_*_PORT-from-env defaults.
+launch_s=${SECONDS}
 docker exec -d "${cid}" \
   sh -c 'set -a; [ -f /etc/isaac/livestream-ports.env ] && . /etc/isaac/livestream-ports.env; set +a; /usr/local/bin/runheadless-host-config.sh > /isaac-sim/kit/logs/stream-smoke.log 2>&1'
 
@@ -397,9 +412,28 @@ rc=0
 smoke_wait_for "${smoke_log}" "${timeout_s}" "${poll_s}" \
   "${ready_markers[@]}" || rc=$?
 case "${rc}" in
-  0) echo "[smoke] OK: Isaac WebRTC stream server up and app loaded" ;;
+  0)
+    load="$(smoke_load_avg)"
+    echo "[smoke] load: ${load}"
+    echo "[smoke] ready after $(( SECONDS - launch_s ))s (load ${load})"
+    echo "[smoke] OK: Isaac WebRTC stream server up and app loaded"
+    ;;
   2) fail "stream container (${cid:-<unresolved>}) is no longer running" ;;
-  *) fail "stream server / app did not come up within ${timeout_s}s" ;;
+  *)
+    last=none
+    missing=none
+    for i in "${!ready_markers[@]}"; do
+      if ! smoke_sequence_line "${smoke_log}" "${ready_markers[@]:0:i+1}" >/dev/null 2>&1; then
+        missing="${ready_markers[i]}"
+        break
+      fi
+      last="${ready_markers[i]}"
+    done
+    fail "timeout after ${timeout_s}s (load $(smoke_load_avg));" \
+      "last ready marker seen: ${last}; missing: ${missing};" \
+      "port ${signal_port} holders: $(smoke_port_holders "${signal_port}");" \
+      "port ${media_port} holders: $(smoke_port_holders "${media_port}")"
+    ;;
 esac
 
 # Hold the client for the whole assertion window plus margin, so it cannot
