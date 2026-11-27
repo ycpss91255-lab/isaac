@@ -1,10 +1,6 @@
 # example/ros2 -- app-side ROS 2 templates
 
-This directory holds the **app side** of the base-repo ROS 2 example. The
-Isaac driver in [`example/sim/`](../sim/) publishes a camera stream and
-drives a chassis from `/cmd_vel`; the packages here are the consumer-side
-counterpart -- ordinary ROS 2 nodes you run in a sibling ROS 2 Humble
-container that **subscribe to the camera** and **publish `/cmd_vel`**.
+These ROS 2 Humble nodes subscribe to camera images from an Isaac scene and publish velocity commands on `/cmd_vel`.
 
 This is the ROS 2-by-default bidirectional topology embodied structurally
 (ADR-0017 section 6): the framework owns the bridge wiring on the Isaac
@@ -22,14 +18,12 @@ Copy one, rename it, and replace the node bodies with your own logic.
 
 ## Topics
 
-The node names and default topics match what the Isaac example
-[`example/sim/`](../sim/) publishes / subscribes, so the two sides connect
-out of the box on a shared DDS network:
+The table lists the node defaults. If your scene uses another camera namespace, set `camera_topic` to its image topic (for example, `/jetbot/camera/color/image_raw` for the Jetbot integration scene).
 
-| Direction | Topic | Type | Set by |
+| Direction | Topic | Type | ROS 2 parameter |
 |---|---|---|---|
-| Isaac -> app (inbound) | `/camera_bot/camera/color/image_raw` | `sensor_msgs/Image` | `example/sim/config/sensor/custom.yaml` |
-| app -> Isaac (outbound) | `/cmd_vel` | `geometry_msgs/Twist` | `example/sim/scene/scene.yaml` |
+| Isaac -> app (inbound) | `/camera_bot/camera/color/image_raw` | `sensor_msgs/Image` | `camera_topic` |
+| app -> Isaac (outbound) | `/cmd_vel` | `geometry_msgs/Twist` | `cmd_vel_topic` |
 
 ## Prerequisites
 
@@ -64,10 +58,9 @@ A clean run reports `0 errors, 0 failures` (the C++ `cppcheck` linter is
 skipped because the optional tool is not in the base image -- that is a
 skip, not a failure).
 
-## Run against the example
+## Run with an Isaac scene
 
-Bring up the Isaac example (see [`example/sim/`](../sim/)) on a host that
-shares a DDS network with this container, then:
+Start a scene that publishes camera images and subscribes to velocity commands on the same DDS domain as these nodes. With the default topics, run:
 
 ```bash
 docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
@@ -86,8 +79,7 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
   ros2 run example_app_py cmd_vel_publisher'
 ```
 
-The `[CMD_VEL OK]` lines correspond to Twists the Isaac driver receives and
-applies to the chassis. The C++ package is identical:
+Each `[CMD_VEL OK]` line reports a Twist published by the node. The C++ package uses the same parameters:
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`.
 
@@ -102,8 +94,7 @@ receiving the live sim topic) is asserted by the GPU integration test
 2. Rename the package: the directory, the `name` in `package.xml`, and
    (Python) `package_name` in `setup.py` / the inner module directory, or
    (C++) `project()` in `CMakeLists.txt`.
-3. Point the `camera_topic` / `cmd_vel_topic` parameters at your topics
-   (or keep the defaults to talk to the example).
+3. Set `camera_topic` and `cmd_vel_topic` to the topics used by your scene.
 4. Replace the node bodies with your application logic.
 
 ## License

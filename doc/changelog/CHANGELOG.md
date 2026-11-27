@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
+
 ### Fixed
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。
 - **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
@@ -17,7 +21,8 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **GUI stage 設定與 PR 人工驗證規則（isaac#428）。** `setup.toml` 明確關閉 `producer` stage 的 GUI。在 `["stage:producer"]` 新增 `"gui.mode" = "off"` 後，產生的 `compose.yaml` 將 `producer` 從 `extends: {service: devel}` 改為完整列出 `args`、`env_file`、`privileged`、`cap_add`、`volumes`、`devices` 與 GPU `deploy` 設定，僅 `target`、`image`、`profiles`、`restart`、`tty` 與 `devel` 不同，其餘設定等價，功能不變，`headless` 與 `stream` 區塊不變，`gui` 則新增 `DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`、`group_add` 與 `/tmp/.X11-unix` 掛載。PR 範本新增截圖勾選項，`CONTRIBUTING.md` 說明合併前的人工驗證規則、機器標示與 Xvfb 實測結果。靜態測試核對各 service 的 GUI 宣告及兩份文件。Bats core 從 119 增至 126。
+- **GUI stage 設定與 PR 人工驗證規則（isaac#428）。** `setup.toml` 明確關閉 `producer` stage 的 GUI。在 `["stage:producer"]` 新增 `"gui.mode" = "off"` 後，產生的 `compose.yaml` 將 `producer` 從 `extends: {service: devel}` 改為完整列出 `args`、`env_file`、`privileged`、`cap_add`、`volumes`、`devices` 與 GPU `deploy` 設定，僅 `target`、`image`、`profiles`、`restart`、`tty` 與 `devel` 不同，其餘設定等價，功能不變，`headless` 與 `stream` 區塊不變，`gui` 則新增 `DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`、`group_add` 與 `/tmp/.X11-unix` 掛載。PR 範本新增截圖勾選項，`CONTRIBUTING.md` 說明合併前的人工驗證規則、機器標示與 Xvfb 實測結果。靜態測試核對各 service 的 GUI 宣告及兩份文件。Bats core 從 108 增至 115。
+- **每週追蹤官方 Isaac Sim 穩定版與測試清單（isaac#442）。** `Bot: Isaac Sim Version` 匿名查詢 NGC，發現新版時，若已有分支名稱或 issue 標題與 bot 在該版本使用的名稱完全相符，就略過更新。自動 PR 僅更新 Dockerfile 的 `BASE_IMAGE` pin，`README.md` 與 Dockerfile 註解中的版本號需人工同步。PR 列出測試清單差異，有變更時另開 issue；若無法取得清單，仍送出版本更新。也可手動指定比較版本。若 override 等於最新版而 Dockerfile 的 pin 較舊，追蹤器不會寫入任何變更，留待未指定 override 的排程更新 pin。版本比對只收三到四段、主版本不超過三位數的 tag，排除年份式舊命名（如 2022.2.1）。建立 PR 後以 workflow_dispatch 啟動 `main.yaml`（`GITHUB_TOKEN` 建立的 PR 不會觸發 pull_request）；`dry_run` 輸入可在 Dockerfile 已是最新版時預覽。前提：儲存庫需開啟「Allow GitHub Actions to create and approve pull requests」。新增 65 個測試（追蹤器、離線 run() 與 layer 解析、workflow）。Hosted baseline 809 -> 874（core 668 -> 733）。
 - **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 769 增至 803（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 90 增至 91。
 - **新增 stream smoke 在 GPU 主機忙碌時的診斷測試（isaac#497）。** 九個 Bats 案例涵蓋訊號埠或媒體埠被占用時提早失敗（有 `ss` 時也能偵測 UDP 媒體埠占用）、略過連接埠檢查、啟動與就緒時的主機負載及就緒耗時，以及逾時時回報就緒標記與連接埠占用者。stream 組由 81 增至 90 項。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
@@ -30,6 +35,7 @@
 - **新增 stream smoke 的 CI 路徑分組回歸測試（isaac#459）。** 測試逐一模擬只改一個相依檔案的 PR，要求每次都選到 `stream` 組。串流 Kit experience 與獨立 smoke 腳本應歸入 `stream`，共用的 entrypoint 與 `script/hooks/pre/*` 應選取全部組別。Hosted baseline 683 -> 691（core 642 -> 650）。
 - **headless stage 開機檢查（isaac#461）。** headless stage 之前只被 build、從來沒有被啟動過；base 的 compose 替它加 `restart: unless-stopped`，所以啟動指令一壞就是容器一直重啟，而 hosted pytest、bats、GPU 整合與串流 smoke 全部是綠的。新增 `script/ci/headless_smoke.sh`：以獨立 compose project 執行 `./script/run.sh -t headless -d`，在 settle 視窗（預設 20 秒）內要求 `State.Status == running` 且 `RestartCount == 0`（重啟迴圈中的容器在兩次重啟之間也是 running，所以不能只看 Status），結束時一律 `compose down`。新增 `ci-headless-smoke.yaml` 與 `main.yaml` 的 `headless-smoke` job（headless 組被選中時才跑，GPU runner、與 `core-gpu` 相同的 fork 防護），`gate` 的 needs 加入它。新增 `headless_smoke_spec.bats`（13 個）與 `test_headless_smoke_wiring.py`（6 個）。Hosted baseline 676 -> 683（core 642、headless 6）；bats headless 0 -> 13。
 ### Changed
+- **同一 PR 的新 CI run 會取消執行中的舊 run（closes isaac#491）。** Main CI/CD 依 PR 號碼將 PR run 分組。推送到 main、推送 tag、手動執行與 `merge_group` 事件則以 `github.run_id` 為每次 run 建立獨立群組，因此排隊中的 run 不會被後續 run 取代或取消。新增 19 個 core 測試案例，其中包含只修改文件目錄下的 HTML 或 PNG 檔案時，CI 只選取 `docs` 組的回歸測試。
 - **`IsaacDriver.run()` 改用 `isaacsim.SimulationApp` 啟動 Kit（isaac#479）。** 啟動前驗證 `ISAAC_LIVESTREAM`。`ISAAC_LIVESTREAM=1` 原本使用原生串流，現在與模式 2 選用相同的 WebRTC experience（行為變更）。串流由 experience 檔決定，啟動設定不再包含 `livestream` 鍵。開機擴充套件與 `ISAAC_KIT_EXTRA_ARGS` 透過 `extra_args` 傳入，保留呼叫端的 `sys.argv`。播放前啟用 #447 的 physics warm start 與 60 Hz 限速。新增 6 個 hosted 單元測試，以模擬的 `carb`、`omni` 與 `simulation_manager` 模組驗證 `_play_timeline`。GPU 測試以 PhysX、Newton 的 Jetbot 雙輪位移取代套件可用性檢查。Hosted 基準 716 → 725（core 623 → 632），GPU 基準 34 → 35。
 - **更新已搬移模型的路徑（isaac#363）。** 模型 README 依 sim_asset 的目錄結構列出 openbase、omwr 與 forklift_blocky 的位置。新增 11 項測試，hosted 單元測試基準由 725 提高至 736，docs 組由 68 提高至 79。
 - **縮小 `Co-authored-by` 的比對範圍（isaac#414）。** 共同作者的姓名僅含 Claude 時不再誤判，也能辨識版本號緊接模型名稱或以連字號相連的寫法，例如 `Claude Sonnet4.5`、`Claude Opus4` 和 `Claude-3`。
