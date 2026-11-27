@@ -29,9 +29,10 @@ def test_module_docstring_line_length():
         for number, line in enumerate(__doc__.splitlines(), start=1)
         if len(line) > 79
     ]
-    assert not offenders, "Module docstring exceeds 79 characters on " + ", ".join(
+    message = "Module docstring exceeds 79 characters on " + ", ".join(
         offenders
     )
+    assert not offenders, message
 
 
 @pytest.mark.parametrize(
