@@ -305,8 +305,9 @@
 #   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
 # isaac#376: the module docstring length check adds one core test (756 -> 757, core 648 -> 649).
 # isaac#359: test_standalone_smoke_matrix.py adds 7 core cases (757 -> 764, core 649 -> 656).
-# isaac#478: +18 scene / joint-drive hosted cases, all core (764 -> 782, core 656 -> 674).
-HOSTED_UNIT_BASELINE = 782
+# isaac#478: +18 scene / joint-drive hosted cases, +5 spawn_overrides contract
+#   cases, all core (764 -> 787, core 656 -> 679).
+HOSTED_UNIT_BASELINE = 787
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -340,8 +341,8 @@ HOSTED_UNIT_BASELINE = 782
 #   isaac#487 adds 16 core cases (core 632 -> 648).
 #   isaac#376 adds 1 core case (core 648 -> 649).
 #   isaac#359 adds 7 core cases (core 649 -> 656).
-#   isaac#478 adds 18 core cases (core 656 -> 674).
-HOSTED_UNIT_BASELINE_CORE = 674
+#   isaac#478 adds 23 core cases (core 656 -> 679).
+HOSTED_UNIT_BASELINE_CORE = 679
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
