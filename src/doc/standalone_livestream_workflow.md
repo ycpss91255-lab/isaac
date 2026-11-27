@@ -33,7 +33,7 @@ docker ps --filter 'name=<user>-isaac-stream' --format '{{.Names}} {{.Status}}'
 
 ```bash
 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/standalone_livestream_smoke.py
+    /home/<user>/work/src/script/standalone_livestream_smoke.py
 ```
 
 預期:30 秒內印 `[smoke] tick ...`、最後 `[smoke] DONE`、`Simulation App Shutting Down`,exit 0。
@@ -48,7 +48,7 @@ just docker exec -t stream /isaac-sim/python.sh \
 ```bash
 cd isaac_ws/src/docker
 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py
+    /home/<user>/work/src/script/<your_driver>.py
 ```
 
 - Kit 起動約 5–10 秒(看到 `<your_driver> 的 stage opened log` 表示 USD 載完)。
@@ -60,7 +60,7 @@ just docker exec -t stream /isaac-sim/python.sh \
 
 ```bash
 nohup just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py \
+    /home/<user>/work/src/script/<your_driver>.py \
     > /tmp/forklift.out 2>&1 &
 echo $! > /tmp/forklift.pid
 ```
@@ -71,7 +71,7 @@ echo $! > /tmp/forklift.pid
 
 ```bash
 timeout 75 just docker exec -t stream /isaac-sim/python.sh \
-    /home/yunchien/work/src/script/<your_driver>.py
+    /home/<user>/work/src/script/<your_driver>.py
 ```
 
 `timeout` 到時送 SIGTERM,driver 同樣攔到 → 乾淨退場。exit code 124(timeout)或 143(SIGTERM)都算 "timeout 結束",不代表 fail。
@@ -157,7 +157,7 @@ sys.exit(exit_code)
 關鍵點:
 
 - `SimulationApp(...)` **一定要先於**任何 `omni.*` / `pxr.*` import。
-- 所有 path 用 `Path(__file__).resolve().parent` 推算,**不要硬編** `/home/yunchien/work/src/...`。容器 mount 路徑、host 路徑、worktree 路徑都可能不同。
+- 所有 path 用 `Path(__file__).resolve().parent` 推算,**不要硬編** `/home/<user>/work/src/...`。容器 mount 路徑、host 路徑、worktree 路徑都可能不同。
 - SIGINT / SIGTERM handler **必裝**,否則 `Ctrl-C` 會半路死掉,Kit 留半開檔。
 - `tl.play()` 只在要 PhysX 模擬時呼叫。純 visual demo 可以不呼叫,sim_app.update() 仍會 tick render。
 
