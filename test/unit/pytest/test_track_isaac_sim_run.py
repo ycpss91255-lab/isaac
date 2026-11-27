@@ -115,6 +115,15 @@ def test_older_override_at_latest_pin_skips_writes(tracker, repo):
     _assert_no_writes(repo)
 
 
+def test_override_equal_to_latest_with_older_pin_skips_writes(tracker, repo):
+    tracker.stable_release.return_value = _LATEST
+    # Nothing is newer than the override, so leave the pin for the scheduled run.
+    tracker.run(_LATEST)
+
+    tracker.inventory_diff.assert_not_called()
+    _assert_no_writes(repo)
+
+
 def test_new_release_pushes_bump_and_opens_pr_and_inventory_issue(tracker, repo):
     tracker.run("")
 
