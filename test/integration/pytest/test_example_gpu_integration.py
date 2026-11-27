@@ -6,9 +6,8 @@ livestream -- bypasses IsaacSim#228) and makes the strong L1-L4 +
 Criteria) as committed test code.
 
 Scene source (#325): the official NVIDIA Jetbot USD fetched through the
-``test/test_assets.py`` helper (#341), NOT the bundled ``example/sim/``
-camera_bot, which is being removed. The assertions keep their meaning;
-only the scene (and so the expected prim paths / counts / topic) changed:
+``test/test_assets.py`` helper (#341). The assertions use the Jetbot prim paths,
+counts and topic:
 
 * L1 -- ``/World/Robot/chassis`` IsValid + RigidBodyAPI present +
   link/joint counts (3 links / 2 joints / root ``/jetbot``) on the live

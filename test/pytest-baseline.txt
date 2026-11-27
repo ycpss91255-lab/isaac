@@ -10,10 +10,10 @@
 #   (test/unit/pytest/, no Isaac Sim installed) must collect at least this
 #   many tests and pass them all. M1 gate floor per the DoD is 115; the
 #   count at extraction (#130) was 171 (121 ported + 50 greenfield). The
-#   example sim (#131) adds 14 hosted unit tests (test_example_driver.py:
+#   example sim (#131) added 14 hosted unit tests (removed in #327):
 #   three-file scene merge, expected base_link prim path, cmd_vel
 #   controller mapping, SCENE attr shape, run() lifecycle-order + SIGINT
-#   spy, import-safety). Live count was then 185. The scaffold (#134)
+#   spy, import-safety. Live count was then 185. The scaffold (#134)
 #   adds 23 hosted structure-check tests
 #   (test/unit/pytest/test_new_workspace_scaffold.py: run new-workspace.sh
 #   into a tmp dir and assert the A5 consumer layout -- 16 emitted-file
@@ -328,16 +328,18 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-HOSTED_UNIT_BASELINE = 705
+# isaac#327: retire 14 bundled-driver tests and add one removal guard, all core.
+#   Hosted 705 -> 692, core 664 -> 651.
+HOSTED_UNIT_BASELINE = 692
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
 #   hosted unit test belongs to exactly one group (pytestmark at module level,
 #   enforced at collection by test/group_markers.py and statically by
-#   script/ci/scope_groups.py), so the six floors below sum to
+#   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
 #   collects each group with `-m <group>` and checks it against its own floor.
-#   A group with no tests yet (gui / headless) has floor 0.
+#   The gui group has no hosted tests yet and has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py
 #   docs     -- test_producer_versions.py, test_no_ai_attribution.py
@@ -351,7 +353,7 @@ HOSTED_UNIT_BASELINE = 705
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 664
+HOSTED_UNIT_BASELINE_CORE = 651
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6

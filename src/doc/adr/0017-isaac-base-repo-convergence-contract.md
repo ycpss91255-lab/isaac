@@ -1,8 +1,8 @@
 # Isaac Base Repo Convergence: `isaac_devkit` Contract, Scene/Sensor Schema, and Test Contract
 
 This repo converges from a research+env monorepo into the Isaac robot-simulation **base repo**:
-env (Dockerfile / `.base` / compose) + a mounted `isaac_devkit` Python framework + one
-ROS2-by-default bidirectional example. Application content (the forklift scenario and its
+env (Dockerfile / `.base` / compose) + a mounted `isaac_devkit` Python framework +
+ROS 2 application templates. Application content (the forklift scenario and its
 models / drivers / scenes) migrates to `ycpss91255-research/isaac-forklift` (#136). The full
 rationale lives in the convergence PRD (`doc/PRD-template-convergence.draft.md`); this ADR is
 the **committed architecture contract** (PRD "Finalized Issue Breakdown" row 2, issue #128):
@@ -10,7 +10,7 @@ consumers code against the final shape from day one, while the implementation gr
 incrementally behind it (schema locked, implementation incremental; unimplemented paths raise
 `NotImplementedError`).
 
-Running example throughout: **camera-bot** — a minimal robot (one chassis body, one camera on
+Schema illustration throughout: **camera-bot** — a minimal robot (one chassis body, one camera on
 `base_link`) that publishes a ROS 2 camera topic and consumes `/cmd_vel`. It replaces the
 forklift as the generic example so that base-repo documents carry no application vocabulary.
 
@@ -18,11 +18,11 @@ forklift as the generic example so that base-repo documents carry no application
 
 ### 1. Base-repo positioning
 
-The repo's role mirrors `ycpss91255-docker/base`: it contains a runnable example, but its
-primary job is to be the foundation that downstream scenario repos consume. Consumption model
+The repo provides the foundation for downstream scenario repos. Simulation examples come
+from NVIDIA Isaac Sim (#327). Consumption model
 (PRD A6, decided): a parent workspace holds `src/docker` (a **git submodule** pinned to a
 semver tag of this repo) next to `src/isaac` (the consumer's own robot content); the whole
-workspace mounts into the container. `new-workspace.sh` scaffolds this in one step (#134).
+workspace mounts into the container. The workspace scaffold was retired in #326.
 Target state: zero application-specific content in base (purity grep, M3 metric, enforced in
 #137 after the migration in #136).
 
@@ -133,7 +133,7 @@ three tiers -> `SensorNotFoundError`; unimplemented sensor paths -> `NotImplemen
 > The technical implementation choice described below (OmniGraph nodes, not
 > rclpy executors) is unchanged.
 
-Two-sided topology, structurally embodied in the example (#131/#133):
+The cross-container Jetbot test (#325) exercises both sides of the topology:
 
 - **Isaac side**: the driver runs via `/isaac-sim/python.sh` in the Isaac container (it cannot
   be an ament package — Isaac's bundled Python rules that out). Outbound: `sensors` builds the
@@ -155,7 +155,7 @@ subclasses (controller abstraction deferred until a third robot — Rule of Thre
 | Lint | ShellCheck / Hadolint / ruff / mypy / ament_lint, zero tolerance | hosted |
 | Smoke | env + wrapper + hooks (bats) | hosted |
 | Unit | framework pure surface + import-safety, no Isaac | hosted |
-| Integration | the example end-to-end **only** | self-hosted GPU |
+| Integration | end-to-end Isaac scenes using official assets | self-hosted GPU |
 
 **Pytest parity baseline = 126** (115 unit + 11 integration). The framework extraction (#130)
 ports the existing pytest suites to `isaac_devkit.*` with external-behavior assertions

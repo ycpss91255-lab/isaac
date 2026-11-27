@@ -13,8 +13,7 @@ The runner subclasses the framework ``IsaacDriver`` and walks the same
 SCENE-driven lifecycle the removed example driver did (``SimulationApp``
 -> signal handlers -> build_scene -> camera -> ros2_io -> defaults ->
 play -> setup -> main -> shutdown -> close); ``setup`` / ``main`` make the
-integration assertions and print markers. The scene is an in-memory dict
-(no ``example/sim/`` files).
+integration assertions and print markers. The scene is an in-memory dict.
 
 Marker lines (the pytest layer asserts on these)::
 

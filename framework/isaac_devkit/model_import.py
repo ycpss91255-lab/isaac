@@ -1008,20 +1008,10 @@ def parse_urdf_expected(urdf_path, usd_path="", merge_fixed_joints=True):
     expectation against which the GPU-side ``import_urdf`` actual is
     compared (ADR-0017 section 7, L1 "diff = 0" -- M2 scope).
 
-    NOTE (ADR-0018 decision 6 -- L1 recalibration pending GPU run): the
-    actual import is now done by Isaac Lab's ``UrdfConverter`` (see
-    ``import_urdf``), which MAY name prims, scope the instanceable
-    wrapper, or count synthetic fixed joints (e.g. the ``fix_base``
-    ``root_joint``) differently from both this pure prediction and the
-    legacy ``omni.kit.commands`` importer. The authoritative L1 diff=0
-    assertion is committed-USD-vs-fresh-import (see
-    ``test_l1_urdf_to_usd_diff_zero``); this pure helper intentionally
-    stays the looser structural prediction. The camera_bot baseline the
-    GPU suite asserts (2 links / 2 joints / root ``/camera_bot``) may
-    need a ONE-LINE recalibration here or in the GPU test's
-    ``EXPECTED_*`` constants once the first Isaac-Lab GPU integration run
-    reports actual-vs-expected. Do not pre-emptively change the pure unit
-    expectations without that GPU evidence.
+    Isaac Lab's ``UrdfConverter`` can name prims, scope the instanceable
+    wrapper or count synthetic fixed joints (such as the ``fix_base``
+    ``root_joint``) differently from this prediction. The GPU tests in
+    ``test_model_import.py`` check the imported USD hierarchy.
 
     Conventions mirrored from the Isaac URDF importer:
 

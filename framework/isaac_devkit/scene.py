@@ -432,9 +432,8 @@ def _orientation_xyzw(wxyz):
     Passing (w, x, y, z) straight through therefore rotates every spawned prim.
     For the common ``rpy: [0, 0, 0]`` it sends (1, 0, 0, 0), which reads as
     x=1, w=0 -- a 180-degree rotation about X. The whole scene spawns
-    upside-down: authored z becomes -z. It went unnoticed because the example
-    scene's only object is a symmetric cube and the GPU tests assert prim
-    structure, not pose.
+    upside-down: authored z becomes -z. A symmetric cube can hide this
+    rotation, so the GPU test checks the authored orientation.
 
     PURE (no Isaac import) so the reorder is unit-testable on the host.
     """
@@ -541,8 +540,7 @@ def _materialize_cfg(sim_utils, spec):
         # base repo runs OFFLINE (no nucleus): that path resolves to None and
         # the spawn dies with ArgumentError GetPrimAtPath(Stage, NoneType).
         # Spawn a procedural collision cuboid floor instead -- fully
-        # offline-safe, no external asset (same principle as the example's
-        # asset-free custom camera). A caller that genuinely has a ground USD
+        # offline-safe, no external asset. A caller that has a ground USD
         # can pass ``usd_path`` via ``environment.ground_overrides`` -> a
         # UsdFileCfg path, but the default is procedural.
         kwargs = dict(spec.kwargs)
@@ -566,7 +564,7 @@ def _materialize_cfg(sim_utils, spec):
         # ``_apply_mobility_physics``, NOT via UsdFileCfg props. Isaac Lab's
         # UsdFileCfg ``rigid_props`` / ``collision_props`` go through
         # ``schemas.modify_*`` -- they only EDIT an EXISTING RigidBodyAPI, so
-        # they cannot turn a geometry-only USD (the prop_cube) into a rigid
+        # they cannot turn a geometry-only USD into a rigid
         # body. The three-file schema declares mobility at the SCENE
         # (object.yaml: "physics level declared at the scene, not baked into
         # the model"), so build_scene applies the schema itself after spawn.
@@ -587,9 +585,8 @@ def _apply_mobility_physics(spec, stage):
       * ``static``  -> ``CollisionAPI`` only (a static collider);
       * ``None``     -> nothing.
 
-    Physics is only authored here (the example uses the timeline loop, not a
-    stepped ``SimulationContext``); collider-on-mesh refinement is deferred
-    with the simulation stepping.
+    This function authors physics properties on the stage. Simulation stepping
+    is the caller's responsibility.
     """
     if spec.kind != "usd" or spec.mobility is None or stage is None:
         return

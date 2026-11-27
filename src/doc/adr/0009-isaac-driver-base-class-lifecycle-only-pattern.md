@@ -34,11 +34,11 @@ Isaac Sim 5.1 的 3-way signal handler 衝突（Kit handler + driver handler + r
 
 ### USD 路徑: repo-relative（不是絕對 hardcode）
 
-現有 3/4 driver hardcode `/home/yunchien/work/src/model/...`，綁死容器 mount 點。改為 subclass 設 repo-relative path（如 `"model/usd/robot/camera_bot/camera_bot.usda"`），base class 從 `__file__` 推算 repo root 後 resolve。
+現有 3/4 driver hardcode `/home/yunchien/work/src/model/...`，綁死容器 mount 點。改為 subclass 設 repo-relative path（如 `"model/usd/robot/my_robot.usda"`），base class 從 `__file__` 推算 repo root 後 resolve。
 
 ### Scene defaults: base class 預設補建（opt-out）
 
-3/4 driver 在 stage open 後補建 SunLight + GroundPlane。Base class 預設補建，先 `GetPrimAtPath().IsValid()` 檢查再建 — 已存在時 skip，對自帶 scene 的 USD（如 camera-bot example）無副作用。
+3/4 driver 在 stage open 後補建 SunLight + GroundPlane。Base class 預設補建，先 `GetPrimAtPath().IsValid()` 檢查再建 — 已存在時 skip，對自帶 scene 的 USD 無副作用。
 
 ### 模組位置: `script/isaac_driver.py`（flat）
 
