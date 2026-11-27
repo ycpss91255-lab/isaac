@@ -65,8 +65,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ISAAC_RUNNER = Path(__file__).parent / "_cross_container_runner.py"
 ROS2_WS = REPO_ROOT / "example" / "ros2"
 
-# Explicit repo bind mount used for the runner, --repo-root and cached assets.
-CONTAINER_WORK = "/workspace/isaac"
+# Container-side repo bind mount under the invoking user's home (same location
+# as before; used for the runner, --repo-root and cached assets).
+CONTAINER_WORK = f"/home/{os.environ.get('USER') or os.environ.get('LOGNAME') or 'user'}/work"
 
 PYTHON_SH = "/isaac-sim/python.sh"
 ROS_IMAGE = "ros:humble"
