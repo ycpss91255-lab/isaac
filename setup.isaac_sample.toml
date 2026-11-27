@@ -65,7 +65,7 @@ target = "/home/${USER_NAME}/Documents"
 
 # Mount sim_asset or another repository of converted USD models read-only.
 # Keep this container location fixed so scene and model paths resolve the same
-# way on every machine. Pass the scene per run with `just run scene`.
+# way on every machine.
 [[volumes]]
 source = "${WS_PATH}/sim_asset"
 target = "/home/${USER_NAME}/models/sim_asset"

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **修正四種語言 README 中已刪除 checkout 的清理步驟（isaac#381）。** 從容器標籤確認 compose project，並在強制移除容器的指令旁註明僅限 checkout 已不存在時使用。補充每個 stage tag 的名義大小，以及共用層對實際回收空間的影響。
 - **`core-build` 不再匯出或匯入 GHA buildx cache（isaac#411）。** Isaac 映像層超過儲存庫的 10 GB 快取上限，導致快取無法命中（isaac#364）。停用快取可避免重複傳輸這些映像層，預期每次建置可縮短 20 到 40 分鐘。
 - **修正 Dockerfile 與 ADR-0005、ADR-0007 對串流啟動的描述（isaac#473、#485）。** 透過 `SimulationApp` 載入 `full.streaming.kit` 後發生 segfault 是 Isaac Sim 5.1.0 的觀察。在 6.2.0.1 上，3/3 次非 root 測試皆成功啟動伺服器並正常結束，Kit 記錄 `Started primary stream server on signal port 49521`。未測試用戶端連線或預設連接埠 49100。
 - **四種語言的 README、操作文件與註解統一使用 rc7 命名（isaac#458）。** 設定範例對齊 `setup.toml` 的表格與欄位，本機覆寫檔為 `setup.local.toml`。建置、啟動、執行與停止容器的範例改用 `just docker` 指令。`core-unit` CI 在 checkout 後執行命名檢查，掃描 Git 追蹤的文字檔。
@@ -10,7 +11,9 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。Hosted baseline 647 -> 663（core 602 -> 618）。
+
+- **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 651 -> 667（core 602 -> 618，docs 24）。
+- **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。
 - **新增 ADR-0026，記錄移除 Isaac Lab 相依性的決策（isaac#476）。** `isaac` 維持官方 Isaac Sim 基底映像，URDF 由 `asset_converter` 轉成 USD，需要 Isaac Lab 的使用者改用 `isaac_lab`。實作由 #477 至 #480 接續。新增 `test/unit/pytest/test_adr_drop_isaac_lab.py` 的 4 個 docs 測試，檢查新決策與舊 ADR 的註記。Hosted baseline 642 -> 646（docs 16 -> 20）。
 - **新增 stream smoke 的 CI 路徑分組回歸測試（isaac#459）。** 測試逐一模擬只改一個相依檔案的 PR，要求每次都選到 `stream` 組。串流 Kit experience 與獨立 smoke 腳本應歸入 `stream`，共用的 entrypoint 與 `script/hooks/pre/*` 應選取全部組別。Hosted baseline 683 -> 691（core 642 -> 650）。
 - **headless stage 開機檢查（isaac#461）。** headless stage 之前只被 build、從來沒有被啟動過；base 的 compose 替它加 `restart: unless-stopped`，所以啟動指令一壞就是容器一直重啟，而 hosted pytest、bats、GPU 整合與串流 smoke 全部是綠的。新增 `script/ci/headless_smoke.sh`：以獨立 compose project 執行 `./script/run.sh -t headless -d`，在 settle 視窗（預設 20 秒）內要求 `State.Status == running` 且 `RestartCount == 0`（重啟迴圈中的容器在兩次重啟之間也是 running，所以不能只看 Status），結束時一律 `compose down`。新增 `ci-headless-smoke.yaml` 與 `main.yaml` 的 `headless-smoke` job（headless 組被選中時才跑，GPU runner、與 `core-gpu` 相同的 fork 防護），`gate` 的 needs 加入它。新增 `headless_smoke_spec.bats`（13 個）與 `test_headless_smoke_wiring.py`（6 個）。Hosted baseline 676 -> 683（core 642、headless 6）；bats headless 0 -> 13。
