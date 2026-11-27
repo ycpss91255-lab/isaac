@@ -28,6 +28,7 @@ pytestmark = pytest.mark.core
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT_DIR = _REPO_ROOT / "src" / "script"
 _HELPER = _SCRIPT_DIR / "standalone_common.py"
+_HARD_CODED_HOME = re.compile(r"/home/[^/\s<>]+/")
 
 # The four standalone scripts the README tells a new user to run.
 _README_SCRIPTS = (
@@ -145,7 +146,13 @@ def test_script_does_not_use_removed_dynamic_control(name):
 @pytest.mark.parametrize("name", _README_SCRIPTS)
 def test_script_has_no_hard_coded_home(name):
     source = (_SCRIPT_DIR / name).read_text(encoding="utf-8")
-    assert not re.search(r"/home/[^/\n]+/work", source)
+    assert not _HARD_CODED_HOME.search(source)
+
+
+def test_standalone_smoke_has_no_hard_coded_workspace():
+    source = (_SCRIPT_DIR / "test" / "standalone_smoke.sh").read_text(encoding="utf-8")
+    assert not _HARD_CODED_HOME.search(source)
+    assert "coreSAM_ws" not in source
 
 
 @pytest.mark.parametrize("name", _README_SCRIPTS)

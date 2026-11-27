@@ -2,7 +2,6 @@
 
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -14,7 +13,6 @@ pytestmark = pytest.mark.core
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = "script/ci/check_forbidden_names.py"
-needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="requires git")
 
 
 def scan(root, names, *flags):
@@ -47,7 +45,6 @@ def checkout(tmp_path):
     return tmp_path
 
 
-@needs_git
 @pytest.mark.parametrize("flags", [(), ("--allow-unset",)], ids=["strict", "allow-unset"])
 def test_hits_report_only_locations_and_pattern_indices(checkout, flags):
     (checkout / "tracked notes.txt").write_text(
@@ -70,12 +67,10 @@ def test_hits_report_only_locations_and_pattern_indices(checkout, flags):
     assert indices in ({2: 1, 3: 0}, {2: 2, 3: 1})
 
 
-@needs_git
 def test_clean_tracked_files_pass_despite_base_and_untracked_hits(checkout):
     assert scan(checkout, "fixture-account").returncode == 0
 
 
-@needs_git
 @pytest.mark.parametrize("names", [None, "", " , , "], ids=["unset", "empty", "empty-items"])
 def test_missing_names_require_explicit_skip(checkout, names):
     strict = scan(checkout, names)
@@ -87,7 +82,6 @@ def test_missing_names_require_explicit_skip(checkout, names):
     assert "SKIPPED: FORBIDDEN_NAMES not set" in optional.stdout.splitlines()
 
 
-@needs_git
 def test_git_error_is_reported(tmp_path, monkeypatch):
     monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
     result = scan(tmp_path, "fixture-account")
@@ -95,11 +89,39 @@ def test_git_error_is_reported(tmp_path, monkeypatch):
     assert "git" in result.stderr.lower()
 
 
-@needs_git
 def test_checkout_has_no_forbidden_names():
-    names = ",".join(("yun" + "chien", "yu" + "lin"))
+    names = os.environ.get("FORBIDDEN_NAMES", "")
+    if not names.strip():
+        result = scan(None, None, "--allow-unset")
+        assert result.returncode == 0
+        assert "SKIPPED: FORBIDDEN_NAMES not set" in result.stdout.splitlines()
+        return
+
     result = scan(None, names)
     assert result.returncode == 0, result.stdout
+
+
+def test_baseline_script_gives_core_group_git_and_forbidden_names():
+    script = (ROOT / "test/assert_pytest_baseline.sh").read_text()
+    image = re.search(r'^PY_IMAGE="\$\{PY_IMAGE:-([^}]+)\}"$', script, re.MULTILINE)
+    assert image, "Missing PY_IMAGE default"
+    assert not image.group(1).endswith(("-slim", "-alpine"))
+
+    # The GPU gate already checks its own JUnit report for skipped tests.
+    hosted = script.partition("# default mode: hosted-unit")[2]
+    assert "-e FORBIDDEN_NAMES" in hosted
+    assert "--junitxml" in hosted
+    assert re.search(r"\bskipped\b", hosted)
+
+
+def test_core_unit_hosted_pytest_receives_forbidden_names():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/main.yaml").read_text())
+    steps = workflow["jobs"]["core-unit"]["steps"]
+    hosted = next(
+        step for step in steps
+        if step.get("name") == "Hosted core-group pytest + group floor + coverage gate"
+    )
+    assert hosted.get("env", {}).get("FORBIDDEN_NAMES") == "${{ vars.FORBIDDEN_NAMES }}"
 
 
 def test_core_unit_runs_forbidden_names_scan_immediately_after_stale_naming():

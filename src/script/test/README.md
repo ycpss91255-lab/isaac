@@ -2,7 +2,7 @@
 
 Integration smoke for `isaac_ws/src/script/*_standalone.py`. Each script
 must reach its "ready marker" within a timeout when run through
-`just docker exec -t stream /isaac-sim/python.sh <script>`. The runner
+`just docker exec -t standalone /isaac-sim/python.sh <script>`. The runner
 launches the script, polls its stdout for the marker, kills the run
 once seen, and reports PASS / FAIL per case.
 
@@ -23,7 +23,7 @@ once seen, and reports PASS / FAIL per case.
 
 Pre-requisites:
 
-- `just docker run -t stream -d` succeeds (smoke auto-runs it if container is down)
+- `just docker run -t standalone -d` succeeds (smoke auto-runs it if container is down)
 - The curated `isaac_ws/src/model/usd/robot/openbase/openbase.usda` is tracked in
   the repo; the USD-dependent cases use it directly. If the file is
   missing (incomplete checkout / accidental delete), regenerate from the
@@ -31,9 +31,9 @@ Pre-requisites:
 
   ```bash
   cd isaac_ws/src/docker
-  just docker exec -t stream /isaac-sim/python.sh \
-      /home/<user>/work/src/script/import_urdf.py \
-      /home/<user>/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
+  just docker exec -t standalone /isaac-sim/python.sh \
+      "${HOME}/work/src/script/import_urdf.py" \
+      "${HOME}/work/src/model/urdf/robot/openbase/openbase_minimal.urdf" \
       /tmp/openbase_generated.usda
   ```
 
@@ -83,8 +83,7 @@ succeeded.
 
 ## Why this dir, not isaac_ws/src/docker/test/
 
-`isaac_ws/src/docker/test/` belongs to the docker repo
-(`ycpss91255-lab/isaac`) and tests the container image / wrappers,
+`isaac_ws/src/docker/test/` belongs to the docker repo and tests the container image / wrappers,
 not the scripts that run inside it. The standalone scripts live in
-`isaac_ws/src/script/` (this repo, `ycpss91255-lab/isaac`); their smoke
+`isaac_ws/src/script/`; their smoke
 lives alongside them so it travels with them.

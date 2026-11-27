@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test for isaac_ws/src/script/*_standalone.py
 #
-# For each standalone script: launch via just docker exec -t stream, watch
+# For each standalone script: launch via just docker exec -t standalone, watch
 # stdout for the script's "ready marker" phrase, kill once seen. If the
 # marker doesn't appear within TIMEOUT, the case fails.
 #
@@ -18,7 +18,7 @@
 # Exit codes:
 #   0 = all PASS (SKIPped cases tolerated by default)
 #   1 = at least one FAIL
-#   2 = pre-flight failure (checkout unavailable / stream container won't start)
+#   2 = pre-flight failure (docker dir missing / standalone container won't start)
 #
 # Flags:
 #   --strict       Treat SKIP as FAIL (e.g. CI where USD must be pre-generated).
@@ -33,8 +33,11 @@
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)" || exit 2
-USD_HOST="$REPO_ROOT/src/model/usd/robot/openbase/openbase.usda"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+DOCKER_DIR="${REPO_ROOT}/script"
+SCRIPT_PATH_IN_CONTAINER="${HOME}/work/src/script"
+USD_HOST="${REPO_ROOT}/src/model/usd/robot/openbase/openbase.usda"
+CONTAINER="${SMOKE_CONTAINER:-$(id -un)-isaac-standalone}"
 
 # Smoke matrix: <basename>|<grep-marker>|<timeout-sec>|<needs-usd>
 CASES=(
@@ -59,13 +62,16 @@ while (( $# > 0 )); do
 done
 
 # Pre-flight ---------------------------------------------------------
-cd "$REPO_ROOT" || exit 2
+if [[ ! -d "$DOCKER_DIR" ]]; then
+  echo "FAIL: docker dir missing: $DOCKER_DIR" >&2
+  exit 2
+fi
 
-# The exec wrapper checks the stream service in this checkout's Compose project.
-if ! just docker exec -T -t stream true >/dev/null 2>&1; then
-  echo "[smoke] starting stream container..."
-  just docker run -t stream -d >/dev/null 2>&1 || {
-    echo "FAIL: just docker run -t stream -d failed" >&2
+# Bring standalone up if needed (no-op if already running)
+if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
+  echo "[smoke] starting standalone container..."
+  "$DOCKER_DIR/run.sh" -t standalone -d >/dev/null 2>&1 || {
+    echo "FAIL: just docker run -t standalone -d failed" >&2
     exit 2
   }
   sleep 3
@@ -86,8 +92,8 @@ _run_case() {
   tmp="$(mktemp)"
 
   # Launch script in background; capture stdout+stderr to tmp.
-  just docker exec -T -t stream /isaac-sim/python.sh \
-    "src/script/$script" > "$tmp" 2>&1 &
+  "$DOCKER_DIR/exec.sh" -t standalone /isaac-sim/python.sh \
+    "$SCRIPT_PATH_IN_CONTAINER/$script" > "$tmp" 2>&1 &
   local exec_pid=$!
 
   local elapsed=0 result="FAIL"
@@ -108,7 +114,8 @@ _run_case() {
   # docker exec doesn't propagate SIGTERM to the remote process, so kill
   # remote explicitly too.
   kill -TERM "$exec_pid" 2>/dev/null
-  just docker exec -T -t stream pkill -TERM -f "src/script/$script" 2>/dev/null
+  docker exec "$CONTAINER" bash -c \
+    'pkill -TERM -f /isaac-sim/python.sh' 2>/dev/null
   wait "$exec_pid" 2>/dev/null
 
   if [[ "$result" == "FAIL" ]]; then

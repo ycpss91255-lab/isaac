@@ -32,14 +32,14 @@
 #   test/assert_pytest_baseline.sh --group <g>
 #       hosted-unit for ONE scope group (isaac#434): runs `pytest -m <g>` and
 #       checks that group against its own floor HOSTED_UNIT_BASELINE_<G>. The
-#       framework coverage gate applies to `core` (the group that exercises
-#       isaac_devkit); the total and group-sum checks need every group, so they
-#       only run in the default full mode. Not valid with --gpu.
+#       core group also enforces framework coverage and fails if any test is
+#       skipped. The total and group-sum checks need every group, so they only
+#       run in the default full mode. Not valid with --gpu.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BASELINE_FILE="${REPO_ROOT}/test/pytest-baseline.txt"
-PY_IMAGE="${PY_IMAGE:-python:3.12-slim}"
+PY_IMAGE="${PY_IMAGE:-python:3.12}"
 
 ALL_GROUPS="core gui stream headless docs"
 MODE="hosted"
@@ -306,7 +306,7 @@ if [[ -z "${baseline}" ]]; then
 fi
 echo "hosted-unit baseline = ${baseline}"
 
-# Run pytest with coverage inside the slim Python container. cd framework
+# Run pytest with coverage inside the Python container with git. cd framework
 # so coverage picks up [tool.coverage] from framework/pyproject.toml.
 #
 # Run the container as the host user (--user + HOME=/tmp). The repo is
@@ -330,14 +330,27 @@ if [[ -n "${GROUP}" ]]; then
   PYTEST_SELECT="-m ${GROUP}"
   [[ "${GROUP}" == "core" ]] || PYTEST_COV=""
 fi
-docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
+docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${GROUP}" \
   -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
   set -eu
   pip install --quiet --user pyyaml pytest pytest-cov xacro numpy
   cd framework
+  if [ "${GROUP}" = core ]; then
+    set -- --junitxml=/tmp/hosted-junit.xml
+  fi
   rc=0
   python -m pytest ../test/unit/pytest/ '"${PYTEST_SELECT}"' \
-    -p no:cacheprovider '"${PYTEST_COV}"' || rc=$?
+    -p no:cacheprovider "$@" '"${PYTEST_COV}"' || rc=$?
+  if [ "${GROUP}" = core ]; then
+    python - <<"PY"
+import sys
+import xml.etree.ElementTree as ET
+
+report = ET.parse("/tmp/hosted-junit.xml")
+if any(int(suite.attrib["skipped"]) > 0 for suite in report.iter("testsuite")):
+    sys.exit("core group has skipped tests (a skipped test is not a pass)")
+PY
+  fi
   # rc 5: no tests collected (an empty group); checked against its floor below.
   [ "${rc}" -eq 0 ] || [ "${rc}" -eq 5 ] || exit "${rc}"
 '
@@ -349,7 +362,7 @@ docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
 # counts as 0.
 GROUPS_LIST="${GROUP:-${ALL_GROUPS}}"
 counts="$(
-  docker run --rm --user "${RUN_AS}" -e HOME=/tmp \
+  docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES \
     -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
     set -eu
     pip install --quiet --user pyyaml pytest xacro numpy >/dev/null

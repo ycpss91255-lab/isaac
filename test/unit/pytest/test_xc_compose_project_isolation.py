@@ -66,7 +66,8 @@ def test_default_compose_project_is_the_dedicated_one(monkeypatch):
     assert _load_xc_default(monkeypatch) == DEDICATED_PROJECT
 
 
-def test_default_compose_project_is_isolated_from_the_stream_stack(monkeypatch):
+@pytest.mark.parametrize("user", ["alice", "bob"])
+def test_default_compose_project_is_isolated_from_the_stream_stack(monkeypatch, user):
     """The default is distinct from any real stream-stack compose project.
 
     Asserts the ISOLATION INTENT, not just the literal: it must not equal the
@@ -74,10 +75,11 @@ def test_default_compose_project_is_isolated_from_the_stream_stack(monkeypatch):
     ``${DOCKER_HUB_USER}-${IMAGE_NAME}``-style derivation (which would still
     coincide with the stream stack and defeat the fix).
     """
-    monkeypatch.setenv("DOCKER_HUB_USER", "alice")
+    monkeypatch.setenv("DOCKER_HUB_USER", user)
     monkeypatch.setenv("IMAGE_NAME", "isaac")
     default = _load_xc_default(monkeypatch)
     assert default != STREAM_STACK_PROJECT
+    assert default != f"{user}-isaac"
 
 
 def test_xc_compose_project_env_override_still_wins(monkeypatch):

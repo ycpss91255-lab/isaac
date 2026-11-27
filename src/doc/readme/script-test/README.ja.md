@@ -1,6 +1,6 @@
 # Standalone scripts smoke
 
-`isaac_ws/src/script/*_standalone.py` の統合 smoke テスト。各スクリプトは `just docker exec -t stream /isaac-sim/python.sh <script>` 経由で実行したとき、タイムアウト内に対応する "ready marker" 文字列を出力しなければいけません。Runner はスクリプトを起動し、stdout を marker でポーリング、見つけ次第ジョブを片付け、各 case の PASS / FAIL を報告します。
+`isaac_ws/src/script/*_standalone.py` の統合 smoke テスト。各スクリプトは `just docker exec -t standalone /isaac-sim/python.sh <script>` 経由で実行したとき、タイムアウト内に対応する "ready marker" 文字列を出力しなければいけません。Runner はスクリプトを起動し、stdout を marker でポーリング、見つけ次第ジョブを片付け、各 case の PASS / FAIL を報告します。
 
 **[English](../../../script/test/README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
 
@@ -19,14 +19,14 @@
 
 前提:
 
-- `just docker run -t stream -d` が成功すること(container が起きていない場合 smoke が自動で起動します)
+- `just docker run -t standalone -d` が成功すること(container が起きていない場合 smoke が自動で起動します)
 - リポジトリには `isaac_ws/src/model/usd/robot/openbase/openbase.usda` が track されており、USD 依存 case はそれを直接使います。もし checkout 不完全や誤削除で当該ファイルが無ければ、repo 内の URDF ソースから再生成してください:
 
   ```bash
   cd isaac_ws/src/docker
-  just docker exec -t stream /isaac-sim/python.sh \
-      /home/<user>/work/src/script/import_urdf.py \
-      /home/<user>/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
+  just docker exec -t standalone /isaac-sim/python.sh \
+      "${HOME}/work/src/script/import_urdf.py" \
+      "${HOME}/work/src/model/urdf/robot/openbase/openbase_minimal.urdf" \
       /tmp/openbase_generated.usda
   ```
 
@@ -64,4 +64,4 @@ Standalone scripts は kit + livestream + rclpy subscriber を起動します。
 
 ## なぜこのディレクトリ、`isaac_ws/src/docker/test/` ではないのか
 
-`isaac_ws/src/docker/test/` は docker repo(`ycpss91255-lab/isaac`)に属し、container image / wrapper をテストします。container 内で動くスクリプトはテストしません。Standalone scripts は `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`)に住み、smoke はそれと一緒に置かれていて、移動時も一緒に動きます。
+`isaac_ws/src/docker/test/` は docker repoに属し、container image / wrapper をテストします。container 内で動くスクリプトはテストしません。Standalone scripts は `isaac_ws/src/script/`に住み、smoke はそれと一緒に置かれていて、移動時も一緒に動きます。
