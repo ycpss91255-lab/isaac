@@ -438,7 +438,9 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   The OutputHub GPU delivery test (#365 part 2) adds 4 in-container
 #   (test_output_hub_gpu.py: RGB uint8 (H,W,3), depth float32 (H,W), joint
 #   state, IMU w,x,y,z, all from one runner boot). +4 on top of main (32 -> 36, a ratchet UP).
-#   NOT executed locally; first proof is the CI gpu-integration job.
+#   Executed on a real GPU (isaac#384, Isaac Sim 6.2.0.1, devel-test image):
+#   4 passed / 0 skipped, so the 4 count as passed, not skipped; the GPU
+#   baseline equals the collected count (no raise needed).
 # isaac#326 unit 1: test_scaffold_smoke.py (3 tests) removed with the scaffold
 #   -- intentional ratchet DOWN 35 -> 32.
 # isaac#422: test_kit_extra_args_integration.py (2 tests) -- ratchet UP 36 -> 38.
@@ -466,9 +468,9 @@ AGGREGATE_TARGET = 126
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
-#   isaac#430 removes 11 core bats tests (119 -> 108).
-# isaac#436: gpu_job_scripts_spec 7 -> 12 raises core from 108 to 113.
-BATS_BASELINE_CORE = 113
+#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115).
+#   isaac#436: gpu_job_scripts_spec 7 -> 12 raises core from 115 to 120.
+BATS_BASELINE_CORE = 120
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13
