@@ -363,6 +363,28 @@ YAML
   [ "$(grep -c '^\[smoke\] load: ' <<< "${output}")" -ge 2 ]
 }
 
+@test "stream_smoke: a UDP-only media holder stops bring-up (isaac#497)" {
+  export SMOKE_LIB="${BATS_TEST_DIRNAME}/stream_smoke_lib.sh"
+  local port=47998
+  while (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null ||
+        (exec 3<>"/dev/tcp/127.0.0.1/$((port + 1))") 2>/dev/null; do
+    port=$((port + 2))
+  done
+  export ISAAC_MEDIA_PORT="${port}" ISAAC_SIGNAL_PORT="$((port + 1))"
+  cat > "${FAKE}/bin/ss" <<'STUB'
+#!/usr/bin/env bash
+if [[ " $* " == *" sport = :${ISAAC_MEDIA_PORT} "* &&
+      " $* " =~ [[:space:]](-[[:alpha:]]*u[[:alpha:]]*|--udp)[[:space:]] ]]; then
+  printf 'udp UNCONN 0 0 0.0.0.0:%s 0.0.0.0:*\n' "${ISAAC_MEDIA_PORT}"
+fi
+STUB
+  run "${FAKE}/script/ci/stream_smoke.sh"
+
+  [ "${status}" -ne 0 ]
+  [[ "${output}" == *"[smoke] FAIL: port ${ISAAC_MEDIA_PORT} already in use by udp UNCONN"* ]]
+  [ ! -e "${RUN_ARGS_FILE}" ]
+}
+
 @test "stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)" {
   export ISAAC_SIGNAL_PORT=49291 STUB_BUSY_PORT=49291 SMOKE_SKIP_PORT_PREFLIGHT=1
   export STUB_PORT_MAPPINGS='other-stream 0.0.0.0:49291->49100/tcp'

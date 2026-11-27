@@ -45,7 +45,10 @@ if [[ -z "${SMOKE_DROP_REGEX:-}" ]]; then
 fi
 
 smoke_port_in_use() {
-  (exec 3<>"/dev/tcp/127.0.0.1/${1:?missing port}") 2>/dev/null
+  local port="${1:?missing port}"
+  (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null && return 0
+  # Kit's media port 47998 uses UDP, so also check bound sockets when ss is available.
+  command -v ss >/dev/null && [[ -n "$(ss -H -ltun "sport = :${port}" 2>/dev/null)" ]]
 }
 
 smoke_load_avg() {

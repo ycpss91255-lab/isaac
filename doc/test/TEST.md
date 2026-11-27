@@ -1,6 +1,6 @@
 # TEST.md
 
-**213 tests** total.
+**217 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -10,11 +10,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 114 | 664 | 40 | 818 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 86 | 19 | 0 | 105 |
+| stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**213 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**217 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -112,7 +112,7 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
 | `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (16)
+## test/bats/smoke/stream_smoke_isolation_spec.bats (17)
 
 Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-lab/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
 
@@ -131,16 +131,20 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: a stream container that restarted fails even though it is Running now (isaac#461)` | The liveness probe reads `{{.State.Running}} {{.RestartCount}}` and needs `true 0`; a container with RestartCount 4 that is Running now fails the smoke. |
 | `stream_smoke: a busy signal port stops bring-up and names the holder (isaac#497)` | An occupied signal port reports the port and Docker container name before `run.sh` runs. |
 | `stream_smoke: a busy media port stops bring-up with an unknown holder (isaac#497)` | An occupied media port with no visible owner reports `unknown`, logs load again and exits before bring-up. |
+| `stream_smoke: a UDP-only media holder stops bring-up (isaac#497)` | The real port probe finds the UDP media socket through `ss`. The script reports the holder and exits before invoking `run.sh`. |
 | `stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)` | With `SMOKE_SKIP_PORT_PREFLIGHT=1`, the same signal-port conflict allows `run.sh` to run. |
 | `stream_smoke: reports load at startup and elapsed time and load at readiness (isaac#497)` | Checks the three load averages before bring-up and again when Kit is ready, along with elapsed seconds. |
 | `stream_smoke: ready timeout reports load, marker progress and port holders (isaac#497)` | A live container logs only the first ready marker. The timeout diagnostic includes the wait duration, load, both markers and both ports' holders. |
 
-## test/bats/smoke/stream_smoke_lib_spec.bats (22)
+## test/bats/smoke/stream_smoke_lib_spec.bats (25)
 
 Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib.sh`, #233). Before #233 the smoke stopped at "Streaming server started.", so a Kit that boots, opens the signaling socket and then dies on the first real client attach passed green; the probe now attaches a client, asserts the observed stream-start sequence, and holds a dwell window. That logic is GPU-free and lives in a sourceable library so it is unit tested on every image build -- the GPU driver (`script/ci/stream_smoke.sh`) itself stays nightly-only (`ci-stream-smoke.yaml`). The liveness probe is the overridable `smoke_alive` hook: the driver binds it to `docker ps`, these specs bind it to stubs (including one that flips to dead mid-dwell).
 
 | Test | Description |
 |------|-------------|
+| `port_in_use: a UDP-only listener is busy` | A port-filtered UDP query finds a listener on a port closed to TCP. |
+| `port_in_use: an empty ss result and a closed TCP port are free` | The probe returns nonzero when neither protocol has a listener. |
+| `port_in_use: a TCP listener is busy when ss is absent` | The probe detects a live loopback TCP listener with `ss` absent from `PATH`. |
 | `marker_line: present marker prints its 1-based line number` | A fixed-string marker resolves to its kit log line number. |
 | `marker_line: absent marker -> rc 1, no stdout` | A missing marker fails without emitting a bogus line number. |
 | `marker_line: missing log file -> rc 1 (no crash)` | An absent kit log is a failure, not a crash. |
