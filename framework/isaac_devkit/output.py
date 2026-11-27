@@ -1,4 +1,4 @@
-"""Single output entry point, selected by ``ISAAC_OUTPUT_MODE`` (ADR-0025).
+"""Single output entry point for Python callbacks.
 
 ``setup_output`` resolves the mode and wires the matching path:
 
@@ -6,7 +6,6 @@
   an :class:`~isaac_devkit.output_hub.OutputHub`; consumers register
   callbacks and the caller invokes :meth:`Output.step` once per
   ``app.update()``.
-* External I/O plugins provide the ``ros`` output mode.
 
 Import safety (ADR-0017 section 8 / ADR-0023): no Isaac or ROS import at
 module top; the Isaac-side readers are imported inside :func:`setup_output`.
@@ -63,12 +62,7 @@ def setup_output(environ=None, *, cameras=(), joint=None, imu=None):
 
     Raises:
         ValueError: ``ISAAC_OUTPUT_MODE`` holds an invalid value.
-        NotImplementedError: mode ``ros`` requires an external I/O plugin.
     """
     mode = resolve_output_mode(environ)
-    if mode == "ros":
-        raise NotImplementedError(
-            "ISAAC_OUTPUT_MODE='ros' requires an external I/O plugin"
-        )
     sources = make_python_sources(tuple(cameras), joint, imu)
     return Output(mode, OutputHub(), sources)

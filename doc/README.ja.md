@@ -336,7 +336,7 @@ just docker stop                           # cleanup
 
 ### Python 出力 API（isaac#365）
 
-`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。モードは `ISAAC_OUTPUT_MODE`（既定 `python`、ROS I/O は外部プラグインが担当）で決まります。
+`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。`ISAAC_OUTPUT_MODE` がサポートする値は既定値の `python` のみです。`ros` を含む他の値を指定すると `ValueError` が発生します。ROS 出力は `isaac_ros_io` が `ISAAC_IO_PLUGIN` を通じて提供します（ADR-0025 は新しい決定に置き換えられました）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output

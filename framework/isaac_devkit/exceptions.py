@@ -50,4 +50,4 @@ class LinkNotFoundError(SensorConfigError):
 
 
 class OutputModeError(IsaacDevkitError):
-    """A call is not valid in the active ``ISAAC_OUTPUT_MODE`` (ADR-0025)."""
+    """A call is invalid for the active ``ISAAC_OUTPUT_MODE``."""

@@ -336,7 +336,7 @@ just docker stop                           # cleanup
 
 ### Python 输出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。模式由 `ISAAC_OUTPUT_MODE` 决定（默认 `python`；ROS I/O 由外部插件提供）。
+`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。`ISAAC_OUTPUT_MODE` 仅支持默认值 `python`。其他值（包括 `ros`）都会引发 `ValueError`。`isaac_ros_io` 通过 `ISAAC_IO_PLUGIN` 提供 ROS 输出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
