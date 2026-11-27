@@ -373,7 +373,7 @@ The hosted suite collects **646 tests** on a host without Isaac Sim. CI runs `te
 
 | File | Collected | Scope |
 |------|:---------:|-------|
-| `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream`, and the livestream SOP, Action Graph guide and ZED installation guide (parametrized) for retired stage names, the `isaac-headless` container name and stale headless prose. |
+| `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream` and the standalone livestream SOP and ZED installation guide for retired stage names, the `isaac-headless` container name and stale headless prose. Requires the SOP to include both `run -t stream -d` (start the idle container) and `exec -t stream` (run a command inside it). |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |
 | `test_import_safety.py` | 15 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
 | `test_no_module_top_isaac_import.py` | 18 | AST static guard: no module-top `import omni\|pxr\|isaacsim` in any package source (catches try/except-disguised module-top imports; mirrors the ruff TID253 config). |

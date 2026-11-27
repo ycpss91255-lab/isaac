@@ -18,7 +18,6 @@ def test_driver_has_no_retired_stream_stage():
     "guide_path",
     (
         "src/doc/standalone_livestream_workflow.md",
-        "src/doc/action_graph_setup.md",
         "src/doc/zed_install.md",
     ),
 )
@@ -42,3 +41,10 @@ def test_docs_use_current_stage_names(guide_path):
         if "runheadless" in line:
             assert "-t headless" not in line, location
             assert "run -t stream" not in line, location
+
+
+def test_livestream_sop_starts_idle_container_then_uses_exec():
+    guide = _REPO_ROOT / "src/doc/standalone_livestream_workflow.md"
+    content = guide.read_text(encoding="utf-8")
+    assert "run -t stream -d" in content
+    assert "exec -t stream" in content
