@@ -103,7 +103,7 @@ exclude_also = [
     "def _og_attr_reader\\(",
     # default_driver: Kit-side fresh-stage creation.
     "def _new_stage\\(",
-    # driver: Kit lifecycle (run + Kit-touching internals).
+    # driver: SimulationApp startup and Kit lifecycle methods.
     "def run\\(",
     "def init_rclpy\\(",
     "def _open_stage\\(",

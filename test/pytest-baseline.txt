@@ -328,7 +328,8 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-HOSTED_UNIT_BASELINE = 705
+# isaac#479: SimulationApp launch coverage takes test_isaac_driver.py from 48 to 50.
+HOSTED_UNIT_BASELINE = 707
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -351,7 +352,7 @@ HOSTED_UNIT_BASELINE = 705
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 664
+HOSTED_UNIT_BASELINE_CORE = 666
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -508,7 +509,9 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-GPU_INTEGRATION_BASELINE = 40
+# isaac#479: replace the availability smoke (1) with PhysX and Newton wheel
+#   motion (2). All 41 cases are core: 39 in-container and 2 host cross-container.
+GPU_INTEGRATION_BASELINE = 41
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Recorded for traceability; after the ingestion work + the owv#55
