@@ -1,4 +1,4 @@
-"""Regression for #447. A velocity command must turn both Jetbot wheels."""
+"""Check Jetbot wheel motion and IsaacDriver timeline settings and pacing (#447)."""
 
 import os
 import re
@@ -17,9 +17,11 @@ PYTHON_SH = "/isaac-sim/python.sh"
 RUNNER = Path(__file__).with_name("_driver_joint_motion_runner.py")
 
 
-@pytest.mark.parametrize("engine", ["physx", "newton"])
-@pytest.mark.skipif(not Path(PYTHON_SH).is_file(), reason="requires Isaac Sim")
-def test_driver_applies_wheel_velocity(engine):
+@pytest.fixture(scope="module", params=["physx", "newton"])
+def driver_run(request):
+    if not Path(PYTHON_SH).is_file():
+        pytest.skip("requires Isaac Sim")
+    engine = request.param
     result = subprocess.run(
         [PYTHON_SH, str(RUNNER), "--engine", engine,
          "--robot-usd", str(fetch_test_asset("jetbot"))],
@@ -33,10 +35,53 @@ def test_driver_applies_wheel_velocity(engine):
     )
     # Kit can exit with status zero even when driver setup or stepping raises.
     assert result.returncode == 0, result.stdout[-4000:]
-    match = re.search(r"^\[WHEEL MOTION\] (\w+) (\S+) (\S+)$", result.stdout, re.MULTILINE)
-    assert match, result.stdout[-4000:]
+    return engine, result.stdout
+
+
+def test_driver_applies_wheel_velocity(driver_run):
+    engine, output = driver_run
+    match = re.search(r"^\[WHEEL MOTION\] (\w+) (\S+) (\S+)$", output, re.MULTILINE)
+    assert match, output[-4000:]
     active, left, right = match.groups()
     assert active.lower() == engine
     # One radian in the commanded direction on each wheel excludes startup jitter.
     assert float(left) > 1.0, match.group()
     assert float(right) > 1.0, match.group()
+
+
+def test_driver_timeline_settings(driver_run):
+    _, output = driver_run
+    match = re.search(
+        r"^\[DRIVE SETTINGS\] rate_limit_enabled=(\w+) rate_limit_hz=(\S+) "
+        r"fixed_step=(\w+) looping=(\w+)$",
+        output, re.MULTILINE,
+    )
+    assert match, output[-4000:]
+    rate_limit_enabled, rate_limit_hz, fixed_step, looping = match.groups()
+    assert rate_limit_enabled == "True", match.group()
+    assert float(rate_limit_hz) == 60, match.group()
+    assert fixed_step == "True", match.group()
+    assert looping == "False", match.group()
+
+
+def test_driver_timeline_clock(driver_run):
+    """sim_hz measures updates per second of omni.timeline simulation time.
+
+    sim_hz is a sanity check, and the wall_hz upper bound detects removal
+    of the 60 Hz rate limit.
+    """
+    _, output = driver_run
+    match = re.search(
+        r"^\[DRIVE CLOCK\] sim_hz=(\S+) wall_hz=(\S+) monotonic=(\w+) "
+        r"span_s=(\S+) updates=(\d+)$",
+        output, re.MULTILINE,
+    )
+    assert match, output[-4000:]
+    sim_hz, wall_hz, monotonic, span_s, updates = match.groups()
+    assert int(updates) >= 2, match.group()
+    assert float(span_s) > 0, match.group()
+    assert monotonic == "True", match.group()
+    assert float(sim_hz) == pytest.approx(60, rel=0.15), match.group()
+    # Only an upper bound: wall rate drops under shared-host load, but removing
+    # the driver 60 Hz rate limit pushes it to ~120 Hz. Allow 15% above 60 Hz.
+    assert float(wall_hz) < 69, match.group()

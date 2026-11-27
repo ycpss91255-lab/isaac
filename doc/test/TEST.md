@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 741 | 35 | 895 |
+| core | 119 | 741 | 39 | 899 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 52 | 0 | 143 |
 | headless | 13 | 6 | 0 | 19 |
@@ -461,7 +461,7 @@ The hosted suite collects **882 tests** on a host without Isaac Sim. isaac#493 a
 
 ## test/integration/pytest/ — GPU integration (pytest, not in the bats count above)
 
-The GPU suite collects **35 tests**. CI runs 33 inside the Isaac test container and two cross-container round-trip tests on the host. `test/assert_pytest_baseline.sh --gpu` checks that both legs ran and enforces the combined collection floor.
+The GPU suite collects **39 tests**. CI runs 37 inside the Isaac test container and two cross-container round-trip tests on the host. `test/assert_pytest_baseline.sh --gpu` checks that both legs ran and enforces the combined collection floor.
 
 | Test | Description |
 |------|-------------|
@@ -474,7 +474,7 @@ The GPU suite collects **35 tests**. CI runs 33 inside the Isaac test container 
 | `test_cross_container_roundtrip.py` (2) | M2 gate (#132, PRD Pre-Publish item 1): the genuine Isaac<->ament cross-container ROS 2 round-trip, host-orchestrated against a sibling `ros:humble` container running the `example/ros2/` ament nodes (the proven #127/#131 `docker run --rm ros:humble` + `ROS_DOMAIN_ID` / `fastdds.xml` pattern on the host network). `test_sim_to_ament_camera_received` (sim -> ament: the ament `example_app_py camera_subscriber` node receives a real sim frame from the official Jetbot asset (#325, replacing camera_bot), `[FRAME OK] ... frame_id=jetbot_camera_color_optical_frame`, topic `/jetbot/camera/color/image_raw` passed via `-p camera_topic:=`); `test_ament_to_sim_cmd_vel_received` (ament -> sim: the ament `cmd_vel_publisher` node's Twist `vx=0.37 wz=0.19` crosses the boundary and the Isaac `RosIo.latest('/cmd_vel')` picks it up, `[XC CMD_VEL RX]`). Isaac side = `_cross_container_runner.py` (takes `--robot-usd`, builds its scene in memory; underscore-prefixed, not collected); it publishes NOTHING on `/cmd_vel` so every command observed crossed the container boundary. Because it spawns sibling containers it runs on the GPU HOST (not inside the Isaac container) -- `assert_pytest_baseline.sh --gpu` runs it as a host leg and sums it into the GPU totals. Skipped (not failed) without docker / the built `isaac:test` image; a skip does not advance the `passed > 0` gate. Marker-line acceptance; headless; retry <= 1, logged. Proven on the RTX 5090. |
 | `test_build_scene_adapter.py` (4) | The runner builds an in-memory scene from the official Jetbot and NVIDIA cube USDs fetched via `test/test_assets.py` (#325). Checks clean exit, ground and light creation, the robot and its `/World/Robot/chassis` prim, a dynamic cube with `RigidBodyAPI`, and identity orientation for zero roll, pitch and yaw. |
 | `test_capture_noise.py` (3) | Capture-speckle fix (isaac#266): one Kit boot (`_capture_noise_runner.py`) builds a lit room and captures it TWICE through the SAME render product -- once as replicator creates it, once after `apply_converged_render_settings` (inlined from the former `viz_render` module, now in `ycpss91255-lab/isaac_physics_test`) authors the recipe on the RenderProduct prim. Asserts the default leg is CLEAN, i.e. NGX-denoised (isaac#294: since #285 set `gpu_capabilities = all` the container gets the `ngx` capability, so the old "default must still be noisy" guard was inverted -- a default leg back near 53 now means NGX dropped out again), that the mode reads back as `PathTracing` off the live prim (a carb `/rtx/rendermode` write reads back unchanged, so this is what separates "applied" from "attempted"), and that the converged frame is clean (absolute ceiling, no relative-to-default check since both legs are now clean) with no fully black pixels. The metric is neighbouring-pixel mean absolute difference, NOT frame `std`: `std` is dominated by scene contrast, which is why every failed hypothesis in the issue "left std unchanged" and looked equally inert. Reference on the RTX 5090: pre-#285 default 53.0 vs converged 2.1; post-#285 default ~0.41 vs converged ~1.53 (CI run 34233956492). |
-| `test_driver_joint_motion.py` (2) | The #447 regression runs `IsaacDriver` on the official Jetbot with PhysX and Newton. Each case checks the active engine and requires both wheels to move more than one radian in the commanded direction. |
+| `test_driver_joint_motion.py` (6) | The #447 regression shares one Jetbot run per engine (PhysX and Newton). The wheel test checks the active engine and requires both wheels to move more than one radian in the commanded direction. The settings test checks that the 60 Hz rate limit and fixed stepping are enabled and timeline looping is off. The clock test requires monotonic `omni.timeline` time, 60 updates per simulated second (±15%), and fewer than 69 updates per wall-clock second (upper bound only, detects removal of the 60 Hz rate limit). |
 | `test_isaac_driver_integration.py` (1) | Exercises the driver lifecycle in Kit. |
 | `test_sensor_setup_integration.py` (5) | Checks sensor setup against a live USD stage. |
 
