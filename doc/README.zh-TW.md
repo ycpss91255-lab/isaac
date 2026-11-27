@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
 
-Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
+Image scope 涵蓋 Isaac Sim 本體，加上其內建 ROS 2 bridge 跨容器通訊所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一併 baked 進 image，當 scene-spawn backend（`sim_utils` spawner；ADR-0018）。`IsaacDriver` 透過 `isaacsim.SimulationApp` 啟動 Kit。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
 
 本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
@@ -130,6 +130,26 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 - 有一個 image 仍然共用：每次 build 也會 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名稱只由 pin 住的 base 版本決定。host 上所有 pin 同一個 base 版本的 checkout 與 repo 都寫同一個 tag，所以別的 checkout 可能正在 build 時不要刪它。`just docker build --clean-tools` 會替所有人把它刪掉。它來自 base 的 `build.sh`，上游追蹤在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前啟動的 container 還留在共用 project 裡。用 `docker compose -p <hub>-isaac ps -a` 列出，按名稱停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 會停掉整個共用 project，包含別的 checkout 的 container。
 
+### 執行多個 instance
+
+本 repo 設計上預設每個 checkout 只跑一個 instance，已移除在同一個 checkout 內管理多個 instance 的機制（[ADR-0019](../src/doc/adr/0019-remove-same-repo-multi-instance.md)）。要跑 N 個 instance，請透過 multi_run 用本 repo 的 `compose.yaml` 啟動 N 次。設計記錄見 [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15)。
+
+- 用 `-p <name>` 為每個 instance 指定不同的 compose project 名稱，這樣 `just docker stop` 只會停止自己的 instance，啟動時也不會接手上次殘留的 instance。
+- 每個 instance 都必須有獨立的 `isaac-sim/` 快取與資料目錄樹。共用可寫入的快取目錄會破壞執行中 instance 的 Kit 快取，而且不會出現警告。詳見 [Cache 路徑](#cache-路徑)。
+- 平行執行 headless instance 不需覆寫連接埠。只有串流時才需要覆寫。
+
+實際能跑幾個 instance 取決於可用的 GPU 記憶體。以一張 32607 MiB 的顯示卡實測，每個執行中的 Isaac instance 約用 3.9 GiB，可同時跑 6–7 個。將顯示卡可用的記憶體換算成 GiB 再除以 3.9，即可估算數量。多個 instance 會共用 GPU 運算資源，因此每個都會跑得較慢。
+
+## 掛載本機 USD 模型
+
+Isaac 不附範例模型。請使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的轉換輸出。
+
+1. 執行 `cp setup.isaac_sample.toml setup.local.toml`，建立 Git 會忽略的本機設定檔。若已有本機設定檔，請將範例合併進去，以保留這個 checkout 的設定。
+2. 將模型掛載的 `source` 改成模型所在的目錄。唯讀掛載的目標保持為 `/home/${USER_NAME}/models/sim_asset`，讓場景在每台機器上都能解析相同的路徑。若新增模型掛載，請將對應的容器內路徑加入 `MODEL_PATH`，並以冒號分隔。
+3. 執行 `just docker run -t headless -d` 啟動容器。
+
+Base 套用本機設定時會取代整份 `[[volumes]]` 清單。請在本機設定檔中保留 `setup.toml` 的所有掛載，並在專案新增掛載時同步更新。
+
 ## 連接 WebRTC livestream
 
 Isaac Sim 6.2.0 用 NVCF（`omni.services.livestream.nvcf`）livestream 協定。可用桌面 client 或瀏覽器 viewer 連線：
@@ -234,7 +254,7 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 同時內建 Humble 與 Jazzy 兩套 ROS 2 libraries（5.1 時放在 `isaacsim.ros2.bridge/`；6.0 把單一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），皆走 Python 3.12 rclpy，與 kit 內嵌 interpreter 一致。**本 image 在 build-time hard-bake distro 選擇** — 透過 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 項目指定（預設 `value = "humble"`，CoreSAM 對齊）。
 
-Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若尚未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
+Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
 
 `setup.toml [environment]` 內 distro-agnostic env wiring：
 
@@ -335,7 +355,7 @@ just docker stop                           # cleanup
 
 ### Python 輸出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。模式由 `ISAAC_OUTPUT_MODE` 決定（預設 `python`；`ros` 尚未接上，見 ADR-0025）。
+`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。`ISAAC_OUTPUT_MODE` 僅支援預設值 `python`。其他值（包括 `ros`）都會引發 `ValueError`。`isaac_ros_io` 透過 `ISAAC_IO_PLUGIN` 提供 ROS 輸出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
