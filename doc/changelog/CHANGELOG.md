@@ -4,14 +4,13 @@
 
 ### Fixed
 - 官方 `startuptests` 會在容器結束前，將 `$HOME/.nvidia-omniverse/logs/` 下各個 Kit app 的記錄複製到 `artifacts/startuptests/kit-logs/`。即使 `run_tests.py` 回傳 0，只要 JUnit 報告的 `failures` 或 `errors` 大於 0，或報告無法解析，`core-gpu` 就會失敗。`docker run` 回傳非零時沿用原結束碼。成功或失敗都會保留報告與 Kit log（isaac#436）。
-||||||| f51efac
 - **修正 Dockerfile 與 ADR-0005、ADR-0007 對串流啟動的描述（isaac#473、#485）。** 透過 `SimulationApp` 載入 `full.streaming.kit` 後發生 segfault 是 Isaac Sim 5.1.0 的觀察。在 6.2.0.1 上，3/3 次非 root 測試皆成功啟動伺服器並正常結束，Kit 記錄 `Started primary stream server on signal port 49521`。未測試用戶端連線或預設連接埠 49100。
 - **四種語言的 README、操作文件與註解統一使用 rc7 命名（isaac#458）。** 設定範例對齊 `setup.toml` 的表格與欄位，本機覆寫檔為 `setup.local.toml`。建置、啟動、執行與停止容器的範例改用 `just docker` 指令。`core-unit` CI 在 checkout 後執行命名檢查，掃描 Git 追蹤的文字檔。
 - **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 691 -> 694（core 650 -> 653），bats core 114 -> 119（gpu_job_scripts_spec 7 -> 12）。
+- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 705 -> 708（core 664 -> 667），bats core 114 -> 119（gpu_job_scripts_spec 7 -> 12）。
 - **新增 stream smoke 的 CI 路徑分組回歸測試（isaac#459）。** 測試逐一模擬只改一個相依檔案的 PR，要求每次都選到 `stream` 組。串流 Kit experience 與獨立 smoke 腳本應歸入 `stream`，共用的 entrypoint 與 `script/hooks/pre/*` 應選取全部組別。Hosted baseline 683 -> 691（core 642 -> 650）。
 - **headless stage 開機檢查（isaac#461）。** headless stage 之前只被 build、從來沒有被啟動過；base 的 compose 替它加 `restart: unless-stopped`，所以啟動指令一壞就是容器一直重啟，而 hosted pytest、bats、GPU 整合與串流 smoke 全部是綠的。新增 `script/ci/headless_smoke.sh`：以獨立 compose project 執行 `./script/run.sh -t headless -d`，在 settle 視窗（預設 20 秒）內要求 `State.Status == running` 且 `RestartCount == 0`（重啟迴圈中的容器在兩次重啟之間也是 running，所以不能只看 Status），結束時一律 `compose down`。新增 `ci-headless-smoke.yaml` 與 `main.yaml` 的 `headless-smoke` job（headless 組被選中時才跑，GPU runner、與 `core-gpu` 相同的 fork 防護），`gate` 的 needs 加入它。新增 `headless_smoke_spec.bats`（13 個）與 `test_headless_smoke_wiring.py`（6 個）。Hosted baseline 676 -> 683（core 642、headless 6）；bats headless 0 -> 13。
 ### Changed
