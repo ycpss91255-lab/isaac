@@ -15,7 +15,7 @@ Rules:
 * a pull request runs the groups its changed paths belong to, plus ``docs``
   (cheap lint, always on);
 * a shared layer (Dockerfile, compose, setup conf, config, the base subtree,
-  the CI wiring) runs every group;
+  the entrypoint, pre hooks, or the CI wiring) runs every group;
 * a test file belongs to the group it declares (pytestmark / file_tags), so
   moving a test between groups needs no edit here;
 * a path matching no rule is ``core`` -- never "nothing".
@@ -38,8 +38,8 @@ STAGE_GROUPS = ("gui", "stream", "headless")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Paths whose change can affect every stage: the image, how it is composed
-# and configured, the base subtree, and the CI wiring and guards themselves.
+# Changes to the image, compose and configuration files, base subtree,
+# entrypoint, pre hooks, or CI wiring and guards can affect every stage.
 _SHARED = (
     "Dockerfile",
     "compose.yaml",
@@ -47,6 +47,8 @@ _SHARED = (
     ".dockerignore",
     "config/*",
     ".base/*",
+    "script/entrypoint.sh",
+    "script/hooks/pre/*",
     ".github/workflows/main.yaml",
     "script/ci/changed_groups.py",
     "script/ci/gate_result.py",
@@ -69,10 +71,11 @@ _DOCS = (
     ".github/dependabot.yml",
 )
 
-# Stage- and stream-specific files that are not tests (tests carry their own
-# group declaration).
+# Stage-specific files include Kit experiences and the standalone stream smoke
+# script. Tests carry their own group declaration.
 _PATH_RULES = (
     ("stream", (
+        "apps/*",
         "script/ci/stream_smoke*",
         "script/ci/producer_smoke.sh",
         "script/ci/publish_stream_source.sh",
@@ -80,6 +83,7 @@ _PATH_RULES = (
         "script/runheadless-host-config.sh",
         "script/host_yaml.sh",
         "script/hooks/post/*",
+        "src/script/standalone_livestream_smoke.py",
         "src/script/stream_source_producer.py",
         ".github/workflows/ci-stream-*",
         ".github/workflows/publish-stream-source.yaml",
