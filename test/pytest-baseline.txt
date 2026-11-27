@@ -331,7 +331,7 @@
 #   Nine cover sim-loop setup (3 in TestPlayTimelineSimLoop) and launcher args
 #   (6 in TestLauncherArgs: 4 default livestream values, 1 override, 1 default run).
 #   Two more in TestPlayTimelineSimLoop cover warm start when the package manager
-#   is rebound. Hosted total: 691 -> 702 after merging main.
+#   is rebound. Hosted total: 691 -> 702 after merging main (702 + 14 from isaac#458 = 716).
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664); combined with isaac#447: 716.
 HOSTED_UNIT_BASELINE = 716
 
@@ -520,7 +520,7 @@ GPU_INTEGRATION_BASELINE = 50
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Recorded for traceability; the isaac#447 floors sum to
-#   744 (694 hosted-unit + 50 GPU-integration), well past the
+#   766 (716 hosted-unit + 50 GPU-integration), well past the
 #   PRD's 126 floor. The aggregate is asserted at M2 where the GPU runner
 #   runs (see assert_pytest_baseline.sh --gpu); a SKIPPED GPU job does not
 #   count toward it.
