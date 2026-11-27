@@ -90,13 +90,8 @@ def _main() -> None:
         class _CameraSmokeDriver(IsaacDriver):
             USD = usd_path
 
-            # Regression guard for isaac#248: nothing is enabled at boot,
-            # so setup_camera() must enable isaacsim.ros2.bridge at RUNTIME
-            # under the Isaac Lab AppLauncher headless-rendering
-            # experience. The original failure was a ModuleNotFoundError
-            # on the deprecated isaacsim.core.utils (not loaded by that
-            # experience) that IsaacDriver.run()'s finally/close() hid;
-            # the base driver's boot-time enable only masked it.
+            # Exercise setup_camera() enabling the ROS 2 bridge after
+            # headless SimulationApp startup and delivering a frame (#248).
             BOOT_EXTENSIONS = ()
 
             def setup(self, stage) -> None:
