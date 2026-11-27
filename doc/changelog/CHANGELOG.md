@@ -12,9 +12,10 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 671 -> 674（core 602 -> 605），bats core 119 -> 124（gpu_job_scripts_spec 7 -> 12）。
-- **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。
+- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 687 -> 690（core 618 -> 621），bats core 119 -> 124（gpu_job_scripts_spec 7 -> 12）。
 
+- **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
+- **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。
 - **新增 PR 提交訊息檢查的 20 個回歸測試（isaac#414）。** 測試涵蓋姓名含 Claude 的共同作者、模型名稱與版本、電子郵件網域，以及縮排、大小寫和 Markdown 連結。另以模擬的 git log 驗證空範圍與無效範圍的結束碼，並檢查省略範圍與 `--stdin` 時的參數錯誤。
 - **新增 ADR-0026，記錄移除 Isaac Lab 相依性的決策（isaac#476）。** `isaac` 維持官方 Isaac Sim 基底映像，URDF 由 `asset_converter` 轉成 USD，需要 Isaac Lab 的使用者改用 `isaac_lab`。實作由 #477 至 #480 接續。新增 `test/unit/pytest/test_adr_drop_isaac_lab.py` 的 4 個 docs 測試，檢查新決策與舊 ADR 的註記。Hosted baseline 642 -> 646（docs 16 -> 20）。
 - **新增 stream smoke 的 CI 路徑分組回歸測試（isaac#459）。** 測試逐一模擬只改一個相依檔案的 PR，要求每次都選到 `stream` 組。串流 Kit experience 與獨立 smoke 腳本應歸入 `stream`，共用的 entrypoint 與 `script/hooks/pre/*` 應選取全部組別。Hosted baseline 683 -> 691（core 642 -> 650）。
