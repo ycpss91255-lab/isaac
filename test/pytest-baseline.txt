@@ -286,10 +286,13 @@
 #   equivalence, 6 _play_timeline cases); live 725.
 # isaac#363: test_model_readme_layout.py adds 11 docs cases (725 -> 736, docs 68 -> 79).
 # isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
-# isaac#487 brought main to 756 hosted cases. The merge retains its 14 name-scan
-#   and CI cases and one standalone smoke path check.
-# isaac#276 removes 36 net core cases from main: 756 -> 720.
-HOSTED_UNIT_BASELINE = 720
+# isaac#487: +14 name-scan and CI cases, +1 standalone smoke path check,
+#   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
+# isaac#376: the module docstring length check adds one core test (756 -> 757, core 648 -> 649).
+# isaac#359: test_standalone_smoke_matrix.py adds 7 core cases (757 -> 764, core 649 -> 656).
+# isaac#276 retains the name-scan, CI and standalone smoke path checks from #487.
+#   Removing ROS I/O and its host-leg guards lowers the hosted floor by 36 (764 -> 728).
+HOSTED_UNIT_BASELINE = 728
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -320,10 +323,12 @@ HOSTED_UNIT_BASELINE = 720
 #   isaac#338 adds 16 core cases (core 602 -> 618).
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#405 adds 1 core case (core 622 -> 623).
-#   isaac#479 adds 9 driver cases (core 623 -> 632).
-#   isaac#487 brought main to 648 core cases. Removing ROS I/O and its
-#   host-leg guards in isaac#276 lowers the merged core floor by 36.
-HOSTED_UNIT_BASELINE_CORE = 612
+#   isaac#479: +9 core (test_isaac_driver.py 48 -> 57): core 623 -> 632.
+#   isaac#487 adds 16 core cases (core 632 -> 648).
+#   isaac#376 adds 1 core case (core 648 -> 649).
+#   isaac#359 adds 7 core cases (core 649 -> 656).
+#   isaac#276 removes 36 net core cases for ROS I/O and its host-leg guards (656 -> 620).
+HOSTED_UNIT_BASELINE_CORE = 620
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6

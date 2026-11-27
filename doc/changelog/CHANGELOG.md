@@ -6,9 +6,11 @@
 
 - **移除 `isaac_devkit` 內建的 ROS 2 I/O（isaac#276）。** `IsaacDriver` 預設只啟用 `isaacsim.core.nodes`。ROS I/O 由 `ISAAC_IO_PLUGIN` 載入外部插件，所需的 Kit 擴充套件可透過 `ISAAC_KIT_EXTRA_ARGS` 啟用。感測器仍接受並驗證 YAML 的 `ros:` 欄位，建立後回傳 USD prim 或掛載路徑。camera_bot 範例改為建立相機並執行模擬迴圈。
   - `isaac_ros_io` 移植時可從本次移除前的 `origin/main` 提取訂閱與感測器發布的 OmniGraph 實作。兩個檔案均保存在提交 `170de8c`。[ros_io.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/ros_io.py) · [sensor_ros.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/sensor_ros.py)
-  - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 31 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 720 例（core 612），Bats 共 218 例（core 115）。
+  - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 31 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 728 例（core 620），Bats 共 218 例（core 115）。
 
 ### Fixed
+- **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。新增 7 項 core 測試，涵蓋 USD 檢查的移除、案例格式、空矩陣與 Bash 語法。
+- **調整 `test_sim_version.py` 的 docstring 換行（isaac#376）。** 模組與 `_find_hardcoded_variants` 的 docstring 每行最多 79 個字元。新增一項 core 測試檢查模組 docstring 的行長。
 - **移除 `.base/` 以外受 Git 追蹤檔案中的個人帳號名稱（isaac#487）。** 可在組織 secret `FORBIDDEN_NAMES` 設定要掃描的名稱，以逗號分隔。獨立掃描步驟與 hosted core 測試都會讀取這份清單，若無法取得 secret（例如來自 fork 的 PR），掃描程式會輸出 `SKIPPED` 並說明略過原因。Core 組改用內含 Git 的 `python:3.12` 映像檔，pytest 只要有一項測試被跳過，CI 就會失敗。Core 組的 pytest 使用 `-rA`，在 CI 日誌中逐行列出每項測試的名稱與結果。合併 isaac#276 後保留 15 個新增的 core 案例，其中 14 個檢查名稱掃描與 CI，1 個檢查獨立 smoke 腳本的路徑。
 - **修正 GPU 共用工作流程的版本檢查（isaac#405、#406）。** pytest 統一從 `gpu_pin.py` 的 `GPU_REUSABLE_TAG` 讀取版本，並確認 Dependabot 註解標示目前的 `v0.4.0`。呼叫端清單不符時，錯誤訊息會列出缺少或多出的工作流程，並提示更新清單與文件。版本與呼叫端結構以 pytest 的檢查為準，Bats 的版本檢查改為從 `gpu_pin.py` 讀取同一個 `GPU_REUSABLE_TAG`，並涵蓋全部 4 個呼叫端（含 `ci-headless-smoke.yaml`）。devel-test 映像把 `gpu_pin.py` 一併放進 `/smoke_test/`。升級 tag 需改 4 個工作流程檔、`gpu_pin.py` 與 Dependabot 註解，沒有其他副本。
 - **合併佇列能取得必要的 `gate` 檢查結果（isaac#453）。** `main.yaml` 收到 `merge_group` 的 `checks_requested` 事件時會執行所有測試組別，再由 `gate` 回報結果。
