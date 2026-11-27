@@ -4,9 +4,9 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker development environment, built on top of [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) (previously `ycpss91255-lab/template`).
 
-Image scope covers Isaac Sim itself plus the env wiring needed for its bundled ROS 2 bridge to talk cross-container. NVIDIA Isaac Lab 3.0 (`v3.0.0`) is also baked in as the scene-spawn backend (`sim_utils` spawners, `UrdfConverter`, `AppLauncher`; ADR-0018). Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
+Image scope covers Isaac Sim itself plus the env wiring needed for its bundled ROS 2 bridge to talk cross-container. NVIDIA Isaac Lab 3.0 (`v3.0.0`) is also baked in as the scene-spawn backend (`sim_utils` spawners, `AppLauncher`; ADR-0018). Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
 
-The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD/URDF models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-lab/isaac` and `ycpss91255-lab/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-lab/isaac/issues/78).
+The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-lab/isaac` and `ycpss91255-lab/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-lab/isaac/issues/78).
 
 ## Prerequisites
 
@@ -113,19 +113,20 @@ Every checkout of this repo on a host used to resolve the same image tag (`<hub>
 - `./script/checkout_identity.sh isolate` writes `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) into the gitignored `setup.local.toml`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
 - The pre build / run / stop hooks refuse to act on the shared names. `ISAAC_ALLOW_SHARED_IDENTITY=1` overrides that; CI's build steps use it.
 - `just docker run` does not rebuild an image that already exists (base#1552). After pulling changes, run `just docker build -t <stage>` before `just docker run -t <stage>`.
-- Disk cost: every checkout or worktree that builds owns its own image set (`<hub>/isaac-<dir>-<hash>:<stage>`), about 31 GB nominal per stage tag. They are not shared, and deleting the checkout directory does not remove them from the Docker daemon.
-- Cleaning up a deleted checkout: take the `isaac-<dir>-<hash>` name from `./script/checkout_identity.sh show` (run it before deleting the directory; it needs `.env.generated`) or from `docker images`, then list first and remove second:
+- Disk cost: each checkout or worktree that builds has its own image tags (`<hub>/isaac-<dir>-<hash>:<stage>`). The nominal size shown by `docker images` is about 31 GB per stage tag. Shared layers mean removing a tag reclaims less disk space. Deleting the checkout directory leaves the images in the Docker daemon.
+- Cleaning up a deleted checkout: take the `isaac-<dir>-<hash>` name from `./script/checkout_identity.sh show` (run it before deleting the directory; it needs `.env.generated`) or from `docker images`. A custom `PROJECT_NAME` can differ from `<hub>-<slug>`. Copy the project from the label output on the row for the deleted checkout's image.
 
   ```bash
-  SLUG=isaac-<dir>-<hash>   # exact name, e.g. from "image: <hub>/<SLUG>:<stage>"
-  HUB=<hub>                 # the <hub> part of that image name
-  docker ps -a --filter "label=com.docker.compose.project=${HUB}-${SLUG}" --format '{{.Names}}'
-  docker ps -aq --filter "label=com.docker.compose.project=${HUB}-${SLUG}" | xargs -r docker rm -f
+  SLUG='isaac-<dir>-<hash>'   # exact name, e.g. from "image: <hub>/<SLUG>:<stage>"
+  docker ps -a --format '{{.Label "com.docker.compose.project"}}  {{.Image}}  {{.Names}}'
+  PROJECT='<project>'
+  docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format '{{.Names}}'
+  docker ps -aq --filter "label=com.docker.compose.project=${PROJECT}" | xargs -r docker rm -f  # kills running containers. Use only for a checkout that no longer exists, never a live one
   docker images --filter "reference=*/${SLUG}:*"
-  docker images -q --filter "reference=*/${SLUG}:*" | xargs -r docker rmi
+  docker images --filter "reference=*/${SLUG}:*" --format '{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
   ```
 
-  The filters match the exact slug only. Do not widen them to `isaac*` and do not run `docker image prune -a`: the shared `test-tools:<base version>` image (next bullet) must not be removed by this procedure.
+  Untagging an image with `docker rmi` frees nothing from shared layers another checkout still uses until the last tag referencing them is gone. The filters match the exact project and image slug. Do not widen them to `isaac*` and do not run `docker image prune -a`: the shared `test-tools:<base version>` image (next bullet) must not be removed by this procedure.
 - One image stays shared: every build also builds the lint/bats tool image `test-tools:<base version>` (now `test-tools:v0.42.0`), named by the pinned base version only. Every checkout and every repo on the host that pins the same base version writes the same tag, so do not delete it while another checkout may be building. `just docker build --clean-tools` removes it for all of them. It comes from base's `build.sh` and is tracked upstream on [base#1551](https://github.com/ycpss91255-lab/base/issues/1551).
 - Containers started before isolating stay in the shared project. List them with `docker compose -p <hub>-isaac ps -a` and stop yours by name. `ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` stops the whole shared project, other checkouts' containers included.
 
@@ -294,7 +295,7 @@ The kit terminal should print `[ros2_test_sub] /host/test <- 'hello-from-host'`.
 
 #### Extra Kit arguments (`ISAAC_KIT_EXTRA_ARGS`)
 
-`IsaacDriver.run` reads `ISAAC_KIT_EXTRA_ARGS`, splits it on whitespace, and appends the tokens to the Kit arguments it boots with (after the built-in boot arguments). Unset, empty or whitespace-only leaves behaviour unchanged. Only `IsaacDriver` reads this variable; `example_driver.py`, `model_import`, `stream_source_producer` and the scripts under `src/script/` do not support it.
+`IsaacDriver.run` reads `ISAAC_KIT_EXTRA_ARGS`, splits it on whitespace, and appends the tokens to the Kit arguments it boots with (after the built-in boot arguments). Unset, empty or whitespace-only leaves behaviour unchanged. Only `IsaacDriver` reads this variable; `example_driver.py`, `stream_source_producer` and the scripts under `src/script/` do not support it.
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -305,7 +306,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### Startup plugin (`ISAAC_IO_PLUGIN`)
 
-`IsaacDriver.run` reads `ISAAC_IO_PLUGIN` (`module:function`). After the stage is built and before the timeline plays, it imports the module and calls `function(stage, robot_prim, config)` once. `config` is an opaque dict (currently `usd_path` and `robot_prim`, the stage's default prim path). Unset or empty calls nothing and imports no ROS module. A malformed value, a module that cannot be imported, or a missing function each fail at startup with an error naming the cause. Only `IsaacDriver.run` supports it; `example_driver.py`, `model_import`, `stream_source_producer` and the scripts under `src/script/` do not.
+`IsaacDriver.run` reads `ISAAC_IO_PLUGIN` (`module:function`). After the stage is built and before the timeline plays, it imports the module and calls `function(stage, robot_prim, config)` once. `config` is an opaque dict (currently `usd_path` and `robot_prim`, the stage's default prim path). Unset or empty calls nothing and imports no ROS module. A malformed value, a module that cannot be imported, or a missing function each fail at startup with an error naming the cause. Only `IsaacDriver.run` supports it; `example_driver.py`, `stream_source_producer` and the scripts under `src/script/` do not.
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'

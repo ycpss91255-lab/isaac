@@ -175,6 +175,10 @@ jobs:
       # opt-in step from base#470 removes ~30 GB of Android SDK / .NET /
       # GHC tool-cache before buildx starts.
       free_disk_space: true
+      # Image layers far exceed the 10 GB GHA cache limit (isaac#364).
+      # In measured runs, cache export took ~20 of the devel-test step's ~32 min
+      # and the cache never hit (isaac#411).
+      disable_cache: true
       extra_stages: ${{ needs.changes.outputs.stages }}
       build_args: |
         BATS_SKIP_GROUPS=${{ needs.changes.outputs.bats_skip }}
