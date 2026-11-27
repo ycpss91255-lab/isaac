@@ -1,23 +1,13 @@
-"""Output-mode resolver: ``ros`` or ``python`` (isaac#366, ADR-0025).
+"""Resolve ``ISAAC_OUTPUT_MODE`` for Python callbacks (isaac#514).
 
-One global setting, the ``ISAAC_OUTPUT_MODE`` environment variable,
-chooses how simulation data leaves Isaac for the whole container:
-
-* ``python`` (default): Python callbacks receive the data; no ROS node
-  is created.
-* ``ros``: the native OmniGraph ROS 2 bridge publishes the topics;
-  Python receives no data.
-
-The two are exclusive. This module only resolves the value; it is pure
-(no Isaac or ROS import, ADR-0017 section 8 / ADR-0023) so it is
-hosted-testable.
+``python`` is the default and the only supported value.
 """
 
 import os
 from collections.abc import Mapping
 
 ENV_VAR = "ISAAC_OUTPUT_MODE"
-MODES = ("python", "ros")
+MODES = ("python",)
 DEFAULT_MODE = "python"
 
 
@@ -29,12 +19,11 @@ def resolve_output_mode(environ: Mapping[str, str] | None = None) -> str:
             ``os.environ``.
 
     Returns:
-        ``"python"`` when the variable is unset, otherwise ``"ros"`` or
-        ``"python"`` exactly as given.
+        ``"python"`` when the variable is unset or explicitly set to ``python``.
 
     Raises:
         ValueError: The variable is set to anything other than exactly
-            ``ros`` or ``python`` (wrong case, empty, ``both``, ...).
+            ``python`` (wrong case, empty, ``both``, ...).
             The message names the offending value and the allowed set;
             there is no silent fallback.
     """
