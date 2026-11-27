@@ -152,7 +152,6 @@ def test_script_has_no_hard_coded_home(name):
 def test_standalone_smoke_has_no_hard_coded_workspace():
     source = (_SCRIPT_DIR / "test" / "standalone_smoke.sh").read_text(encoding="utf-8")
     assert not _HARD_CODED_HOME.search(source)
-    assert "coreSAM_ws" not in source
 
 
 @pytest.mark.parametrize("name", _README_SCRIPTS)

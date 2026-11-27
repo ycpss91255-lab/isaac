@@ -330,6 +330,8 @@ if [[ -n "${GROUP}" ]]; then
   PYTEST_SELECT="-m ${GROUP}"
   [[ "${GROUP}" == "core" ]] || PYTEST_COV=""
 fi
+# Run the FORBIDDEN_NAMES scan from a normal clone. The container mounts only
+# the worktree directory, and a linked worktree's .git file points outside it.
 docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${GROUP}" \
   -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
   set -eu

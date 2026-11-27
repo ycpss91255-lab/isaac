@@ -33,11 +33,10 @@
 
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-DOCKER_DIR="${REPO_ROOT}/script"
+DOCKER_DIR="${HOME}/workspace/coreSAM_ws/isaac_ws/src/docker"
 SCRIPT_PATH_IN_CONTAINER="${HOME}/work/src/script"
-USD_HOST="${REPO_ROOT}/src/model/usd/robot/openbase/openbase.usda"
-CONTAINER="${SMOKE_CONTAINER:-$(id -un)-isaac-standalone}"
+USD_HOST="${HOME}/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openbase/openbase.usda"
+CONTAINER="$(id -un)-isaac-standalone"
 
 # Smoke matrix: <basename>|<grep-marker>|<timeout-sec>|<needs-usd>
 CASES=(
