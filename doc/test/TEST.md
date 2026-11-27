@@ -1,6 +1,6 @@
 # TEST.md
 
-**210 tests** total.
+**213 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 116 | 653 | 40 | 809 |
+| core | 119 | 653 | 40 | 812 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**210 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**213 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -271,7 +271,7 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `guard: no .env.generated yet -> nothing to check, passes` | No resolved identity means nothing to refuse. |
 | `pre hooks: build/run/stop refuse a shared checkout and pass an isolated one` | The real baked hooks exit non-zero on the shared identity and zero on an isolated one. |
 
-## test/bats/smoke/gpu_job_scripts_spec.bats (9)
+## test/bats/smoke/gpu_job_scripts_spec.bats (12)
 
 Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. The Docker stub executes the mounted startup script with a temporary home directory. Its fixture `run_tests.py` writes JUnit to `/tmp/r.xml` and a Kit log under `$HOME/.nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)/6.2/`. The spec runs without Docker or a GPU.
 
@@ -280,6 +280,9 @@ Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration
 | `gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline, official startuptests -- in order` | The job runs the official suite once after a successful GPU baseline. A baseline failure stops the job before the suite. |
 | `gpu integration job: successful startuptests retain JUnit and the Kit log` | Checks the passing JUnit report in `artifacts/startuptests/r.xml` and the Kit log under `kit-logs/` with its app and version directories preserved. |
 | `gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log` | Checks that the job returns the fixture's exit code 23 and retains both the failing JUnit report and that run's Kit log. |
+| `gpu integration job: JUnit failure fails the job even when run_tests.py exits zero` | A single `<testsuite>` reports one failure for `tests-startup.main.sh` with the message `Exit code: 55`. The job fails and retains the report and Kit log. |
+| `gpu integration job: an error inside testsuites fails the job even when run_tests.py exits zero` | A suite inside `<testsuites>` reports one error and zero failures. The job fails and retains the report and Kit log. |
+| `gpu integration job: a truncated JUnit report fails the job even when run_tests.py exits zero` | The report is missing its closing tag. The job fails and retains the truncated XML and Kit log. |
 | `gpu integration job: works from any cwd (resolves the repo root itself)` | Invoked from `/`, the script resolves its own repo root. |
 | `gpu integration job: a failed build fails the job before the GPU suite` | A build failure (`BUILD_RC=3`) exits non-zero and does not reach the baseline step. |
 | `stream smoke job: apply, pin WS_PATH, build stream, caches, smoke -- in order` | The five steps fire in the expected order with the expected env. |

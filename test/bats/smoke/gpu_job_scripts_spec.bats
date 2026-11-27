@@ -39,6 +39,7 @@ setup() {
   chmod +x "${FAKE}/script/ci/"*.sh "${FAKE}/bin/docker"
   export PATH="${FAKE}/bin:${PATH}"
   unset DOCKER_HUB_USER STARTUP_RC BASELINE_RC
+  unset STARTUP_JUNIT_FAILURES STARTUP_JUNIT_ERRORS STARTUP_JUNIT_WRAPPED STARTUP_JUNIT_TRUNCATED
 
   export CALLS="${FAKE}/calls.log"
   export GITHUB_WORKSPACE="${FAKE}"
@@ -113,25 +114,64 @@ teardown() {
   [ "${output}" = "0" ]
 }
 
-assert_startuptests_artifacts() {
-  local failures="$1" rc="$2"
+assert_startuptests_log() {
+  local rc="$1"
   local artifacts="${FAKE}/artifacts/startuptests"
   local app_dir="${artifacts}/kit-logs/Kit/Isaac-Sim Streaming (Newton)/6.2"
-  grep -Fxq "<testsuite name=\"startup-fixture\" failures=\"${failures}\"/>" "${artifacts}/r.xml"
   grep -Fxq "Kit startup fixture rc=${rc}" "${app_dir}/kit_20261127_162941.log"
 }
 
+assert_startuptests_report() {
+  python3 - "${FAKE}/artifacts/startuptests/r.xml" "$@" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+
+path, root_tag, failures, errors, *failure_messages = sys.argv[1:]
+root = ET.parse(path).getroot()
+assert root.tag == root_tag, root.tag
+suite = root if root_tag == "testsuite" else root.find("testsuite")
+assert suite.get("name") == "startuptests.default"
+assert suite.get("failures") == failures and suite.get("errors") == errors, suite.attrib
+assert len(suite.findall("testcase/error")) == int(errors)
+main_failures = suite.findall("testcase[@name='tests-startup.main.sh']/failure")
+assert [entry.get("message") for entry in main_failures] == failure_messages
+PY
+}
+
 @test "gpu integration job: successful startuptests retain JUnit and the Kit log" {
-  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  STARTUP_JUNIT_WRAPPED=1 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
-  assert_startuptests_artifacts 0 0
+  assert_startuptests_report testsuites 0 0
+  assert_startuptests_log 0
 }
 
 @test "gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log" {
   STARTUP_RC=23 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 23 ]
   grep -q '^docker run ' "${CALLS}"
-  assert_startuptests_artifacts 1 23
+  assert_startuptests_report testsuite 1 0 "Exit code: 23"
+  assert_startuptests_log 23
+}
+
+@test "gpu integration job: JUnit failure fails the job even when run_tests.py exits zero" {
+  STARTUP_JUNIT_FAILURES=1 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  assert_startuptests_report testsuite 1 0 "Exit code: 55"
+  assert_startuptests_log 0
+  [ "${status}" -ne 0 ]
+}
+
+@test "gpu integration job: an error inside testsuites fails the job even when run_tests.py exits zero" {
+  STARTUP_JUNIT_WRAPPED=1 STARTUP_JUNIT_ERRORS=1 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  assert_startuptests_report testsuites 0 1
+  assert_startuptests_log 0
+  [ "${status}" -ne 0 ]
+}
+
+@test "gpu integration job: a truncated JUnit report fails the job even when run_tests.py exits zero" {
+  STARTUP_JUNIT_TRUNCATED=1 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  grep -q '<testsuite ' "${FAKE}/artifacts/startuptests/r.xml"
+  assert_startuptests_log 0
+  [ "${status}" -ne 0 ]
 }
 
 @test "gpu integration job: works from any cwd (resolves the repo root itself)" {

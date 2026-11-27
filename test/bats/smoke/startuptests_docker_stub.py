@@ -36,6 +36,7 @@ bash() { fixture_command bash "$@"; }
 RUN_TESTS = """\
 import argparse
 import os
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 parser = argparse.ArgumentParser()
@@ -43,7 +44,26 @@ parser.add_argument("--suite", choices=["startuptests"], required=True)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 rc = int(os.environ.get("STARTUP_RC", "0"))
-args.output.write_text(f'<testsuite name="startup-fixture" failures="{int(rc != 0)}"/>\\n')
+failures = int(os.environ.get("STARTUP_JUNIT_FAILURES", int(rc != 0)))
+errors = int(os.environ.get("STARTUP_JUNIT_ERRORS", "0"))
+suite = ET.Element("testsuite", name="startuptests.default", tests="4",
+                   failures=str(failures), errors=str(errors))
+main = ET.SubElement(suite, "testcase", name="tests-startup.main.sh")
+if failures:
+    ET.SubElement(main, "failure", message=f"Exit code: {rc or 55}")
+for index in range(1, 4):
+    case = ET.SubElement(suite, "testcase", name=f"startup-fixture-{index}")
+    if index <= errors:
+        ET.SubElement(case, "error", message="Startup error")
+
+report = suite
+if os.environ.get("STARTUP_JUNIT_WRAPPED") == "1":
+    report = ET.Element("testsuites")
+    report.append(suite)
+xml = ET.tostring(report, encoding="unicode")
+if os.environ.get("STARTUP_JUNIT_TRUNCATED") == "1":
+    xml = xml[:xml.rindex("</")]
+args.output.write_text(xml + "\\n")
 
 log = (Path.home() / ".nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)"
        / "6.2/kit_20261127_162941.log")
