@@ -12,10 +12,7 @@ joint prim's ``UsdPhysics.DriveAPI("angular")`` gains are asserted:
 
   runtime-apply  import with NO drive, then
                  ``apply_joint_drive(joint_path, stiffness, damping)``
-                 (Isaac Lab ``modify_joint_drive_properties``, stage-only --
-                 no Articulation, no SimulationContext, so it does NOT touch
-                 the #151 shutdown-hang surface) -> the DriveAPI is applied
-                 to the already-imported joint with the configured gains.
+                 writes the DriveAPI gains directly on the imported joint.
 
 Both assertions are STRUCTURAL: the DriveAPI is present with the right gains.
 "The joint physically reaches / holds a commanded target" needs STEPPED
@@ -47,22 +44,12 @@ RUNNER = Path(__file__).parent / "_joint_drive_runner.py"
 PYTHON_SH = "/isaac-sim/python.sh"
 IMPORT_TIMEOUT_SEC = 240
 
-# Gains we pass in, in URDF/per-degree convention (what a user types). Both
-# the import-time path (Isaac Lab UrdfConverter) and the runtime path
-# (modify_joint_drive_properties) treat a configured stiffness/damping on an
-# ANGULAR (revolute) joint as per-degree and write the per-radian value onto
-# the USD DriveAPI, i.e. they multiply by ``math.pi / 180`` (Isaac Lab
-# v2.3.2: urdf_converter ``set_strength(math.pi / 180 * stiffness)`` for a
-# non-prismatic joint; schemas ``modify_joint_drive_properties`` applies the
-# same N-m/rad -> N-m/deg conversion). This is a DETERMINISTIC unit
-# conversion, NOT a dropped input: the gains stay fully user-controllable
-# (double the input -> double the stored value); only the storage unit
-# differs. The DriveAPI therefore stores ``IN * pi/180``, which is what we
-# assert (#168).
+# Both paths convert angular gains from per-radian input to USD's
+# per-degree units, multiplying stiffness and damping by pi/180.
 STIFFNESS = 800.0
 DAMPING = 40.0
 _DEG2RAD = math.pi / 180.0
-# Expected per-radian gains the angular DriveAPI actually stores.
+# Expected per-degree gains the angular DriveAPI actually stores.
 EXPECTED_STIFFNESS = STIFFNESS * _DEG2RAD
 EXPECTED_DAMPING = DAMPING * _DEG2RAD
 # Float tolerance: the marker prints with %g (6 sig figs), so compare with a
@@ -127,8 +114,8 @@ def test_import_time_joint_drive_configures_driveapi(tmp_path):
         summary["stiffness"], EXPECTED_STIFFNESS, rel_tol=_REL_TOL
     ), (
         f"DriveAPI stiffness {summary['stiffness']} != "
-        f"{EXPECTED_STIFFNESS} (= {STIFFNESS} * pi/180, the per-radian value "
-        "the angular drive stores for a per-degree input)"
+        f"{EXPECTED_STIFFNESS} (= {STIFFNESS} * pi/180, the per-degree value "
+        "the angular drive stores for a per-radian input)"
     )
     assert math.isclose(
         summary["damping"], EXPECTED_DAMPING, rel_tol=_REL_TOL
@@ -142,10 +129,8 @@ def test_runtime_apply_joint_drive_sets_driveapi(tmp_path):
     """apply_joint_drive sets a DriveAPI on an already-imported joint.
 
     The fixture is imported with NO drive, then the runtime helper
-    (modify_joint_drive_properties, stage-only) writes the DriveAPI gains on
-    the existing joint prim -- the "set Kp/Kd on an already-imported joint"
-    path the driver/adapter calls. Structural CONFIGURED check; no stepped
-    physics (no SimulationContext, #151).
+    writes the DriveAPI gains on the existing joint prim. The test reads
+    those gains without stepping the simulation.
     """
     summary = _run_drive("runtime-apply", tmp_path / "arm_runtime.usd")
     assert summary["has_drive"], (
@@ -156,8 +141,7 @@ def test_runtime_apply_joint_drive_sets_driveapi(tmp_path):
     ), (
         f"DriveAPI stiffness {summary['stiffness']} != "
         f"{EXPECTED_STIFFNESS} (= {STIFFNESS} * pi/180; "
-        "modify_joint_drive_properties applies the same per-degree -> "
-        "per-radian angular conversion as the import path)"
+        "the runtime and import paths both store angular gains per degree)"
     )
     assert math.isclose(
         summary["damping"], EXPECTED_DAMPING, rel_tol=_REL_TOL

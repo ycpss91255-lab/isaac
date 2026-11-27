@@ -41,9 +41,9 @@
 #   tests for the new pure material_cfg_from_yaml (color-only -> per-prim
 #   cfg-param mapping). Net +4. Live count is now 233 -- the enforced
 #   floor. MR (#152, ADR-0018 decisions 1/3): build_scene is rewritten as
-#   the pure YAML -> Isaac Lab sim_utils cfg adapter (to_isaaclab_cfg ->
+#   the pure YAML adapter (now to_scene_specs ->
 #   list[SpawnSpec]) plus a thin materialize/spawn tail; test_scene_builder.py
-#   adds the TestToIsaaclabCfg + TestRpyToQuat coverage (curated-field
+#   adds the spec mapping and TestRpyToQuat coverage (curated-field
 #   translation, rpy->quat, mobility, spawn_overrides spread (overrides-win),
 #   instance expansion, optional material-diffuse hook): 17 -> 38 (+21).
 #   Live count is now 254. The same PR makes resolve_model_path tolerant of
@@ -86,7 +86,7 @@
 #   before Isaac: 7), and the CLI plumbing (#167/#168 -- collider default /
 #   flag / unsupported-rejected, joint-drive flags default None / parse as
 #   floats: 6). All pure (no Isaac import: the JointDriveCfg build and the
-#   apply_joint_drive runtime helper are function-local isaaclab imports,
+#   apply_joint_drive runtime helper use function-local simulator imports,
 #   GPU-covered). Live count is now 296 -- the enforced floor.
 #
 #   owv#55 isaac-side fix (dedicated cross-container compose project): adds
@@ -328,7 +328,8 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-HOSTED_UNIT_BASELINE = 705
+# isaac#478: 2 scene adapter export tests and 2 import-safety tests, all core.
+HOSTED_UNIT_BASELINE = 709
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -351,7 +352,7 @@ HOSTED_UNIT_BASELINE = 705
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 664
+HOSTED_UNIT_BASELINE_CORE = 668
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -414,7 +415,7 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   MR (#152, ADR-0018 decisions 1/3): the build_scene adapter gets
 #   dedicated GPU coverage (test_build_scene_adapter.py: 3 tests -- the
 #   example scene's environment ground + light + robot USD spawn via the
-#   to_isaaclab_cfg -> sim_utils cfg -> cfg.func() path, a mobility:dynamic
+#   scene builder (now to_scene_specs -> USD) path, a mobility:dynamic
 #   object carries UsdPhysics.RigidBodyAPI, and the runner exits clean;
 #   plus the _build_scene_runner.py helper). This exercises the adapter on
 #   the live stage independently of the example driver's own raw-pxr
@@ -467,10 +468,10 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #       import_urdf(joint_drive_stiffness=, joint_drive_damping=) ->
 #       UrdfConverterCfg.joint_drive=JointDriveCfg(PDGainsCfg, force/
 #       position), and (b) at runtime via apply_joint_drive ->
-#       modify_joint_drive_properties (stage-only, no SimulationContext).
+#       UsdPhysics.DriveAPI (stage-only, no SimulationContext).
 #       Both assert the revolute joint's UsdPhysics.DriveAPI("angular")
-#       carries the configured gains -- stored in per-radian units: Isaac
-#       Lab applies the deterministic *pi/180 per-degree->per-radian
+#       carries the configured gains -- stored in per-degree units. Both
+#       paths apply the deterministic *pi/180 per-radian to per-degree
 #       conversion on an angular joint, so stiffness=800 lands as 13.96 on
 #       the DriveAPI (still fully user-controllable; only the unit differs).
 #       STRUCTURAL "drive CONFIGURED" check. The "joint physically reaches a

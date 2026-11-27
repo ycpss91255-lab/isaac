@@ -1,20 +1,8 @@
-"""Declarative scene composition from YAML config.
+"""Declarative scene composition from YAML.
 
-Reads a Scene YAML that lists robot + objects + sensors, resolves model
-paths relative to repo root, and assembles the scene at runtime via Isaac
-Lab ``sim_utils`` config-dataclass spawners (ADR-0018 decisions 1, 3).
-
-The host-side surface is pure (no Isaac / pxr import): ``load_scene``,
-``resolve_model_path``, ``generate_instances``, ``resolve_sensor_configs``
-and the new ``to_isaaclab_cfg`` adapter, which maps a validated scene dict
-to a neutral, JSON-serializable list of ``SpawnSpec`` records. Only
-``build_scene`` materializes those specs into real ``isaaclab.sim`` cfg
-objects and spawns them, and it imports ``isaaclab.sim`` function-locally
-(ADR-0017 section 8 import-safety invariant).
-
-``SpawnSpec`` is the stable seam (ADR-0018 decision 1): the same spec list
-can later be collected into an ``InteractiveSceneCfg`` ("C") without
-changing the YAML schema or this adapter contract.
+``to_scene_specs`` resolves a validated scene into JSON-serializable spawn
+specifications. ``build_scene`` authors those specifications on a USD stage.
+Stage access and USD schema imports are local to the runtime functions.
 
 Usage from an IsaacDriver subclass:
 
@@ -34,15 +22,10 @@ import yaml
 class SpawnSpec(NamedTuple):
     """A neutral, GPU-free description of one prim to spawn.
 
-    Pure / JSON-serializable: ``to_isaaclab_cfg`` returns these so a hosted
-    unit test can assert the YAML -> cfg mapping without a live stage.
-    ``build_scene`` materializes each into the matching ``isaaclab.sim``
-    cfg dataclass and spawns it via ``cfg.func``.
-
     Fields:
         prim_path: USD prim path the spec spawns at (e.g. "/World/Robot").
         kind: One of "ground_plane", "distant_light", "usd".
-        kwargs: Constructor kwargs for the cfg dataclass (incl. any
+        kwargs: Spawn parameters (incl. any
             ``spawn_overrides`` and, for "usd", ``usd_path``).
         translation: (x, y, z) in meters.
         orientation: (w, x, y, z) quaternion.
@@ -277,7 +260,7 @@ def _material_diffuse_for(entry, repo_root):
     (repo-relative) plus an optional ``variant`` selection. We reuse the
     pure ``materials.material_cfg_from_yaml`` mapper (#153) and take the
     diffuse color of the FIRST prim that declares one -- the minimal hook
-    so ``build_scene`` can attach a ``PreviewSurfaceCfg``. Full per-prim
+    so ``build_scene`` can author a USD preview surface. Full per-prim
     material GPU coverage is #154. No material key -> None (skip).
     """
     material_rel = entry.get("material")
@@ -339,7 +322,7 @@ def _usd_spec(prim_path, entry, usd_abs, repo_root, mobility=None):
     )
 
 
-def to_isaaclab_cfg(scene, repo_root):
+def to_scene_specs(scene, repo_root):
     """Map a validated scene dict to a neutral list of ``SpawnSpec``.
 
     PURE: imports no Isaac module. Emits, in order:
@@ -348,9 +331,7 @@ def to_isaaclab_cfg(scene, repo_root):
        at ``/World/ground``;
     2. a distant light at ``/World/light`` from ``environment.light``
        (curated optional ``intensity`` / ``color`` / ``angle``); if
-       ``environment.light`` is absent a sensible default SunLight is
-       still emitted so "ground + light spawn via the adapter" holds
-       (DoD) -- the driver's ``_ensure_scene_defaults`` defers to this;
+       ``environment.light`` is absent its intensity defaults to 3000;
     3. the robot USD at ``/World/Robot``;
     4. one USD spec per object instance at
        ``/World/Objects/<modelstem>_<idx>_<instidx>``, carrying mobility.
@@ -399,7 +380,7 @@ def to_isaaclab_cfg(scene, repo_root):
     robot = scene["robot"]
     robot_usd = resolve_model_path(robot["model"], repo_root)
     specs.append(
-        _usd_spec("/World/Robot", robot, robot_usd, repo_root)
+        _usd_spec("/World/Robot", robot, robot_usd, repo_root, robot.get("mobility"))
     )
 
     for idx, obj_entry in enumerate(scene.get("objects", [])):
@@ -422,182 +403,311 @@ def to_isaaclab_cfg(scene, repo_root):
 
 
 def _orientation_xyzw(wxyz):
-    """Reorder a (w, x, y, z) quaternion to the (x, y, z, w) the spawners want.
-
-    ``rpy_to_quat`` returns (w, x, y, z) -- the convention Isaac Lab uses for
-    quaternions nearly everywhere. The ``sim_utils`` SPAWNERS are the
-    exception: ``spawn_from_usd`` / ``spawn_from_urdf`` document their
-    ``orientation`` argument as ``(x, y, z, w)``.
-
-    Passing (w, x, y, z) straight through therefore rotates every spawned prim.
-    For the common ``rpy: [0, 0, 0]`` it sends (1, 0, 0, 0), which reads as
-    x=1, w=0 -- a 180-degree rotation about X. The whole scene spawns
-    upside-down: authored z becomes -z. It went unnoticed because the example
-    scene's only object is a symmetric cube and the GPU tests assert prim
-    structure, not pose.
-
-    PURE (no Isaac import) so the reorder is unit-testable on the host.
-    """
+    """Reorder a scalar-first quaternion for callers using scalar-last order."""
     w, x, y, z = wxyz
     return (x, y, z, w)
 
 
-def build_scene(scene, stage, repo_root):
-    """Assemble the scene on the active USD stage. Requires Isaac Lab.
+def _set_spawn_pose(prim, translation, orientation, scale=None):
+    """Set the canonical translate/orient/scale stack, retaining asset precision."""
+    from pxr import Gf, UsdGeom
 
-    Rewritten (ADR-0018 decisions 1, 3) to spawn via Isaac Lab
-    ``sim_utils`` config-dataclass spawners instead of raw ``pxr``
-    ``DefinePrim`` / ``GetReferences().AddReference``. The pure
-    ``to_isaaclab_cfg`` adapter produces the spec list; this function
-    materializes each ``SpawnSpec`` into the matching cfg dataclass and
-    calls ``cfg.func(prim_path, cfg, translation=, orientation=)``.
-
-    Physics props (ADR-0018):
-      * ``mobility == "dynamic"`` -> rigid body + mass + collision props.
-      * ``mobility == "static"``  -> collision props only (static
-        collider, no rigid body).
-      * ``mobility is None``      -> no physics props.
-
-    Isaac Lab 3.0 API (spawn stage binding): the ``sim_utils`` spawners
-    resolve their target stage from a thread-local context via
-    ``get_current_stage()`` (``isaaclab/sim/utils/stage.py:496``), NOT from
-    the ``omni.usd`` context. Opening the stage on the ``omni.usd`` context
-    (the driver's ``_open_stage``) no longer populates that thread-local, so
-    in 3.0 ``cfg.func()`` -> ``_spawn_geom_from_prim_type``
-    (``shapes.py:284``) reaches ``get_current_stage()`` returning ``None`` and
-    raises ``AttributeError: 'NoneType' ... GetPrimAtPath``. Isaac Lab 2.3
-    resolved the stage internally; 3.0 requires the caller to bind it. We
-    wrap the spawn loop in ``sim_utils.use_stage(stage)``
-    (``isaaclab/sim/utils/stage.py:229``), which sets ``_context.stage`` for
-    the spawn duration so ``get_current_stage()`` returns the real stage.
-
-    Sensors (unchanged) are resolved and set up via ``isaac_devkit.sensors``.
-    """
-    import contextlib
-
-    import isaaclab.sim as sim_utils
-
-    _set_active_stage(stage)
-    if stage is None:
-        try:
-            import omni.usd
-
-            stage = omni.usd.get_context().get_stage()
-        except Exception:  # noqa: BLE001  (spawners still use the active context)
-            stage = None
-
-    # Bind the thread-local spawn stage the Isaac Lab 3.0 way (see docstring).
-    # ``use_stage`` asserts a real ``Usd.Stage``; fall back to a no-op context
-    # when no stage is available so spawning still attempts via any active
-    # context (matching the pre-3.0 best-effort behavior).
-    stage_ctx = (
-        sim_utils.use_stage(stage)
-        if stage is not None
-        else contextlib.nullcontext()
+    xform = UsdGeom.Xformable(prim)
+    if scale is None and prim.HasAttribute("xformOp:scale"):
+        scale = Gf.Transform(xform.GetLocalTransformation()).GetScale()
+        units = prim.GetAttribute("xformOp:scale:unitsResolve")
+        if units:
+            scale = Gf.CompMult(scale, Gf.Vec3d(units.Get()))
+    values = (
+        ("translate", Gf.Vec3d(*translation), xform.AddTranslateOp),
+        ("orient", Gf.Quatd(*orientation), xform.AddOrientOp),
+        ("scale", Gf.Vec3d(*(scale or (1, 1, 1))), xform.AddScaleOp),
     )
-    with stage_ctx:
-        for spec in to_isaaclab_cfg(scene, repo_root):
-            cfg = _materialize_cfg(sim_utils, spec)
-            cfg.func(
-                spec.prim_path,
-                cfg,
-                translation=spec.translation,
-                orientation=_orientation_xyzw(spec.orientation),
+    reset = xform.GetResetXformStack()
+    ops = []
+    for name, value, add_op in values:
+        attr = prim.GetAttribute("xformOp:" + name)
+        op = UsdGeom.XformOp(attr) if attr else add_op(UsdGeom.XformOp.PrecisionDouble)
+        op.Set(op.GetAttr().GetTypeName().type.pythonClass(value))
+        ops.append(op)
+    xform.SetXformOpOrder(ops, reset)
+
+
+def _set_physics_properties(prim, schema, properties, physx_schema=None):
+    """Apply a physics schema and set the supplied snake_case properties."""
+    schema.Apply(prim)
+    for key, value in properties.items():
+        if value is None:
+            continue
+        name = "".join(word.title() for word in key.split("_"))
+        attr_name = name[0].lower() + name[1:]
+        attr = prim.GetAttribute("physics:" + attr_name)
+        if not attr and physx_schema:
+            namespace = physx_schema.removesuffix("API")
+            prim.AddAppliedSchema(physx_schema)
+            attr = prim.GetAttribute(namespace[0].lower() + namespace[1:] + ":" + attr_name)
+        if not attr:
+            raise ValueError(f"Unknown {schema.__name__} property {key!r} on {prim.GetPath()}")
+        attr.Set(value)
+
+
+def _bind_spawn_materials(prim, directory, options):
+    """Build the preview shader and physics material only when requested."""
+    from pxr import Gf, Sdf, Usd, UsdPhysics, UsdShade
+
+    stage = prim.GetStage()
+    visual = options.pop("visual_material", None)
+    diffuse = options.pop("visual_material_diffuse", None)
+    if diffuse is not None:
+        visual = {"diffuse_color": diffuse, **(visual or {})}
+    visual_path = options.pop("visual_material_path", "material")
+    if visual is not None:
+        visual_path = Sdf.Path(visual_path).MakeAbsolutePath(directory)
+        material = UsdShade.Material.Define(stage, visual_path)
+        shader = UsdShade.Shader.Define(stage, visual_path.AppendChild("Shader"))
+        shader.CreateIdAttr("UsdPreviewSurface")
+        for output in (material.CreateSurfaceOutput(), material.CreateDisplacementOutput()):
+            output.ConnectToSource(shader.CreateOutput(output.GetBaseName(), Sdf.ValueTypeNames.Token))
+        inputs = {
+            "diffuse_color": (0.18,) * 3,
+            "emissive_color": (0.0,) * 3,
+            "roughness": 0.5,
+            "metallic": 0.0,
+            "opacity": 1.0,
+        }
+        inputs.update(visual)
+        for key, value in inputs.items():
+            if value is None:
+                continue
+            name = key.replace("_color", "Color")
+            if name.endswith("Color"):
+                shader.CreateInput(name, Sdf.ValueTypeNames.Float3).Set(Gf.Vec3f(*value))
+            else:
+                shader.CreateInput(name, Sdf.ValueTypeNames.Float).Set(float(value))
+        UsdShade.MaterialBindingAPI.Apply(prim).Bind(material, UsdShade.Tokens.strongerThanDescendants)
+
+    physics = options.pop("physics_material", None)
+    physics_path = options.pop("physics_material_path", "material")
+    if physics is not None:
+        physics_path = Sdf.Path(physics_path).MakeAbsolutePath(directory)
+        material = UsdShade.Material.Define(stage, physics_path)
+        properties = dict(static_friction=0.5, dynamic_friction=0.5, restitution=0.0)
+        properties.update(physics)
+        _set_physics_properties(material.GetPrim(), UsdPhysics.MaterialAPI, properties, "PhysxMaterialAPI")
+        targets = iter(Usd.PrimRange(prim))
+        for target in targets:
+            if target.HasAPI(UsdPhysics.CollisionAPI):
+                UsdShade.MaterialBindingAPI.Apply(target).Bind(
+                    material, UsdShade.Tokens.strongerThanDescendants, "physics"
+                )
+                targets.PruneChildren()
+
+
+def _spawn_light(stage, spec, options):
+    from pxr import Gf, Sdf, UsdLux
+
+    prim = stage.DefinePrim(spec.prim_path, options.pop("prim_type", "DistantLight"))
+    light = UsdLux.LightAPI(prim)
+    _set_spawn_pose(prim, spec.translation, spec.orientation)
+    for key, default, attribute in (
+        ("intensity", 1.0, light.CreateIntensityAttr),
+        ("exposure", 0.0, light.CreateExposureAttr),
+        ("normalize", False, light.CreateNormalizeAttr),
+        ("enable_color_temperature", False, light.CreateEnableColorTemperatureAttr),
+        ("color_temperature", 6500.0, light.CreateColorTemperatureAttr),
+    ):
+        value = options.pop(key, default)
+        if value is not None:
+            attribute(value)
+    angle = options.pop("angle", 0.53)
+    if angle is not None:
+        prim.CreateAttribute("inputs:angle", Sdf.ValueTypeNames.Float, custom=False).Set(angle)
+    color = options.pop("color", (1, 1, 1))
+    if color is not None:
+        light.CreateColorAttr(Gf.Vec3f(*color))
+    return prim
+
+
+def _spawn_reference(stage, spec, options):
+    from pxr import Usd, UsdGeom
+
+    path = spec.prim_path
+    prim = stage.GetPrimAtPath(path)
+    usd_path = options.pop("usd_path")
+    scale = options.pop("scale", None)
+    if not prim:
+        if not stage.ResolveIdentifierToEditTarget(usd_path):
+            raise FileNotFoundError(f"USD reference not found: {usd_path}")
+        prim = UsdGeom.Xform.Define(stage, path).GetPrim()
+        prim.GetReferences().AddReference(usd_path)
+        _set_spawn_pose(prim, spec.translation, spec.orientation, scale)
+    sets = prim.GetVariantSets()
+    variants = options.pop("variants", None) or {}
+    if isinstance(variants, str):
+        # A material YAML also accepts a scalar color variant.
+        names = sets.GetNames()
+        if len(names) > 1:
+            raise ValueError(f"Specify the variant set for {path}: {names}")
+        variants = {names[0]: variants} if names else {}
+    for name, selection in variants.items():
+        if sets.HasVariantSet(name):
+            variant = sets.GetVariantSet(name)
+            if selection not in variant.GetVariantNames():
+                raise ValueError(f"Unknown selection {selection!r} for {path} variant {name!r}")
+            variant.SetVariantSelection(selection)
+    if options.pop("make_uninstanceable", False):
+        for child in Usd.PrimRange(prim):
+            if child.IsInstance():
+                child.SetInstanceable(False)
+    return prim
+
+
+def _spawn_prim(stage, spec):
+    """Author one environment prim or referenced model and its spawn overrides."""
+    from pxr import Sdf, Usd, UsdGeom, UsdPhysics, UsdShade
+
+    path = spec.prim_path
+    options = spec.kwargs.copy()
+    if stage.GetPrimAtPath(path) and "usd_path" not in options:
+        raise ValueError(f"A prim already exists at {path}")
+    if spec.kind == "distant_light":
+        prim = _spawn_light(stage, spec, options)
+    else:
+        procedural = "usd_path" not in options
+        if procedural:
+            prim = UsdGeom.Xform.Define(stage, path).GetPrim()
+            _set_spawn_pose(prim, spec.translation, spec.orientation)
+            directory = prim.GetPath().AppendChild("geometry")
+            mesh = UsdGeom.Cube.Define(stage, directory.AppendChild("mesh"))
+            dimensions = options.pop("size", (50.0, 50.0, 0.1))
+            size = min(dimensions)
+            mesh.CreateSizeAttr(size)
+            target = mesh.GetPrim()
+            _set_spawn_pose(target, (0, 0, 0), (1, 0, 0, 0), tuple(d / size for d in dimensions))
+            options.setdefault("collision_props", {})
+        else:
+            prim = _spawn_reference(stage, spec, options)
+            target = prim
+            directory = prim.GetPath()
+
+        for key, schema, physx_schema, anchor, mobility in (
+            ("collision_props", UsdPhysics.CollisionAPI, "PhysxCollisionAPI", target, ("dynamic", "static")),
+            ("rigid_props", UsdPhysics.RigidBodyAPI, "PhysxRigidBodyAPI", prim, ("dynamic",)),
+            ("mass_props", UsdPhysics.MassAPI, None, prim, ("dynamic",)),
+        ):
+            if spec.mobility in mobility:
+                schema.Apply(anchor)
+            props = options.pop(key, None)
+            if props is None:
+                continue
+            if procedural:
+                _set_physics_properties(anchor, schema, props, physx_schema)
+                continue
+            children = iter(Usd.PrimRange(anchor))
+            for child in children:
+                if child.HasAPI(schema):
+                    _set_physics_properties(child, schema, props, physx_schema)
+                    children.PruneChildren()
+
+        _bind_spawn_materials(target, directory, options)
+        if options.pop("activate_contact_sensors", False):
+            bodies = [child for child in Usd.PrimRange(prim) if child.HasAPI(UsdPhysics.RigidBodyAPI)]
+            if not bodies:
+                raise ValueError(f"No rigid bodies for contact reporting at {path}")
+            for body in bodies:
+                body.AddAppliedSchema("PhysxRigidBodyAPI")
+                body.CreateAttribute("physxRigidBody:sleepThreshold", Sdf.ValueTypeNames.Float, False).Set(0)
+                body.AddAppliedSchema("PhysxContactReportAPI")
+                body.CreateAttribute("physxContactReport:threshold", Sdf.ValueTypeNames.Float, False).Set(0)
+
+        for part, material in options.pop("visual_material_bindings", {}).items():
+            part_prim = stage.GetPrimAtPath(prim.GetPath().AppendPath(part))
+            material_path = Sdf.Path(material.removeprefix("./")).MakeAbsolutePath(prim.GetPath())
+            UsdShade.MaterialBindingAPI.Apply(part_prim).Bind(
+                UsdShade.Material.Get(stage, material_path), UsdShade.Tokens.strongerThanDescendants
             )
-            _apply_mobility_physics(spec, stage)
+
+    imageable = UsdGeom.Imageable(prim)
+    if options.pop("visible", True):
+        imageable.MakeVisible()
+    else:
+        imageable.MakeInvisible()
+    for kind, value in options.pop("semantic_tags", None) or ():
+        from pxr import UsdSemantics
+
+        labels = UsdSemantics.LabelsAPI.Apply(prim, kind.replace(" ", "_")).CreateLabelsAttr()
+        existing = list(labels.Get() or [])
+        value = value.replace(" ", "_")
+        if value not in existing:
+            labels.Set(existing + [value])
+    # These options only affect cloning across regex paths. Each spec has one concrete path.
+    options.pop("copy_from_source", None)
+    options.pop("spawn_path", None)
+    if options:
+        raise ValueError(f"Unsupported spawn overrides for {path}: {', '.join(options)}")
+
+
+def build_scene(scene, stage, repo_root):
+    """Author the scene specs and set up sensors on the given or active stage."""
+    if stage is None:
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise ValueError("build_scene requires a USD stage")
+
+    for spec in to_scene_specs(scene, repo_root):
+        _spawn_prim(stage, spec)
 
     sensor_paths = resolve_sensor_configs(scene, repo_root)
     if sensor_paths:
         from isaac_devkit.sensors import load_config, setup_sensor
-        for sp in sensor_paths:
-            cfg = load_config(sp)
-            setup_sensor(cfg, stage)
+
+        for path in sensor_paths:
+            setup_sensor(load_config(path), stage)
 
 
-def _set_active_stage(stage):
-    """Make ``stage`` the active USD context stage, best-effort.
+def apply_joint_drive(prim_path, stiffness, damping, *, drive_type="force", stage=None):
+    """Set a joint's drive and verify its authored gains on the resolved stage.
 
-    The ``sim_utils`` spawners author into the active USD context; the
-    driver already opens the stage on that context, so this is normally a
-    no-op. Guarded so a None / detached stage does not break spawning.
+    Revolute gains are supplied per radian and stored per degree. Prismatic
+    gains use linear units. Return False for a missing stage or undriveable joint.
     """
+    if stiffness is None or damping is None:
+        raise ValueError("apply_joint_drive needs both stiffness and damping")
+    stiffness, damping = float(stiffness), float(damping)
+    if stiffness < 0 or damping < 0:
+        raise ValueError("joint drive gains must be non-negative")
+
     if stage is None:
-        return
-    try:
         import omni.usd
 
-        ctx = omni.usd.get_context()
-        if ctx.get_stage() is not stage:
-            ctx.attach_stage(stage)
-    except Exception:  # noqa: BLE001  (best-effort; spawners use the context)
-        pass
-
-
-def _materialize_cfg(sim_utils, spec):
-    """Turn a SpawnSpec into the concrete ``sim_utils`` cfg dataclass."""
-    if spec.kind == "ground_plane":
-        # Isaac Lab's GroundPlaneCfg defaults usd_path to a nucleus asset
-        # (ISAAC_NUCLEUS_DIR/Environments/Grid/default_environment.usd). The
-        # base repo runs OFFLINE (no nucleus): that path resolves to None and
-        # the spawn dies with ArgumentError GetPrimAtPath(Stage, NoneType).
-        # Spawn a procedural collision cuboid floor instead -- fully
-        # offline-safe, no external asset (same principle as the example's
-        # asset-free custom camera). A caller that genuinely has a ground USD
-        # can pass ``usd_path`` via ``environment.ground_overrides`` -> a
-        # UsdFileCfg path, but the default is procedural.
-        kwargs = dict(spec.kwargs)
-        if "usd_path" in kwargs:
-            return sim_utils.UsdFileCfg(**kwargs)
-        kwargs.setdefault("size", (50.0, 50.0, 0.1))
-        kwargs.setdefault("collision_props", sim_utils.CollisionPropertiesCfg())
-        return sim_utils.CuboidCfg(**kwargs)
-
-    if spec.kind == "distant_light":
-        return sim_utils.DistantLightCfg(**spec.kwargs)
-
-    if spec.kind == "usd":
-        kwargs = dict(spec.kwargs)
-        diffuse = kwargs.pop("visual_material_diffuse", None)
-        if diffuse is not None:
-            kwargs["visual_material"] = sim_utils.PreviewSurfaceCfg(
-                diffuse_color=tuple(diffuse)
-            )
-        # NOTE (ADR-0018): mobility physics is DEFINED post-spawn in
-        # ``_apply_mobility_physics``, NOT via UsdFileCfg props. Isaac Lab's
-        # UsdFileCfg ``rigid_props`` / ``collision_props`` go through
-        # ``schemas.modify_*`` -- they only EDIT an EXISTING RigidBodyAPI, so
-        # they cannot turn a geometry-only USD (the prop_cube) into a rigid
-        # body. The three-file schema declares mobility at the SCENE
-        # (object.yaml: "physics level declared at the scene, not baked into
-        # the model"), so build_scene applies the schema itself after spawn.
-        return sim_utils.UsdFileCfg(**kwargs)
-
-    raise ValueError(f"unknown SpawnSpec kind: {spec.kind!r}")
-
-
-def _apply_mobility_physics(spec, stage):
-    """DEFINE physics schemas for a scene-declared mobility (post-spawn).
-
-    Isaac Lab's ``UsdFileCfg`` rigid/collision props only MODIFY an existing
-    ``RigidBodyAPI`` (``schemas.modify_*``), so they cannot make a
-    geometry-only USD a rigid body. The three-file schema declares mobility
-    at the SCENE, not in the model, so apply the schema on the spawned prim:
-
-      * ``dynamic`` -> ``RigidBodyAPI`` + ``CollisionAPI`` (a free rigid body);
-      * ``static``  -> ``CollisionAPI`` only (a static collider);
-      * ``None``     -> nothing.
-
-    Physics is only authored here (the example uses the timeline loop, not a
-    stepped ``SimulationContext``); collider-on-mesh refinement is deferred
-    with the simulation stepping.
-    """
-    if spec.kind != "usd" or spec.mobility is None or stage is None:
-        return
+        stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        return False
     from pxr import UsdPhysics
 
-    prim = stage.GetPrimAtPath(spec.prim_path)
-    if not prim or not prim.IsValid():
-        return
-    UsdPhysics.CollisionAPI.Apply(prim)
-    if spec.mobility == "dynamic":
-        UsdPhysics.RigidBodyAPI.Apply(prim)
+    prim = stage.GetPrimAtPath(prim_path)
+    if not prim or prim.IsInstanceProxy() or prim.IsInPrototype():
+        return False
+    schemas = {name.partition(":")[0] for name in prim.GetAppliedSchemas()}
+    if "PhysxTendonAxisAPI" in schemas and "PhysxTendonAxisRootAPI" not in schemas:
+        return False
+    if prim.IsA(UsdPhysics.RevoluteJoint):
+        axis = "angular"
+        stiffness, damping = math.radians(stiffness), math.radians(damping)
+    elif prim.IsA(UsdPhysics.PrismaticJoint):
+        axis = "linear"
+    else:
+        return False
+    drive = UsdPhysics.DriveAPI(prim, axis) or UsdPhysics.DriveAPI.Apply(prim, axis)
+    drive.CreateTypeAttr().Set(drive_type)
+    drive.CreateStiffnessAttr().Set(stiffness)
+    drive.CreateDampingAttr().Set(damping)
+    drive = UsdPhysics.DriveAPI(stage.GetPrimAtPath(prim_path), axis)
+    return (
+        bool(drive)
+        and drive.GetTypeAttr().Get() == drive_type
+        and math.isclose(drive.GetStiffnessAttr().Get(), stiffness, rel_tol=1e-6)
+        and math.isclose(drive.GetDampingAttr().Get(), damping, rel_tol=1e-6)
+    )

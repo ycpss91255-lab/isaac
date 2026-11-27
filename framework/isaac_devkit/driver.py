@@ -407,7 +407,7 @@ class IsaacDriver:
         keep viewport-less debug renders readable.
 
         ADR-0018: ``scene.build_scene`` now spawns a distant light at
-        ``/World/light`` via the ``sim_utils`` adapter. This default is
+        ``/World/light`` on the USD stage. This default is
         opt-out so the scene never ends up with two SunLights -- if a
         light already exists at ``/World/light`` or ``/World/SunLight``,
         skip. (The example driver consolidation is #154.)

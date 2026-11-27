@@ -431,18 +431,31 @@ def _scene_dict(robot=None, objects=None, environment=None):
     return scene
 
 
-class TestToIsaaclabCfg:
+class TestToSceneSpecs:
     """Pure YAML -> SpawnSpec mapping; asserted without a live stage."""
+
+    def test_scene_builder_reexports_adapter(self, monkeypatch):
+        script_dir = Path(__file__).resolve().parents[3] / "src" / "script"
+        monkeypatch.syspath_prepend(str(script_dir))
+        import scene_builder as shim
+
+        assert shim.to_scene_specs is scene_builder.to_scene_specs
+        assert "to_scene_specs" in shim.__all__
+        assert not hasattr(shim, "to_isaaclab_cfg")
+        assert "to_isaaclab_cfg" not in shim.__all__
+
+    def test_old_adapter_name_is_gone(self):
+        assert not hasattr(scene_builder, "to_isaaclab_cfg")
 
     def test_default_environment_emits_light_only(self, repo_root):
         # No environment block -> no ground, but a default light is emitted.
-        specs = scene_builder.to_isaaclab_cfg(_scene_dict(), repo_root)
+        specs = scene_builder.to_scene_specs(_scene_dict(), repo_root)
         kinds = [s.kind for s in specs]
         assert "ground_plane" not in kinds
         assert kinds[0] == "distant_light"
 
     def test_ground_plane_spec(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(environment={"ground_plane": True}), repo_root
         )
         ground = next(s for s in specs if s.kind == "ground_plane")
@@ -450,7 +463,7 @@ class TestToIsaaclabCfg:
         assert ground.mobility is None
 
     def test_default_light_when_absent(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(environment={"ground_plane": True}), repo_root
         )
         light = next(s for s in specs if s.kind == "distant_light")
@@ -458,7 +471,7 @@ class TestToIsaaclabCfg:
         assert light.kwargs.get("intensity") == 3000.0
 
     def test_curated_light_fields(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 environment={
                     "light": {
@@ -476,7 +489,7 @@ class TestToIsaaclabCfg:
         assert light.kwargs["angle"] == 0.3
 
     def test_emits_specs_in_order(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 environment={"ground_plane": True},
                 objects=[
@@ -493,7 +506,7 @@ class TestToIsaaclabCfg:
         assert kinds == ["ground_plane", "distant_light", "usd", "usd"]
 
     def test_robot_usd_spec(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(robot={"pose": {"xyz": [1.0, 2.0, 3.0], "rpy": [0, 0, 0]}}),
             repo_root,
         )
@@ -505,7 +518,7 @@ class TestToIsaaclabCfg:
         assert robot.mobility is None
 
     def test_object_usd_spec_translation_and_path(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {
@@ -526,7 +539,7 @@ class TestToIsaaclabCfg:
         assert obj.mobility == "dynamic"
 
     def test_object_static_mobility(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {
@@ -544,7 +557,7 @@ class TestToIsaaclabCfg:
         assert obj.mobility == "static"
 
     def test_object_rpy_to_orientation(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {
@@ -562,7 +575,7 @@ class TestToIsaaclabCfg:
         assert obj.orientation == pytest.approx((s, 0.0, 0.0, s))
 
     def test_instance_expansion_flows_through(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {
@@ -587,7 +600,7 @@ class TestToIsaaclabCfg:
         assert all(o.mobility == "dynamic" for o in objs)
 
     def test_spawn_overrides_spread_onto_kwargs(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 robot={
                     "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
@@ -601,7 +614,7 @@ class TestToIsaaclabCfg:
 
     def test_spawn_overrides_win_over_curated(self, repo_root):
         # An override on usd_path beats the curated resolved path.
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 robot={
                     "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
@@ -614,7 +627,7 @@ class TestToIsaaclabCfg:
         assert robot.kwargs["usd_path"] == "/override/path.usd"
 
     def test_variant_carried_as_variants_kwarg(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {
@@ -634,7 +647,7 @@ class TestToIsaaclabCfg:
     def test_specs_are_json_serializable(self, repo_root):
         import json
 
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(environment={"ground_plane": True}), repo_root
         )
         # NamedTuple -> list of fields; every field is plain data.
@@ -653,7 +666,7 @@ class TestToIsaaclabCfg:
         }
         mat_path = repo_root / "model" / "usd" / "object" / "pallet" / "mat.yaml"
         mat_path.write_text(yaml.dump(material))
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {
@@ -673,7 +686,7 @@ class TestToIsaaclabCfg:
         )
 
     def test_no_material_no_diffuse_key(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_scene_specs(
             _scene_dict(
                 objects=[
                     {

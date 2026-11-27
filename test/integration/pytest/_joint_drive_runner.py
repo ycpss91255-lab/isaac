@@ -15,10 +15,8 @@ singleton):
     ``UsdPhysics.DriveAPI("angular")`` stiffness/damping.
 
   ``--mode runtime-apply``  converts with NO drive, then calls the runtime
-    helper ``model_import.apply_joint_drive`` (Isaac Lab's
-    ``modify_joint_drive_properties``, stage-only -- no Articulation, no
-    SimulationContext) on the imported joint prim, and reports the DriveAPI
-    gains the helper wrote.
+    helper ``model_import.apply_joint_drive`` on the imported joint prim
+    and reports its authored DriveAPI gains.
 
 Either way the assertion is STRUCTURAL: the DriveAPI is present on the joint
 with the configured gains. "The joint physically reaches / holds a commanded
@@ -133,9 +131,7 @@ def _main() -> None:
             raise RuntimeError("no revolute joint prim in produced USD")
 
         if args.mode == "runtime-apply":
-            # Stage-only per-joint drive application (no SimulationContext).
-            # apply_joint_drive resolves the current stage via Isaac Lab's
-            # modify_joint_drive_properties; make the produced stage current.
+            # Exercise the helper's default stage lookup through the USD context.
             import omni.usd
 
             omni.usd.get_context().open_stage(str(produced))

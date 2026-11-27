@@ -86,12 +86,16 @@ exclude_also = [
     "def _build_graph_topology\\(",
     "def _resolve_asset_url\\(",
     "def _set_xform_pose\\(",
-    # scene: Isaac-side stage build + sim_utils cfg materialization
-    # (ADR-0018). The pure adapter (to_isaaclab_cfg / rpy_to_quat /
-    # _usd_spec / _material_diffuse_for) stays counted.
+    # Scene and joint authoring run against a USD stage. The pure
+    # to_scene_specs adapter and quaternion conversion stay counted.
     "def build_scene\\(",
-    "def _set_active_stage\\(",
-    "def _materialize_cfg\\(",
+    "def _spawn_light\\(",
+    "def _spawn_reference\\(",
+    "def _spawn_prim\\(",
+    "def _set_spawn_pose\\(",
+    "def _bind_spawn_materials\\(",
+    "def _set_physics_properties\\(",
+    "def apply_joint_drive\\(",
     # output_python: Isaac-side readers (live stage only, GPU suite).
     "def make_sources\\(",
     "def _annotator_reader\\(",

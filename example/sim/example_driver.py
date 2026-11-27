@@ -13,7 +13,7 @@ overrides ``run()`` to walk the SCENE-driven lifecycle (ADR-0017 section
     install signal handlers (override Kit SIGINT)
     scene = load_scene(SCENE)        # pure: read + merge three files
     stage = get_stage()              # from SimulationApp/World
-    build_scene(scene, stage)        # framework Isaac Lab sim_utils adapter
+    build_scene(scene, stage)        # framework USD scene builder
     setup_sensors(scene, stage)      # L3 outbound: camera -> ROS 2
     self.io = setup_ros2_io(scene, stage)  # inbound: /cmd_vel subscribe
     ensure_scene_defaults(stage)     # base: SunLight (skipped, adapter lit)
@@ -234,18 +234,11 @@ class ExampleDriver(IsaacDriver):
         return omni.usd.get_context().get_stage()
 
     def _build_scene(self, scene: Dict[str, Any], stage: Any) -> None:
-        """Spawn the scene via the framework Isaac Lab adapter (#154).
+        """Author the environment and model references on the supplied USD stage.
 
-        Delegates to ``isaac_devkit.scene.build_scene`` -- the
-        ``to_isaaclab_cfg`` -> ``sim_utils`` cfg -> ``cfg.func()`` spawn
-        path (ADR-0018 decisions 1, 3). The example no longer carries its
-        own raw-``pxr`` ``DefinePrim`` / ``GetReferences().AddReference``
-        spawn: the adapter spawns the environment ground + light, the
-        robot USD at ``/World/Robot`` (referencing
-        ``camera_bot.usd`` whose ``defaultPrim`` is ``/camera_bot``), and
-        each object instance under ``/World/Objects``. ``base_link`` then
-        resolves at ``/World/Robot/base_link`` so the camera placement's
-        ``parent_prim`` resolves.
+        The framework builds the prims described by ``to_scene_specs``.
+        Referencing the robot at ``/World/Robot`` exposes its base link at
+        ``/World/Robot/base_link`` for the camera placement.
 
         ``repo_root`` is ``<repo>/example/sim`` -- the example's model
         paths resolve there (``resolve_model_path`` tolerates the robot

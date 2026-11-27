@@ -1,12 +1,9 @@
 """L1 adapter GPU test (#152, ADR-0018 decisions 1 + 3).
 
-Dedicated GPU coverage for the new ``isaac_devkit.scene.build_scene``
-adapter: a scene is spawned through ``to_isaaclab_cfg`` -> ``sim_utils``
-cfg -> ``cfg.func()`` and the spawned prims are asserted on the live
-stage. Since #325 the scene is built in the runner around the official
-NVIDIA Jetbot (robot) and cube (``mobility: dynamic`` object) USDs,
-fetched through ``test/test_assets.py`` -- not repo-bundled scaffold
-assets.
+The runner calls ``isaac_devkit.scene.build_scene`` and checks the prims
+from ``to_scene_specs`` on the live stage. It uses the official NVIDIA
+Jetbot (robot) and cube (``mobility: dynamic`` object) USDs fetched
+through ``test/test_assets.py`` (#325).
 
 The Kit side runs in ``_build_scene_runner.py`` (one ``SimulationApp`` per
 process -- the singleton constraint); this module owns the subprocess
@@ -75,11 +72,11 @@ def test_adapter_runner_clean_exit(adapter_run):
 
 
 def test_adapter_spawns_ground_light_robot(adapter_run):
-    """environment ground + light + robot USD spawn via the cfg adapter.
+    """environment ground + light + robot USD spawn via the scene builder.
 
     Also asserts /World/Robot/chassis RESOLVES through the adapter
     reference: the Jetbot USD carries a defaultPrim (/jetbot), so the
-    UsdFileCfg reference pulls in the referenced robot content and its
+    USD reference pulls in the referenced robot content and its
     articulation body lands at /World/Robot/chassis (the Jetbot has no
     base_link).
     """
@@ -104,11 +101,8 @@ def test_adapter_spawns_ground_light_robot(adapter_run):
 def test_adapter_spawns_mobility_dynamic_object(adapter_run):
     """A mobility: dynamic object spawns AND carries RigidBodyAPI.
 
-    The scene marks the official NVIDIA cube ``mobility: dynamic``; the
-    adapter spawns it with ``UsdFileCfg`` and then DEFINES the physics
-    schema post-spawn (``_apply_mobility_physics``). The cube USD has a
-    defaultPrim, so the reference resolves and ``UsdPhysics.RigidBodyAPI``
-    lands on a real prim (``rigidbody=True``).
+    The scene builder references the NVIDIA cube and applies the
+    rigid-body schema to the prim marked ``mobility: dynamic``.
     """
     m = re.search(
         r"\[ADAPTER OBJECT\] path=(\S+) valid=True rigidbody=(\w+)",

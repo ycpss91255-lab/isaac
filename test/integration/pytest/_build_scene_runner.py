@@ -6,9 +6,8 @@ headless ``SimulationApp``, builds an in-memory scene around the official
 Jetbot (robot) and NVIDIA cube (``mobility: dynamic`` object) USDs passed
 on the CLI (fetched by the pytest layer through ``test/test_assets.py``,
 #325 -- no repo-bundled scaffold files), and calls
-the FRAMEWORK ``isaac_devkit.scene.build_scene`` -- the new
-``to_isaaclab_cfg`` -> ``sim_utils`` cfg -> ``cfg.func()`` spawn path --
-then reports the spawned prims as marker lines. This is the dedicated GPU
+``isaac_devkit.scene.build_scene``. It reports the prims spawned from
+``to_scene_specs`` as marker lines. This is the dedicated GPU
 coverage for the adapter.
 
 Marker lines (the pytest layer asserts on these)::
@@ -97,7 +96,7 @@ def _main() -> None:
             print(f"[ADAPTER PRIM] path={path} valid={_valid(path)}", flush=True)
 
         # The Jetbot USD has a defaultPrim (/jetbot), so the adapter's
-        # UsdFileCfg reference brings in the referenced content and its
+        # USD reference brings in the referenced content and its
         # articulation body lands at /World/Robot/chassis (the Jetbot has no
         # base_link). Asserted strictly by the test.
         chassis = _valid("/World/Robot/chassis")
