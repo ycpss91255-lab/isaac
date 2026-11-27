@@ -140,6 +140,16 @@ Kit 每次启动都会打印几种不影响运行的警告：
 
 实际能运行多少个 instance 取决于可用显存。在一张 32607 MiB 的显卡上实测，每个运行中的 Isaac instance 约占 3.9 GiB，可同时运行 6–7 个。将显卡的可用显存换算成 GiB 再除以 3.9，即可估算数量。多个 instance 共享 GPU 算力，因此每个都运行得更慢。
 
+## 挂载本地 USD 模型
+
+Isaac 不附带示例模型。请使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的转换输出。
+
+1. 运行 `cp setup.isaac_sample.toml setup.local.toml`，创建 Git 会忽略的本地配置文件。如果已有本地配置文件，请将示例合并进去，以保留当前 checkout 的配置。
+2. 将模型挂载的 `source` 改为模型所在的目录。只读挂载的目标保持为 `/home/${USER_NAME}/models/sim_asset`，让场景在每台机器上都能解析相同的路径。如果添加模型挂载，请将对应的容器内路径加入 `MODEL_PATH`，并用冒号分隔。
+3. 运行 `just docker run -t headless -d` 启动容器。
+
+Base 应用本地配置时会替换整个 `[[volumes]]` 列表。请在本地配置文件中保留 `setup.toml` 的所有挂载，并在项目添加挂载时同步更新。
+
 ## 连接 WebRTC livestream
 
 Isaac Sim 6.2.0 用 NVCF（`omni.services.livestream.nvcf`）livestream 协议。可以用桌面 client 或浏览器 viewer 连接：

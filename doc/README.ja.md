@@ -140,6 +140,16 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 
 実用上の同時実行数は GPU の空きメモリで決まる。32607 MiB の GPU で実測したところ、実行中の Isaac instance は 1 つあたり約 3.9 GiB を使用し、6～7 個を同時に実行できる。手元の GPU の空きメモリを GiB に換算し、3.9 で割ると目安がわかる。GPU の演算資源は共有するため、各 instance の実行速度は低下する。
 
+## ローカルの USD モデルをマウントする
+
+Isaac にはサンプルモデルが同梱されていません。`sim_asset` の USD モデル、または `asset_converter` で変換した USD モデルを使ってください。
+
+1. `cp setup.isaac_sample.toml setup.local.toml` を実行して、Git の管理対象外のローカル設定ファイルを作成します。すでにファイルがある場合は、このチェックアウトの設定を保持するため、既存のファイルにサンプルの設定を統合してください。
+2. モデルのマウント設定の `source` を、モデルがあるディレクトリに変更します。どのマシンでもシーンから同じパスを参照できるように、読み取り専用のマウント先は `/home/${USER_NAME}/models/sim_asset` のままにします。モデルのマウントを追加する場合は、対応するコンテナ内のパスをコロン区切りで `MODEL_PATH` に追加します。
+3. `just docker run -t headless -d` でコンテナを起動します。
+
+Base はローカル設定を適用するときに `[[volumes]]` のリスト全体を置き換えます。ローカル設定には `setup.toml` のマウントをすべて残し、リポジトリにマウントが追加されたら反映してください。
+
 ## WebRTC livestream への接続
 
 Isaac Sim 6.2.0 は NVCF（`omni.services.livestream.nvcf`）livestream プロトコルを使用。デスクトップ client またはブラウザベースのビューアで接続：

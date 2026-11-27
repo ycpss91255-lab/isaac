@@ -140,6 +140,16 @@ One instance per checkout is the deliberate default. This repo removed its built
 
 Available GPU memory sets the practical instance count. On a 32607 MiB card, each running Isaac instance used about 3.9 GiB, enough for 6–7 instances. Divide your card's available memory in GiB by 3.9 for an estimate. The instances share GPU compute, so each runs more slowly.
 
+## Mounting local USD models
+
+Isaac ships no example models. Use USD models from `sim_asset` or the output of `asset_converter`.
+
+1. Run `cp setup.isaac_sample.toml setup.local.toml` to create the gitignored local configuration. If you already have a local configuration, merge the sample into it to keep your checkout settings.
+2. Edit the model mount’s `source` to point to your models. Keep its read-only target at `/home/${USER_NAME}/models/sim_asset` so scenes resolve the same paths on every machine. If you add model mounts, add their container paths to `MODEL_PATH`, separated by colons.
+3. Start the container with `just docker run -t headless -d`.
+
+Base replaces the entire `[[volumes]]` list when it applies the local configuration. Keep every mount from `setup.toml` in your copy and update it whenever the repo adds a mount.
+
 ## Connecting to the WebRTC livestream
 
 Isaac Sim 6.2.0 uses the NVCF (`omni.services.livestream.nvcf`) livestream protocol. Connect with the desktop client or a browser-based viewer:
