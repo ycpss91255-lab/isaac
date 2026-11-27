@@ -50,36 +50,20 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：啟動 Isaac 並跑一個場景
 
-`example/` 的 camera_bot 場景以 headless 執行，會發布 ROS 2 camera topic 並訂閱 `/cmd_vel`。container 的工作目錄是 repo root（mount 在 `~/work`），所以腳本路徑都相對於 repo。以下流程已在 Isaac Sim 6.2.0（RTX 5090）驗證：
+本專案未附模擬範例。請從 [Isaac Sim 官方範例](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)中選擇可在 headless 模式執行的腳本。將 `path/to/your_scene.py` 換成容器內的腳本路徑。相對路徑以專案根目錄（`~/work`）為起點。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 EXAMPLE_TICK_BUDGET=100000 exec /isaac-sim/python.sh example/sim/example_driver.py'
-# prints [CAMERA GRAPH OK] and [BOOT OK] in about 30 s
-
-# In a second terminal: the camera topic, from a sibling ROS 2 container on the same domain
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash && ros2 topic echo --once /camera_bot/camera/color/image_raw sensor_msgs/msg/Image --field header'
-# frame_id: camera_bot_camera_color_optical_frame
+  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh path/to/your_scene.py'
 
 just docker stop
 ```
 
-範例刻意跑在私有 ROS domain（`77`）上。共用的 host 可能有其他 `/cmd_vel` publisher 在預設的 domain 0，它們也會驅動這台機器人。任選一個沒人用的 domain（0 到 101），兩端用同一個 `ROS_DOMAIN_ID`。
+使用 ROS 2 場景時，請讓場景與 ROS 2 用戶端使用同一個未被占用的 `ROS_DOMAIN_ID`（此處為 `77`）。
 
-**第一次啟動時，camera topic 大約會在 `[BOOT OK]` 之後 2 分鐘才出現。** camera publisher 要等第一個 frame render 完才會出現，而 cache 是空的時候 renderer 要先編譯 shader。在一次冷啟動中，topic 在 `[BOOT OK]` 之後 1 分 52 秒出現，`ros2 topic echo --once` 再過 2 秒回傳。用那次留下的 cache 再跑，topic 在 `[BOOT OK]` 之後 3 秒內就在。等待的不是 DDS discovery：Isaac 在發布時，新開的 sibling container 立刻就看得到 topic。想要看它何時出現、而不是乾等 `echo`：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash &&
-   until ros2 topic list | grep -q image_raw; do sleep 1; done &&
-   ros2 topic hz /camera_bot/camera/color/image_raw'
-# average rate: ~30
-```
-
-沒設 `EXAMPLE_TICK_BUDGET` 時，driver 跑完 1800 次 update（headless 約 2 分鐘）後會自行停止並印出 `[EXIT CLEAN]`。Kit 會把 session log 寫到 host 端的 `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log`。追最新一份：
+Kit 會把 session log 寫到 host 端的 `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log`。追最新一份：
 
 ```bash
 tail -f "$(ls -t isaac-sim/kit/logs/Kit/*/*/kit_*.log | head -1)"
@@ -93,7 +77,7 @@ tail -f "$(ls -t isaac-sim/kit/logs/Kit/*/*/kit_*.log | head -1)"
 
 Kit 每次啟動都會印出幾種不影響執行的警告：
 
-- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`，前 2 秒大約 40 行。OmniHub 是 Nucleus asset 的選用本機 cache 服務。它的 helper（`/usr/local/bin/hub`）在 container 內以 `Permission denied` 結束，所以 Kit 直接載入 asset。這裡的範例只用本機檔案。
+- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`，前 2 秒大約 40 行。OmniHub 是 Nucleus asset 的選用本機 cache 服務。它的 helper（`/usr/local/bin/hub`）在 container 內以 `Permission denied` 結束，所以 Kit 直接載入 asset。
 - `Extensions config 'extension.toml' doesn't exist '/home/<user>/work/<dir>'`，repo 每個頂層目錄一行（約 15 行）。這來自本修正之前 build 的 image：experience 檔的 `extsUser` extension 目錄不在 image 裡，container user 又無法建立它，Kit 就改去工作目錄找 extension。現在 image 會建立這個目錄。如果還看到這些警告，用 `just docker build -t <stage>` 重 build 該 stage。
 
 ### 停止 driver 腳本
@@ -288,7 +272,7 @@ Kit terminal 應印出 `[ros2_test_sub] /host/test <- 'hello-from-host'`。
 
 #### 額外 Kit 參數（`ISAAC_KIT_EXTRA_ARGS`）
 
-`IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`example_driver.py`、`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
+`IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -299,7 +283,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### 啟動插件（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`example_driver.py`、`stream_source_producer` 與 `src/script/` 下的腳本不支援。
+`IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`stream_source_producer` 與 `src/script/` 下的腳本不支援。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
