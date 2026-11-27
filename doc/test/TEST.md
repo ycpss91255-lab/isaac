@@ -1,6 +1,6 @@
 # TEST.md
 
-**214 tests** total (bats). Hosted pytest collects **720 tests**.
+Bats 共 **214 例**，hosted pytest 共 **721 例**。
 
 ## Tests by group (isaac#434)
 
@@ -10,11 +10,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 119 | 619 | 34 | 772 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 82 | 51 | 0 | 133 |
+| stream | 82 | 52 | 0 | 134 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 44 | 0 | 44 |
 
-The `**214 tests** total` above counts the bats specs only. Including 720 hosted and 34 GPU pytest cases, the groups total 968 tests. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+五組合計 969 例，包含 214 個 Bats、721 個 hosted pytest 與 34 個 GPU pytest 案例。`gui` 的測試預計由 #428 加入，`headless` 包含啟動檢查（#461）。GPU 整合測試在共用的 `devel` 層啟動 Isaac，因此全部歸入 `core`。
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -376,7 +376,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **720 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+Hosted 測試可在未安裝 Isaac Sim 的環境收集，共 **721 例**。CI 執行 `test/assert_pytest_baseline.sh`，檢查各組是否達到 `test/pytest-baseline.txt` 所列的下限，以及框架的純 Python 程式碼覆蓋率是否達到 80%。
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -411,11 +411,11 @@ The hosted suite collects **720 tests** on a host without Isaac Sim. CI runs `te
 | `test_stream_visual_scene.py` | 3 | Kit startup, known scene content and recovery after a stage replacement. |
 | `test_stream_visual_probe.py` | 2 | Browser frame sampling, fresh navigation on retry and diagnostic capture. |
 | `test_stream_visual_verdict.py` | 12 | Pixel statistics, known-colour thresholds and WebRTC requirements. |
-| `test_stream_visual_wiring.py` | 4 | Stream scope, GPU workflow, failure artifact upload and required check. |
+| `test_stream_visual_wiring.py` | 5 | 驗證 stream 組觸發條件、GPU 工作流程、失敗時的產物上傳、必要檢查，以及容器清理篩選器只命中同一次執行與嘗試的容器。 |
 | `test_main_workflow_scope.py` | 20 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job, including `stream-visual-e2e`, needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. |
 | `test_workflow_naming.py` | 42 | `core`. Workflow naming rule and lint (isaac#443), `script/ci/lint_workflow_names.py` + `doc/workflow-naming.md`: the real `.github/workflows/` follows the rule (and the glob finds `main.yaml` and `ci-stream-smoke.yaml`, no vacuous pass; the pre-rename stream smoke file is gone); detector self-tests on temp trees for bad file names (`.yml`, no category, uppercase, underscores), bad display names (parenthesised note, wrong case, wrong category), non-kebab job ids, a CI job with no group prefix, job-level `name:`; the allowed CI ids (`changes` / `gate` / `release` / `<group>-...`) and a bot job needing only kebab-case; exemptions are by exact file name and each carries a reason; `main.yaml` is exempt from file and display name but not from the job rule; base's `init.sh` still generates `base-version-monitor.yaml` under that name and only creates it when absent (the reason it keeps its name); the doc lists every category, group and exemption; retired names (`RETIRED_NAMES` in the lint: the old job ids, the old stream smoke file name and display name) are reported in docs while the new file name and history (changelog, ADRs) are not. |
 | `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only `base-version-monitor.yaml` (an upstream-release bot that runs no tests) may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
-| `test_workflow_pins.py` | 4 | Parses every `.github/workflows/*.y*ml` and asserts each job calling the org `gpu-self-hosted.yml` reusable is pinned to exactly `@v0.4.0` (isaac#402), and that the discovered caller set is exactly main.yaml, ci-stream-smoke.yaml, publish-stream-source.yaml (no vacuous pass). No docker/GPU. |
+| `test_workflow_pins.py` | 4 | 掃描 `.github/workflows/*.y*ml`，確認只有 `main.yaml`、`ci-stream-smoke.yaml`、`ci-stream-visual-e2e.yaml`、`ci-headless-smoke.yaml` 與 `publish-stream-source.yaml` 呼叫組織的 `gpu-self-hosted.yml`，且各呼叫都固定使用 `@v0.4.0`（isaac#402）。另以替身驗證 `core-gpu` 的清理篩選器與腳本使用相同的 Compose 專案名稱（isaac#344）。 |
 | `test_readme_cleanup_text.py` | 4 | `docs`. One case per README language (isaac#381) checks the inline force-removal warning, the compose project label lookup, the nominal per-tag size and when shared layers can be reclaimed. |
 | `test_stream_source_producer.py` | 19 | Hosted import/CLI-contract for the deterministic WebRTC stream-source producer driver `src/script/stream_source_producer.py` (isaac#223 / owv#48 / isaac#173): the module imports on a non-Isaac host without pulling `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (every Isaac import function-local), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env vars (the `docker run -e` container contract) with an explicit flag overriding the env, and `python stream_source_producer.py --help` exits 0 on a bare host (argparse exits before any Isaac import). Loads the driver by file path; no docker/GPU. |
 | `test_xc_compose_project_isolation.py` | 3 | Hosted guard for the isaac-side root cause of `ycpss91255-lab/omniverse_web_viewer#55`: the cross-container round-trip's default `COMPOSE_PROJECT` is the dedicated `xc-isaac-roundtrip` (not the `${DOCKER_HUB_USER}-${IMAGE_NAME}` stream-stack project, e.g. `yunchien-isaac`), so its project-level teardown can never reach a co-hosted manual `stream` container; asserts the dedicated literal, the isolation intent (distinct from any `${user}-${image}` derivation, which would still coincide), and that the `XC_COMPOSE_PROJECT` env override still wins. Loads the integration module by file path with env cleaned -- pure, no docker/GPU. |

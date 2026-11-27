@@ -1,10 +1,13 @@
 """Tier B belongs to the same GPU scope and required check as Tier A (#173)."""
 
+import re
 import runpy
 from pathlib import Path
 
 import pytest
 import yaml
+
+from test_stream_visual_job import _check_cleanup, _value, run_job
 
 pytestmark = pytest.mark.stream
 
@@ -32,6 +35,31 @@ def test_visual_workflow_triggers_and_gpu_job():
     assert inputs["artifact-name"]
     assert inputs["artifact-path"].rstrip("/") == "artifacts/stream-visual-e2e"
     assert inputs.get("artifact-when", "failure") in {"failure", "always"}
+
+
+def test_reap_filter_matches_only_containers_from_same_run_and_attempt(run_job):
+    inputs = _load(_WORKFLOW)["jobs"][_JOB]["with"]
+    key, template = inputs["reap-container-filter"].split("=", 1)
+    assert key == "name"
+    assert template.startswith("^/")
+
+    containers = {}
+    for run_id, attempt in ((12, 1), (123, 1), (12, 10)):
+        result, calls, _ = run_job(run_id, attempt)
+        assert result.returncode == 0, result.stdout
+        project = _check_cleanup(calls)
+        names = [f"/{project}-stream-1"]
+        names.extend("/" + _value(call, "--name ") for call in calls if call.startswith("docker run "))
+        assert len(set(names)) == 3
+        containers[run_id, attempt] = names
+
+    for run_id, attempt in containers:
+        rendered = template.replace("${{ github.run_id }}", str(run_id))
+        pattern = re.compile(rendered.replace("${{ github.run_attempt }}", str(attempt)))
+        for owner, names in containers.items():
+            for name in names:
+                matched = pattern.search(name) is not None
+                assert matched == (owner == (run_id, attempt)), (pattern.pattern, name)
 
 
 def test_main_uses_the_stream_smoke_conditions_and_gates_visual_result():

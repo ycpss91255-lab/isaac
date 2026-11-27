@@ -11,7 +11,8 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。Hosted baseline 687 -> 720（stream 19 -> 51、core 618 -> 619）。Bats stream 81 -> 82。
+
+- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 687 增至 721（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 81 增至 82。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
 - **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。
 - **新增 PR 提交訊息檢查的 20 個回歸測試（isaac#414）。** 測試涵蓋姓名含 Claude 的共同作者、模型名稱與版本、電子郵件網域，以及縮排、大小寫和 Markdown 連結。另以模擬的 git log 驗證空範圍與無效範圍的結束碼，並檢查省略範圍與 `--stdin` 時的參數錯誤。
