@@ -121,17 +121,9 @@ GA 後可重評：拿掉本 MD 的 GUI 步驟 → 改純腳本路徑。本 MD �
 
    ```bash
    ls isaac_ws/src/model/usd/robot/openbase/openbase.usda
-   # 不存在的話:
-   just docker run -t stream -d
-   just docker exec -t stream /isaac-sim/python.sh \
-       /home/yunchien/work/src/script/import_urdf.py \
-       --no-fix-base \
-       /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
-       /home/yunchien/work/src/model/usd/robot/openbase/openbase.usda
-   just docker stop
    ```
 
-   > 預設用 `openbase_minimal.urdf`（單一 base_link rigid body），cmd_vel 直接寫 base velocity。完整 articulation (`openbase.urdf` 32 link) 需要額外的 HolonomicController + ArticulationController 節點鏈，本 MD 暫不涵蓋（B-Phase 真要 mecanum 物理時再補）。
+   這個流程使用單一 `base_link` 剛體。若需要製作 USD，請使用 [asset_converter](https://github.com/ycpss91255-lab/asset_converter)。
 
 3. **host 上有可推 `/cmd_vel` 的 ROS 2 環境**（一個 `ros:humble` sibling container 即可，本 MD 後段提供）
 
@@ -350,9 +342,9 @@ just docker stop
 
 需要重跑本 MD 的 GUI 流程的場景：
 
-1. **重 gen OpenBase USD** — `import_urdf.py` 跑出來的 USD 不含 graph，需要重新依本流程烤
+1. **重 gen OpenBase USD** — 若新的 USD 不含 graph，需要重新依本流程烤
 2. **改 graph 結構** — 加新 ROS 2 topic、改 controller、改節點連線
-3. **OpenBase URDF 改了 link / joint** — 影響 prim path，Write Prim Attribute 的 target 要重設
+3. **OpenBase USD 改了 link / joint** — 影響 prim path，Write Prim Attribute 的 target 要重設
 4. **升 Isaac Sim 版本** — 6.0 GA 後可全面 migrate 走純腳本路徑，**本 MD 可廢棄**
 
 ---
