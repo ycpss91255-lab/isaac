@@ -1,6 +1,6 @@
 # TEST.md
 
-**207 tests** total.
+**207 tests** total (bats). Hosted pytest collects **646 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -12,7 +12,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 16 | 0 | 16 |
+| docs | 0 | 20 | 0 | 20 |
 
 The `**207 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
@@ -369,7 +369,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **642 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **646 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -408,6 +408,7 @@ The hosted suite collects **642 tests** on a host without Isaac Sim. CI runs `te
 | `test_xc_roundtrip_asset_migration.py` | 4 | Hosted guard for the cross-container round-trip migration onto the official Jetbot asset (isaac#325): expected camera topic / frame_id are `/jetbot/camera/color/image_raw` / `jetbot_camera_color_optical_frame`; the ament `camera_subscriber` sibling is pointed at that topic via its `camera_topic` parameter (no ament package change); the test module fetches the USD through `fetch_test_asset("jetbot")`; the Isaac runner takes `--robot-usd` and no longer imports `example_driver` or references camera_bot. Reads the real module + runner source; no docker, GPU or network. |
 | ~~`test_render_settings.py`~~ | ~~13~~ | Moved to `ycpss91255-lab/isaac_physics_test` with `viz_render.py` (isaac#309). The converged-render recipe `_capture_noise_runner.py` used is now inlined there. |
 | `test_sim_version.py` | 10 | `isaac_devkit.sim_version.isaac_sim_version` (isaac#295): the Isaac Sim release read from `/isaac-sim/VERSION` (`6.2.0-rc.15+...` -> `6.2.0`, `6.0.1-rc.7+...` -> `6.0.1`, a bare `5.1.0`), `unknown` for an absent or empty file, the default path; plus a structural scan over `src/script/*.py` and `test/verify_*.py` that no script writes `isaac_variant` as a literal; the scan fails when either glob matches nothing, so it cannot pass vacuously (isaac#360). Pure -- tmp trees (each glob empty on its own, planted literal reported) and source reads. |
+| `test_adr_drop_isaac_lab.py` | 4 | ADR-0026 (isaac#476), `docs`. Checks the superseded ADR and repository names in the decision, the status in ADR-0018, URDF import ownership in ADR-0020, and the reference in ADR-0017's Isaac Lab amendment. |
 | `test_no_ai_attribution.py` | 10 | `script/ci/check_no_ai_attribution.py` (isaac#413): PR commits must carry no AI attribution. Fed `git log` records on stdin (no git binary needed). A clean commit exits 0; `Co-authored-by:` naming Claude or `noreply@anthropic.com`, `Generated with Claude Code` (case-insensitive), a `Claude-Session` trailer, and an anthropic.com author or committer address each exit non-zero and print the commit sha; a bare mention of the word is not flagged; every offending commit in the range is listed. |
 | `test_standalone_scripts.py` | 18 | The README-listed standalone drivers (`src/script/{ros2_test_pub,ros2_test_sub}_standalone.py`), from a README-only onboarding run on 6.2.0. Pins the pure helper `src/script/standalone_common.py`: `kit_config` follows `ISAAC_LIVESTREAM`, `openbase_usd_path` raises `FileNotFoundError` mentioning `sim_asset` when the USD is absent (models moved to `ycpss91255-lab/sim_asset`), `PeriodicTimer` fires once per wall-clock period whatever the Kit update rate and does not burst after a stall, and `run_and_exit` turns an exception into exit code 1 and passes a return code through. Each script has no `omni.isaac.dynamic_control` import (removed in 6.x), no hard-coded `/home/yunchien`, no module-top Isaac import or `SimulationApp(...)` (a module-top failure bypassed every handler and exited 0), and a `__main__` block that goes through `run_and_exit`. `ros2_test_pub` publishes on a `PeriodicTimer` instead of every 60 ticks (measured 3.5-7.5 Hz against a claimed ~1 Hz). The `move_openbase_planar` / `cmd_vel_planar` standalone scripts and their guards moved to `ycpss91255-lab/isaac_physics_test` (isaac#342). Pure -- AST parses, file reads, and a fake clock. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |
