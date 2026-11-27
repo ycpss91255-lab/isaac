@@ -287,14 +287,14 @@
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
-# isaac#173: 32 stream visual cases and one core workflow-scope case (671 -> 704).
-HOSTED_UNIT_BASELINE = 704
+# isaac#173: 32 stream visual cases and one core workflow-scope case (687 -> 720).
+HOSTED_UNIT_BASELINE = 720
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
 #   hosted unit test belongs to exactly one group (pytestmark at module level,
 #   enforced at collection by test/group_markers.py and statically by
-#   script/ci/scope_groups.py), so the five floors below sum to 704.
+#   script/ci/scope_groups.py), so the five floors below sum to 720.
 #   test_test_groups.py checks that sum against HOSTED_UNIT_BASELINE. assert_pytest_baseline.sh
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
@@ -314,8 +314,8 @@ HOSTED_UNIT_BASELINE = 704
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
-#   GPU visual E2E (#173) raises stream 19 -> 51 and core 602 -> 603.
-HOSTED_UNIT_BASELINE_CORE = 603
+#   GPU visual E2E (#173) raises stream 19 -> 51 and core 618 -> 619.
+HOSTED_UNIT_BASELINE_CORE = 619
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 51
 HOSTED_UNIT_BASELINE_HEADLESS = 6
