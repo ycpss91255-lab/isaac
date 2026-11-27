@@ -186,3 +186,7 @@ This replaces the two required checks recorded in the 2026-11-10 update above:
 
 `strict` mode stays on. The fork-PR note above still holds: a skipped job counts as passing, and `gate` treats `skipped` as success.
 
+## Update (2026-11-27) -- Merge queue checks (isaac#453)
+
+When the merge queue sends `merge_group` with activity type `checks_requested`, `main.yaml` runs every scope group so the required `gate` reports a result for the queued commit. The owner enables the queue through `rulesets.yaml` in the organization's `.github` repository.
+

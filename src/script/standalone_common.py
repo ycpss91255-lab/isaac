@@ -18,8 +18,6 @@ Why these exist:
 - ``PeriodicTimer``: Kit's update rate depends on the stage, the renderer
   and the host load (measured 200-450 updates/s headless), so "every 60
   updates" is not "every second".
-- ``openbase_usd_path``: paths are relative to this file, not
-  ``/home/<one user>/work``.
 """
 
 from __future__ import annotations
@@ -28,28 +26,7 @@ import os
 import sys
 import time
 import traceback
-from pathlib import Path
 from typing import Any, Callable, Dict, Optional
-
-_SCRIPT_DIR = Path(__file__).resolve().parent
-SRC_DIR = _SCRIPT_DIR.parent
-
-
-def openbase_usd_path() -> Path:
-    """Return the committed OpenBase USD, resolved from this checkout.
-
-    Raises:
-        FileNotFoundError: when the USD file is absent. The production
-            models now live in ``ycpss91255-lab/sim_asset``.
-    """
-    p = SRC_DIR / "model" / "usd" / "robot" / "openbase" / "openbase.usda"
-    if not p.is_file():
-        raise FileNotFoundError(
-            f"OpenBase USD not found at {p}. "
-            "Robot models have moved to the sim_asset repository "
-            "(ycpss91255-lab/sim_asset). Copy the robot USD to this path."
-        )
-    return p
 
 
 def kit_config(livestream_env: Optional[str]) -> Dict[str, Any]:
@@ -132,75 +109,3 @@ def run_and_exit(
     sys.stdout.flush()
     sys.stderr.flush()
     exit_fn(code)
-
-
-# OpenBase wheel joints: their drives are zeroed so the wheels spin freely
-# and the base moves only through the velocity the scripts write.
-OPENBASE_WHEELS = ("left_rim_joint", "back_rim_joint", "right_rim_joint")
-OPENBASE_BASE_LINK = "/open_base/base_link"
-
-
-def setup_openbase_stage(app: Any, usd_path: Path) -> Any:
-    """Open the OpenBase USD and prepare it for planar velocity control.
-
-    Isaac-side (function-local imports; call after ``SimulationApp``).
-    Adds a light and Isaac's GroundPlane when missing, frees the wheel
-    drives, and disables gravity on ``base_link``. The scripts overwrite the
-    base velocity every step (Gazebo planar_move semantics: SE(2) motion,
-    constant height). PhysX integrates gravity inside the step after that
-    write, so with gravity on the base gained ``v.z = -0.16`` m/s every
-    step and fell through the floor.
-
-    Args:
-        app: the running ``SimulationApp``.
-        usd_path: the OpenBase USD to open.
-
-    Returns:
-        The opened ``Usd.Stage``.
-
-    Raises:
-        FileNotFoundError: the USD does not exist.
-        RuntimeError: the stage did not open.
-    """
-    import omni.usd
-    from pxr import PhysxSchema, UsdLux, UsdPhysics
-
-    if not usd_path.is_file():
-        raise FileNotFoundError(f"USD not found: {usd_path}")
-    ctx = omni.usd.get_context()
-    if not ctx.open_stage(str(usd_path)):
-        raise RuntimeError(f"open_stage() returned False for {usd_path}")
-    # open_stage is asynchronous in standalone mode: pump updates until the
-    # stage is OPENED instead of touching a None stage.
-    for _ in range(600):
-        if ctx.get_stage_state() == omni.usd.StageState.OPENED:
-            break
-        app.update()
-    else:
-        raise RuntimeError("stage did not reach OPENED within 600 updates")
-    stage = ctx.get_stage()
-    print(f"[setup] opened {usd_path}", flush=True)
-
-    if not stage.GetPrimAtPath("/World/SunLight").IsValid():
-        UsdLux.DistantLight.Define(
-            stage, "/World/SunLight"
-        ).GetIntensityAttr().Set(3000.0)
-    if not stage.GetPrimAtPath("/World/GroundPlane").IsValid():
-        from isaacsim.core.api.objects.ground_plane import GroundPlane
-
-        GroundPlane(prim_path="/World/GroundPlane", z_position=0, size=100)
-
-    for prim in stage.Traverse():
-        if prim.GetName() in OPENBASE_WHEELS:
-            drive = UsdPhysics.DriveAPI.Get(prim, "angular")
-            drive.GetStiffnessAttr().Set(0.0)
-            drive.GetDampingAttr().Set(0.0)
-            drive.GetTargetVelocityAttr().Set(0.0)
-
-    base_prim = stage.GetPrimAtPath(OPENBASE_BASE_LINK)
-    if not base_prim.IsValid():
-        raise RuntimeError(f"{OPENBASE_BASE_LINK} not found in {usd_path}")
-    physx_body = PhysxSchema.PhysxRigidBodyAPI.Apply(base_prim)
-    physx_body.GetDisableGravityAttr().Set(True)
-    print("[setup] wheels freed, base_link gravity disabled", flush=True)
-    return stage
