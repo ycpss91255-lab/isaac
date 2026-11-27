@@ -114,11 +114,11 @@ RUN set -e; official_gid="$(cat /etc/isaac/base-gid)"; \
         chmod g+w "${dir}"; \
     done
 
-# Kit writes here at runtime. Existing official subdirectories keep their permissions.
+# Kit writes to kit/data and kit/cache. The official test harness writes to /isaac-sim/_testoutput.
 RUN official_gid="$(cat /etc/isaac/base-gid)" && \
-    mkdir -p /isaac-sim/kit/data /isaac-sim/kit/cache && \
-    chgrp "${official_gid}" /isaac-sim/kit/data /isaac-sim/kit/cache && \
-    chmod g+wx /isaac-sim/kit/data /isaac-sim/kit/cache
+    mkdir -p /isaac-sim/kit/data /isaac-sim/kit/cache /isaac-sim/_testoutput && \
+    chgrp "${official_gid}" /isaac-sim/kit/data /isaac-sim/kit/cache /isaac-sim/_testoutput && \
+    chmod g+wx /isaac-sim/kit/data /isaac-sim/kit/cache /isaac-sim/_testoutput
 
 # Rename colliding accounts in place so numeric file ownership stays valid.
 # A base account's home can contain official files. Give it a host-user home

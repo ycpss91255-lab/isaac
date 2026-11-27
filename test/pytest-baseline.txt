@@ -298,8 +298,8 @@
 # isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
 # isaac#487: +14 name-scan and CI cases, +1 standalone smoke path check,
 #   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
-# isaac#474: +39 core (check_no_recursive_chown 27, uid_agnostic 12): 756 -> 795.
-HOSTED_UNIT_BASELINE = 795
+# isaac#474: +40 core (check_no_recursive_chown 27, uid_agnostic 13): 756 -> 796.
+HOSTED_UNIT_BASELINE = 796
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -331,8 +331,8 @@ HOSTED_UNIT_BASELINE = 795
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#479: +9 core (test_isaac_driver.py 48 -> 57): core 623 -> 632.
 #   isaac#487 adds 16 core cases (core 632 -> 648).
-#   isaac#474 host-UID user setup: core 648 -> 687; bats core 119 -> 125.
-HOSTED_UNIT_BASELINE_CORE = 687
+#   isaac#474 host-UID user setup: core 648 -> 688; bats core 119 -> 125.
+HOSTED_UNIT_BASELINE_CORE = 688
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6

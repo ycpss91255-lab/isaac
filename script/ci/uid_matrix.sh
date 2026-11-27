@@ -45,7 +45,7 @@ probe='
   ls /isaac-sim >/dev/null
   for dir in /isaac-sim/exts/isaacsim.asset.importer.mjcf{,.ui}/data \
              /isaac-sim/exts/isaacsim.asset.importer.mjcf/data/mjcf \
-             /isaac-sim/kit/data /isaac-sim/kit/cache; do
+             /isaac-sim/kit/data /isaac-sim/kit/cache /isaac-sim/_testoutput; do
     [[ -d "${dir}" ]] || continue
     test -w "${dir}"
     touch "${dir}/.uid-matrix-$$"

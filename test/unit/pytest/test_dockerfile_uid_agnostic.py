@@ -127,7 +127,7 @@ def test_mjcf_group_write_rule_is_nonrecursive_and_inherited_by_both_targets():
     assert any("/mjcf" in rule for rule in write_rules), "include the existing data/mjcf directory"
 
 
-@pytest.mark.parametrize("path", ["/isaac-sim/kit/data", "/isaac-sim/kit/cache"])
+@pytest.mark.parametrize("path", ["/isaac-sim/kit/data", "/isaac-sim/kit/cache", "/isaac-sim/_testoutput"])
 def test_kit_directory_is_created_and_writable_by_runtime_user(path, tmp_path):
     # Model the requested modes on a local directory without privileged chown.
     directory = tmp_path / "kit-dir"

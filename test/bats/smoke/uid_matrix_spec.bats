@@ -119,13 +119,16 @@ check_plan() {
   check_plan devel --no-gpu
 }
 
-@test "uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory, kit/data and kit/cache" {
+@test "uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory, kit/data, kit/cache and _testoutput" {
   # Replay the actual CPU probe against a fixture with the official image layout.
   # Only account lookups and paths specific to the image need substituting.
   export FIXTURE="${BATS_TEST_TMPDIR}/image"
   local ext="${FIXTURE}/isaac-sim/exts/isaacsim.asset.importer.mjcf"
   local kit="${FIXTURE}/isaac-sim/kit"
-  local -a probe_dirs=("${ext}/data" "${ext}/data/mjcf" "${ext}.ui/data" "${kit}/data" "${kit}/cache")
+  local -a probe_dirs=(
+    "${ext}/data" "${ext}/data/mjcf" "${ext}.ui/data"
+    "${kit}/data" "${kit}/cache" "${FIXTURE}/isaac-sim/_testoutput"
+  )
   mkdir -p "${probe_dirs[@]}" "${FIXTURE}/home/uidcheck"
   echo 1234 > "${FIXTURE}/base-gid"
   cat > "${BATS_TEST_TMPDIR}/docker" <<'STUB'

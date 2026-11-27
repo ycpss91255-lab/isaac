@@ -1,6 +1,6 @@
 # TEST.md
 
-**228 tests** total (bats). Hosted pytest collects **795 tests**.
+**228 tests** total (bats). Hosted pytest collects **796 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 125 | 687 | 35 | 847 |
+| core | 125 | 688 | 35 | 848 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
@@ -394,12 +394,12 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 | `uid_matrix: an unknown option fails before any Docker call` | Nonzero exit, no docker call. |
 | `uid_matrix: dry-run plans each host identity on the Sim base` | One plan per UID/GID case including the GID-conflict case. |
 | `uid_matrix: --no-gpu dry-run honors the Lab base and devel target overrides` | `BASE_IMAGE` and `UID_MATRIX_TARGET` overrides are passed through; no GPU flags. |
-| `uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory` | Replays the CPU probe for all four identities and checks each write and removal. |
+| `uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory, kit/data, kit/cache and _testoutput` | Replays the CPU probe for all four identities and checks each write and removal. |
 | `core-gpu: a failing GPU UID matrix fails the integration job` | A matrix failure propagates to the job. |
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **795 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **796 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -428,7 +428,7 @@ The hosted suite collects **795 tests** on a host without Isaac Sim. CI runs `te
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |
 | `test_ros_io.py` | 23 | Greenfield `isaac_devkit.ros_io` pure surface: `parse_ros2_io_config`, `expected_attr_paths`, `_build_graph_topology`, `RosIo.latest` non-blocking fresh-once bookkeeping against an injected reader. |
 | `test_example_driver.py` | 14 | `example/sim/example_driver.py` pure surface (#131): three-file scene merge (`load_three_file_scene`), expected robot/`base_link` prim-path strings, `cmd_vel_to_planar_velocity` controller mapping, `SCENE` attr shape, the `run()` SCENE-driven lifecycle-order spy + injected-SIGINT shutdown, and example import-safety. |
-| `test_dockerfile_uid_agnostic.py` | 12 | Dockerfile host-user setup (isaac#474): no literal official uid or `isaac-sim` group name, official ids probed from the base USER, sudoers by `#UID`, group joined by numeric gid, POSIX sh MJCF loop, MJCF group write inherited by both targets, creation of group-writable Kit data and cache directories, recursive ownership guard, and hosted CPU and self-hosted GPU matrix wiring. |
+| `test_dockerfile_uid_agnostic.py` | 13 | Dockerfile host-user setup (isaac#474): no literal official uid or `isaac-sim` group name, official ids probed from the base USER, sudoers by `#UID`, group joined by numeric gid, POSIX sh MJCF loop, MJCF group write inherited by both targets, creation of group-writable `kit/data`, `kit/cache`, and `_testoutput` directories, recursive ownership guard, and hosted CPU and self-hosted GPU matrix wiring. |
 | `test_check_no_recursive_chown.py` | 27 | `core`. `script/ci/check_no_recursive_chown.py` (isaac#474): flags recursive chown outside `${HOME}/` in any option order, variable targets, `/`, `/opt`, `find -exec chown`, `xargs chown`, continuation lines; accepts safe forms and the real Dockerfile; CLI exit codes; `core-unit` runs the script. |
 | `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "auto"` (stream / headless / devel-test stay `off`). No docker/GPU. |
 | `test_test_groups.py` | 25 | Test-group contract (isaac#434), `core`: every pytest module has exactly one `pytestmark` group (static AST check over `test/unit/pytest` and `test/integration/pytest`, with unmarked / two-group / unknown-group / function-level-marker detector self-tests on temp trees); every bats spec has exactly one `# bats file_tags=<group>` (non-group tags allowed, `test_tags` may not name a group) plus per-group bats counts; the collection-time plugin `test/group_markers.py` aborts a subprocess pytest run for an ungrouped or two-group test, accepts a grouped one, and `-m <other group>` collects nothing without an unknown-marker warning; the plugin and `script/ci/scope_groups.py` agree on the five groups; `test/pytest-baseline.txt` has a floor per group that sums to the total, the bats counts meet the `BATS_BASELINE_*` floors, and the 'Tests by group' table above matches the specs and the baseline. |
