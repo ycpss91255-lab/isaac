@@ -22,20 +22,12 @@ Subclass contract:
     if __name__ == "__main__":
         MyDriver().run()
 
-The base class owns the Kit init (Isaac Lab ``AppLauncher``) / signal
-handling / stage open / scene defaults / timeline play / shutdown
-lifecycle. The subclass owns the main loop -- this matches the IsaacLab /
-Isaac Sim standalone / Gymnasium / PyBullet pattern (ADR-0009), launched
-on Isaac Lab's ``AppLauncher`` (ADR-0018). The ``SimulationContext`` loop
-manager is adopted with the example rework (#154), where the new
-spawn-backend scene flow handles its shutdown cleanly.
+The base class starts Kit with ``isaacsim.SimulationApp``, installs signal
+handlers, opens the stage, applies scene defaults, starts the timeline,
+and closes the app. The subclass owns the main loop (ADR-0009).
 
-This module is import-safe without Isaac Sim available: the pure-Python
-helpers (``parse_livestream_env``, ``parse_livestream_applauncher``,
-``resolve_repo_relative_usd``) can be unit-tested on the host. The
-Kit-side imports (``isaaclab``, ``isaacsim``, ``omni.*``, ``pxr``) are
-deferred into the ``IsaacDriver.run`` body and friends so that
-constructing the class outside Kit does not raise.
+Launch configuration and path resolution can be tested on the host.
+Kit imports are local to the methods that use them.
 """
 
 from __future__ import annotations
@@ -117,46 +109,30 @@ def parse_livestream_env(env_value: Optional[str]) -> Dict[str, Any]:
     )
 
 
-def parse_livestream_applauncher(env_value: Optional[str]) -> Dict[str, Any]:
-    """Translate ``ISAAC_LIVESTREAM`` into Isaac Lab ``AppLauncher`` args.
+def parse_livestream_simulation_app(
+    env_value: Optional[str],
+) -> tuple[Dict[str, Any], Optional[str]]:
+    """Return the headless launch config and optional streaming Kit experience.
 
-    ADR-0018: the driver launches via Isaac Lab ``AppLauncher`` instead of
-    a raw ``SimulationApp``. ``AppLauncher`` takes ``headless`` /
-    ``livestream`` / ``enable_cameras`` (its ``HEADLESS`` / ``LIVESTREAM``
-    env-var convention), so the existing ``ISAAC_LIVESTREAM`` (0/1/2)
-    mapping is preserved through this helper:
-
-    - unset / empty / ``"0"`` -> headless, no streaming.
-    - ``"1"`` -> native streaming (livestream supersedes + forces headless).
-    - ``"2"`` -> WebRTC streaming.
-
-    ``enable_cameras=True`` is set in every mode so cameras render even
-    in headless runs (Isaac Lab issue #3250). Unknown values raise, same as
-    ``parse_livestream_env``.
+    The experience file controls streaming in Isaac Sim 6.2. Modes 1 and 2
+    both select the same WebRTC experience. Mode 1 formerly used native streaming.
     """
-    if env_value is None or env_value == "" or env_value == "0":
-        return {"headless": True, "enable_cameras": True}
-    if env_value == "1":
-        return {"headless": True, "livestream": 1, "enable_cameras": True}
-    if env_value == "2":
-        return {"headless": True, "livestream": 2, "enable_cameras": True}
-    raise ValueError(
-        f"unsupported ISAAC_LIVESTREAM value {env_value!r}; "
-        "expected one of '', '0', '1', '2'"
-    )
+    if env_value not in (None, "", "0", "1", "2"):
+        raise ValueError(
+            f"unsupported ISAAC_LIVESTREAM value {env_value!r}; "
+            "expected one of '', '0', '1', '2'"
+        )
+    config = {
+        "headless": True,
+        "disable_viewport_updates": False,
+    }
+    if env_value in ("1", "2"):
+        return config, "/isaac-sim/apps/isaacsim.exp.base.python.streaming.kit"
+    return config, None
 
 
 def boot_extension_kit_args(extensions) -> list:
-    """Build the Kit ``--enable <ext>`` argv for boot-time extension loads.
-
-    Isaac Lab's ``AppLauncher`` forwards leftover ``sys.argv`` tokens to
-    the underlying Kit process, so appending ``--enable <ext>`` pairs
-    before constructing the launcher makes Kit enable those extensions
-    during boot. See ``IsaacDriver.BOOT_EXTENSIONS`` for the defaults.
-
-    Pure (host-runnable): returns the flat argv list; the caller splices
-    it into ``sys.argv``. Empty / falsy input yields ``[]`` (no-op).
-    """
+    """Build ordered Kit ``--enable <ext>`` pairs for SimulationApp's extra_args."""
     args: list = []
     for ext in extensions or ():
         args += ["--enable", ext]
@@ -231,41 +207,29 @@ class IsaacDriver:
     def __init__(self) -> None:
         self._should_quit: bool = False
         self._app: Any = None
-        self._app_launcher: Any = None
 
     # -- Entry point ---------------------------------------------------------
 
     def run(self) -> None:
         """Walk the lifecycle: init Kit, open stage, set up, loop, shut down.
 
-        Order matters (ADR-0018): Isaac Lab ``AppLauncher`` must be the
-        *first* Isaac Sim construction, before any ``omni.*`` / ``pxr`` /
-        ``isaaclab.sim`` import resolves; the signal handler override must
-        come *after* it because Kit installs its own SIGINT trap during
-        construction. ``AppLauncher.app`` is the ``SimulationApp`` instance,
-        so ``is_running`` / ``update`` / ``close`` keep working.
+        Construct SimulationApp before importing stage APIs. Kit installs
+        signal handlers during startup, so register ours after construction.
         """
-        from isaaclab.app import AppLauncher
-
-        launcher_args = parse_livestream_applauncher(
+        config, experience = parse_livestream_simulation_app(
             os.environ.get("ISAAC_LIVESTREAM")
         )
-        # Enable the boot-time extensions via Kit
-        # ``--enable`` args, which AppLauncher forwards from leftover
-        # sys.argv to the Kit process it constructs (see BOOT_EXTENSIONS).
-        # AppLauncher reads sys.argv only during construction, so restore
-        # it immediately afterwards to avoid leaking the flags to anything
-        # else parsing argv.
-        _saved_argv = list(sys.argv)
-        sys.argv += boot_extension_kit_args(self.BOOT_EXTENSIONS)
-        # ISAAC_KIT_EXTRA_ARGS: extra Kit args (whitespace-split) appended
-        # after the boot args, inside the same restore window (isaac#422).
-        sys.argv += os.environ.get("ISAAC_KIT_EXTRA_ARGS", "").split()
-        try:
-            self._app_launcher = AppLauncher(launcher_args)
-        finally:
-            sys.argv[:] = _saved_argv
-        self._app = self._app_launcher.app
+        config["extra_args"] = (
+            boot_extension_kit_args(self.BOOT_EXTENSIONS)
+            + os.environ.get("ISAAC_KIT_EXTRA_ARGS", "").split()
+        )
+
+        from isaacsim import SimulationApp
+
+        if experience is None:
+            self._app = SimulationApp(config)
+        else:
+            self._app = SimulationApp(config, experience)
 
         # Override Kit's SIGINT (which swallows Ctrl+C) so the loop can
         # observe ``_should_quit`` and break out cleanly.
@@ -281,7 +245,7 @@ class IsaacDriver:
             self.main()
             self.shutdown()
         finally:
-            # SimulationApp.close() (via AppLauncher.app) forces process
+            # SimulationApp.close() forces process
             # _exit(0) on its way out and overrides any sys.exit(N)
             # downstream, so an exception in flight here would never reach
             # the caller. Print it first, or a setup()/main() failure exits
@@ -379,10 +343,32 @@ class IsaacDriver:
         UsdLux.DistantLight.Define(stage, "/World/SunLight")
 
     def _play_timeline(self) -> None:
-        """Set an effectively-infinite end time and start the timeline."""
+        """Enable physics warm start and pace the timeline at 60 Hz (#447)."""
+        import carb.settings
         import omni.timeline
 
+        # A physics backend can replace the package-level SimulationManager.
+        # Prefer the original manager that owns the warm-start callback.
+        package = "isaacsim.core.simulation_manager"
+        for module_name in (f"{package}.impl.simulation_manager", package):
+            try:
+                module = importlib.import_module(module_name)
+            except ImportError:
+                continue
+            manager = getattr(module, "SimulationManager", None)
+            if hasattr(manager, "enable_warm_start_callback"):
+                manager.enable_warm_start_callback(True)
+                break
+        else:
+            print("[isaac_driver] Warning: warm-start callback unavailable", flush=True)
+
+        settings = carb.settings.get_settings()
+        settings.set("/app/runLoops/main/rateLimitEnabled", True)
+        settings.set("/app/runLoops/main/rateLimitFrequency", 60)
+        settings.set("/app/player/useFixedTimeStepping", True)
+
         timeline = omni.timeline.get_timeline_interface()
+        timeline.set_looping(False)
         # 1e10 seconds is effectively infinite for any drive scenario.
         timeline.set_end_time(1e10)
         timeline.play()

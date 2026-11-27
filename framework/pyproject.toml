@@ -94,7 +94,7 @@ exclude_also = [
     "def make_python_sources\\(",
     # default_driver: Kit-side fresh-stage creation.
     "def _new_stage\\(",
-    # driver: Kit lifecycle (run + Kit-touching internals).
+    # driver: SimulationApp startup and Kit lifecycle methods.
     "def run\\(",
     "def _open_stage\\(",
     "def _ensure_scene_defaults\\(",

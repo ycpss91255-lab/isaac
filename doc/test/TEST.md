@@ -1,6 +1,6 @@
 # TEST.md
 
-**209 tests** total (bats). Hosted pytest collects **681 tests**.
+**218 tests** total (bats). Hosted pytest collects **690 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 115 | 588 | 30 | 733 |
+| core | 115 | 597 | 31 | 743 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 81 | 19 | 0 | 100 |
+| stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 68 | 0 | 68 |
 
-The `**209 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**218 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -112,7 +112,7 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
 | `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (11)
+## test/bats/smoke/stream_smoke_isolation_spec.bats (17)
 
 Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-lab/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
 
@@ -129,13 +129,22 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: a Kit 110 log with a connected peer passes on the default markers (isaac#291)` | A Kit 110 (Isaac Sim 6.0.1) log, lines verbatim from the GPU host, drives the real driver through the ready wait (`Started primary stream server` -> `App is loaded.`), the attach wait (`signaling headers` -> `Client connected to WebRTC server`) and the dwell to `PASS`. The pre-#291 defaults waited for the Kit 107 `Streaming server started.` line Isaac Sim 6.x never prints. |
 | `stream_smoke: a peer that never completes the WebRTC handshake fails the attach (isaac#291)` | The same log cut after `Processing N signaling headers` (as far as a peer that never answers the SDP offer gets, i.e. the old curl probe at best) fails with `streams did not start`. |
 | `stream_smoke: a stream container that restarted fails even though it is Running now (isaac#461)` | The liveness probe reads `{{.State.Running}} {{.RestartCount}}` and needs `true 0`; a container with RestartCount 4 that is Running now fails the smoke. |
+| `stream_smoke: a busy signal port stops bring-up and names the holder (isaac#497)` | An occupied signal port reports the port and Docker container name before `run.sh` runs. |
+| `stream_smoke: a busy media port stops bring-up with an unknown holder (isaac#497)` | An occupied media port with no visible owner reports `unknown`, logs load again and exits before bring-up. |
+| `stream_smoke: a UDP-only media holder stops bring-up (isaac#497)` | The real port probe finds the UDP media socket through `ss`. The script reports the holder and exits before invoking `run.sh`. |
+| `stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)` | With `SMOKE_SKIP_PORT_PREFLIGHT=1`, the same signal-port conflict allows `run.sh` to run. |
+| `stream_smoke: reports load at startup and elapsed time and load at readiness (isaac#497)` | Checks the three load averages before bring-up and again when Kit is ready, along with elapsed seconds. |
+| `stream_smoke: ready timeout reports load, marker progress and port holders (isaac#497)` | A live container logs only the first ready marker. The timeout diagnostic includes the wait duration, load, both markers and both ports' holders. |
 
-## test/bats/smoke/stream_smoke_lib_spec.bats (22)
+## test/bats/smoke/stream_smoke_lib_spec.bats (25)
 
 Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib.sh`, #233). Before #233 the smoke stopped at "Streaming server started.", so a Kit that boots, opens the signaling socket and then dies on the first real client attach passed green; the probe now attaches a client, asserts the observed stream-start sequence, and holds a dwell window. That logic is GPU-free and lives in a sourceable library so it is unit tested on every image build -- the GPU driver (`script/ci/stream_smoke.sh`) itself stays nightly-only (`ci-stream-smoke.yaml`). The liveness probe is the overridable `smoke_alive` hook: the driver binds it to `docker ps`, these specs bind it to stubs (including one that flips to dead mid-dwell).
 
 | Test | Description |
 |------|-------------|
+| `port_in_use: a UDP-only listener is busy` | A port-filtered UDP query finds a listener on a port closed to TCP. |
+| `port_in_use: an empty ss result and a closed TCP port are free` | The probe returns nonzero when neither protocol has a listener. |
+| `port_in_use: a TCP listener is busy when ss is absent` | The probe detects a live loopback TCP listener with `ss` absent from `PATH`. |
 | `marker_line: present marker prints its 1-based line number` | A fixed-string marker resolves to its kit log line number. |
 | `marker_line: absent marker -> rc 1, no stdout` | A missing marker fails without emitting a bogus line number. |
 | `marker_line: missing log file -> rc 1 (no crash)` | An absent kit log is a failure, not a crash. |
@@ -366,7 +375,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **681 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **690 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -388,7 +397,7 @@ The hosted suite collects **681 tests** on a host without Isaac Sim. CI runs `te
 | `test_material_setup.py` | 29 | `isaac_devkit.materials`: material YAML load / validate, variant enumeration, prim-material mapping, plus `material_cfg_from_yaml` (ADR-0018 decision 7) -- color-only variant -> per-prim spawn cfg-param mapping (`{prim: {shader, diffuse_color (r,g,b), ...}}`), JSON-serializable / GPU-free, the seam #152 attaches to `sim_utils` visual material. |
 | `test_scene_builder.py` | 52 | `isaac_devkit.scene`: YAML load / validate, model-path resolution (incl. the `model/usd/`-prefixed transition shim, the `MODEL_PATH` env-var search path -- search order, second-root fallback, absolute-path bypass, missing-MODEL_PATH legacy fallback, error-lists-all-roots, and `package://` URI resolution -- resolved from MODEL_PATH, requires package.xml, searches multiple roots, error names the package), multi-instance generation, sensor-config reference resolution, plus the ADR-0018 (#152) pure `to_isaaclab_cfg` adapter -- `rpy_to_quat` (XYZ-intrinsic deg -> `(w,x,y,z)`), the ordered `SpawnSpec` list (ground / default + curated light / robot + object USD), curated-field translation, `mobility` (dynamic / static / None), `spawn_overrides` spread overrides-win, instance expansion flow-through, `variant` -> `variants` kwarg, optional material diffuse hook, JSON-serializability. |
 | `test_no_urdf_import.py` | 6 | Enforces the USD-only boundary and verifies that the USD helpers remain importable. |
-| `test_isaac_driver.py` | 48 | `isaac_devkit.driver`: `parse_livestream_env`, `parse_livestream_applauncher`, `resolve_repo_relative_usd`, `boot_extension_kit_args` + `BOOT_EXTENSIONS` (isaac#248), construction without Kit, plus the greenfield `SCENE` shape + hosted lifecycle-order spy (ADR-0017 section 7; asserts `run()` restores `sys.argv`), and `run()` printing an in-flight exception's traceback before `close()` (isaac#248). `TestKitExtraArgs` (isaac#422, +7): `ISAAC_KIT_EXTRA_ARGS` unset / empty / whitespace-only leaves the `AppLauncher` argv unchanged; a single or multi-token value (split on any whitespace, expected token count = program + boot tokens + extra tokens) is appended after the boot args; `sys.argv` is restored after `run()`. `TestIoPlugin` (isaac#423, +10): `ISAAC_IO_PLUGIN` unset / empty never calls the plugin; a set `module:function` is called exactly once with `(stage, robot_prim, config)` after `_ensure_scene_defaults` and before `_play_timeline` / `setup`; five malformed values (no colon, empty module, empty function, two colons, space), a missing module and a missing function each raise `RuntimeError` naming `ISAAC_IO_PLUGIN` before the timeline plays. |
+| `test_isaac_driver.py` | 57 | Tests both livestream helpers, USD resolution, boot extension ordering, Kit-free construction, and the `SCENE` class attribute. A fake `SimulationApp` records headless mode, streaming experience, and the boot arguments followed by whitespace-split `ISAAC_KIT_EXTRA_ARGS` in `extra_args`. The tests check caller `sys.argv` during and after construction, invalid livestream rejection before startup, signal registration and lifecycle order, traceback output before close, and `ISAAC_IO_PLUGIN` invocation and error handling before timeline play. `TestPlayTimeline` checks warm start callback preference, package fallback, and the warning when neither callback is available. It verifies all three settings (fixed time stepping, rate limiting enabled, and a 60 Hz limit) and the call order from disabling looping through setting the end time, starting playback, and running 10 warmup updates. |
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |
 | `test_example_driver.py` | 12 | 驗證三份場景 YAML 的合併、機器人與 base_link 路徑、驅動程式的執行順序、無 I/O 插件時的更新次數，以及 SIGINT 觸發的關閉流程。 |
 | `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "auto"` (stream / headless / devel-test stay `off`). No docker/GPU. |
@@ -414,7 +423,7 @@ The hosted suite collects **681 tests** on a host without Isaac Sim. CI runs `te
 
 ## test/integration/pytest/ — GPU integration (pytest, not in the bats count above)
 
-The GPU suite collects **30 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. The ROS round-trip belongs to `isaac_ros_io` (isaac#276).
+The GPU suite collects **31 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. The ROS round-trip belongs to `isaac_ros_io` (isaac#276).
 
 | Test | Description |
 |------|-------------|
@@ -424,10 +433,10 @@ The GPU suite collects **30 tests**, all inside the Isaac test container. `test/
 | `test_joint_drive_integration.py` (1) | Creates a revolute USD joint, applies a runtime drive and reads the angular stiffness and damping back from its DriveAPI. |
 | `test_output_hub_gpu.py` (4) | OutputHub delivery (isaac#365): one runner boot (`_output_hub_runner.py`, official Jetbot) builds python-mode output with an RGB and a depth camera, joint state and an IMU prim, steps 300 ticks and the four tests assert RGB uint8 `480x640x3`, depth float32 `480x640`, joint names present, IMU orientation length 4. Marker-line acceptance. NOT run locally; first run is CI `gpu-integration`. |
 | `test_kit_extra_args_integration.py` (2) | `ISAAC_KIT_EXTRA_ARGS` (isaac#422): `_kit_extra_args_runner.py` boots a minimal `IsaacDriver` and reads `/app/isaac_test/marker` back through carb settings. With `ISAAC_KIT_EXTRA_ARGS=--/app/isaac_test/marker=1` the value is `1`; without the variable the setting is absent (control). First proof is the CI GPU job. |
-| `test_io_plugin_integration.py` (2) | `ISAAC_IO_PLUGIN` (isaac#423): `_io_plugin_runner.py` boots a minimal `IsaacDriver` (no boot extensions) on the official Jetbot asset (`fetch_test_asset`). With `ISAAC_IO_PLUGIN=_io_plugin_marker:make_marker` the fake plugin's marker prim exists once the timeline is playing; without it the marker is absent and `sys.modules` holds no `rclpy` / `isaacsim.ros2*` module. First proof is the CI GPU job. |
+| `test_io_plugin_integration.py` (2) | `ISAAC_IO_PLUGIN` (isaac#423): `_io_plugin_runner.py` boots a minimal `IsaacDriver` with the default `isaacsim.core.nodes` extension on the official Jetbot asset (`fetch_test_asset`). With `ISAAC_IO_PLUGIN=_io_plugin_marker:make_marker` the fake plugin's marker prim exists once the timeline is playing; without it the marker is absent. Both runs check that no `rclpy` or `isaacsim.ros2*` module was loaded. First proof is the CI GPU job. |
 | `test_build_scene_adapter.py` (4) | MR gate (#152, ADR-0018 decisions 1/3), assertions strengthened (#154); since #325 the scene is built in the runner around the official Jetbot (robot, `/World/Robot/chassis` replaces `base_link`) and NVIDIA cube (`mobility: dynamic`) USDs fetched via `test/test_assets.py` (runner takes `--robot-usd` / `--object-usd`), no `example/sim/` assets; NOT yet run on the GPU runner. Originally: the example scene spawned via the framework `build_scene` adapter (`to_isaaclab_cfg` -> `sim_utils` cfg -> `cfg.func()`). A module-scoped fixture runs `_build_scene_runner.py` once (one `SimulationApp`) and shares its marker stdout. `test_adapter_runner_clean_exit` (`[EXIT CLEAN]`, no `[RAISED]`, returncode 0); `test_adapter_spawns_ground_light_robot` (`[ADAPTER OK] ground=True light=True robot=True objects>=1` -- environment ground (a procedural collision cuboid, NOT the nucleus `GroundPlaneCfg`) + light + robot USD authored on the live stage -- AND, strengthened in #154, `[ADAPTER BASE_LINK] valid=True`: `/World/Robot/base_link` now resolves through the adapter reference + the fb6f580 `defaultPrim`); `test_adapter_spawns_mobility_dynamic_object` (a `mobility: dynamic` object materializes a `UsdFileCfg` with `rigid_props`/`mass_props`/`collision_props`, `cfg.func` spawns it, AND -- strengthened in #154 -- carries `rigidbody=True`, the `UsdPhysics.RigidBodyAPI` now landing on resolved referenced content). Both strengthenings were reported-not-asserted before fb6f580 added the `defaultPrim` to the committed `camera_bot.usd` / `prop_cube.usda`. Collected count unchanged (the base_link assertion is folded into the ground/light/robot test). Marker-line acceptance; headless; runner `_build_scene_runner.py` (underscore-prefixed, not collected). |
 | `test_capture_noise.py` (3) | Capture-speckle fix (isaac#266): one Kit boot (`_capture_noise_runner.py`) builds a lit room and captures it TWICE through the SAME render product -- once as replicator creates it, once after `apply_converged_render_settings` (inlined from the former `viz_render` module, now in `ycpss91255-lab/isaac_physics_test`) authors the recipe on the RenderProduct prim. Asserts the default leg is CLEAN, i.e. NGX-denoised (isaac#294: since #285 set `gpu_capabilities = all` the container gets the `ngx` capability, so the old "default must still be noisy" guard was inverted -- a default leg back near 53 now means NGX dropped out again), that the mode reads back as `PathTracing` off the live prim (a carb `/rtx/rendermode` write reads back unchanged, so this is what separates "applied" from "attempted"), and that the converged frame is clean (absolute ceiling, no relative-to-default check since both legs are now clean) with no fully black pixels. The metric is neighbouring-pixel mean absolute difference, NOT frame `std`: `std` is dominated by scene contrast, which is why every failed hypothesis in the issue "left std unchanged" and looked equally inert. Reference on the RTX 5090: pre-#285 default 53.0 vs converged 2.1; post-#285 default ~0.41 vs converged ~1.53 (CI run 34233956492). |
-| `test_isaaclab_available.py` (1) | Boots AppLauncher headlessly and checks the installed Isaac Lab version and the `UsdFileCfg` and `GroundPlaneCfg` spawner classes. |
+| `test_driver_joint_motion.py` (2) | The #447 regression runs `IsaacDriver` on the official Jetbot with PhysX and Newton. Each case checks the active engine and requires both wheels to move more than one radian in the commanded direction. |
 | `test_isaac_driver_integration.py` (1) | Exercises the driver lifecycle in Kit. |
 
 ## example/ros2/ — app-side ament package tests (colcon test, not in the counts above)

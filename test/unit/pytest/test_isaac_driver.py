@@ -1,15 +1,8 @@
-"""Unit tests for ``isaac_devkit.driver`` -- pure-Python helpers.
-
-These cover the host-runnable surface (``parse_livestream_env`` and
-``resolve_repo_relative_usd``). The Kit-side lifecycle (``IsaacDriver.run``
-walking through SimulationApp / open_stage / play_timeline / ...) is
-covered by the integration test under ``test/integration/pytest/``; the
-pure side of the lifecycle ORDER is covered hosted by the spy test at
-the bottom of this file (ADR-0017 section 7 greenfield addition).
-"""
+"""Host-side tests for the IsaacDriver launch configuration and lifecycle."""
 
 import sys
 import types
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -59,60 +52,28 @@ class TestParseLivestreamEnv:
             id_mod.parse_livestream_env("yes")
 
 
-# ---------- parse_livestream_applauncher (ADR-0018) ----------
+STREAM_EXPERIENCE = "/isaac-sim/apps/isaacsim.exp.base.python.streaming.kit"
 
 
-class TestParseLivestreamApplauncher:
-    """The ADR-0018 AppLauncher-args variant. Mirrors the ISAAC_LIVESTREAM
-    0/1/2 mapping but emits Isaac Lab AppLauncher kwargs (headless /
-    livestream / enable_cameras), with enable_cameras always on so cameras
-    render headless for the ROS 2 publish chain.
-    """
+class TestParseLivestreamSimulationApp:
+    @pytest.mark.parametrize("value", [None, "", "0", "1", "2"])
+    def test_launch_config_and_experience(self, value):
+        config, experience = id_mod.parse_livestream_simulation_app(value)
+        assert config["headless"] is True
+        assert "livestream" not in config
+        assert config["disable_viewport_updates"] is False
+        assert experience == (STREAM_EXPERIENCE if value in ("1", "2") else None)
 
-    def test_unset_returns_headless_cameras(self):
-        assert id_mod.parse_livestream_applauncher(None) == {
-            "headless": True,
-            "enable_cameras": True,
-        }
+    def test_streaming_modes_return_identical_config_and_experience(self):
+        assert (
+            id_mod.parse_livestream_simulation_app("1")
+            == id_mod.parse_livestream_simulation_app("2")
+        )
 
-    def test_empty_string_returns_headless_cameras(self):
-        assert id_mod.parse_livestream_applauncher("") == {
-            "headless": True,
-            "enable_cameras": True,
-        }
-
-    def test_zero_returns_headless_cameras(self):
-        assert id_mod.parse_livestream_applauncher("0") == {
-            "headless": True,
-            "enable_cameras": True,
-        }
-
-    def test_one_returns_native_livestream(self):
-        assert id_mod.parse_livestream_applauncher("1") == {
-            "headless": True,
-            "livestream": 1,
-            "enable_cameras": True,
-        }
-
-    def test_two_returns_webrtc_livestream(self):
-        assert id_mod.parse_livestream_applauncher("2") == {
-            "headless": True,
-            "livestream": 2,
-            "enable_cameras": True,
-        }
-
-    def test_enable_cameras_always_on(self):
-        for value in (None, "", "0", "1", "2"):
-            assert id_mod.parse_livestream_applauncher(value)["enable_cameras"] is True
-
-    def test_unknown_value_raises(self):
-        with pytest.raises(ValueError) as ei:
-            id_mod.parse_livestream_applauncher("3")
-        assert "'3'" in str(ei.value)
-
-    def test_garbage_value_raises(self):
-        with pytest.raises(ValueError):
-            id_mod.parse_livestream_applauncher("yes")
+    @pytest.mark.parametrize("value", ["3", "yes"])
+    def test_unknown_value_raises(self, value):
+        with pytest.raises(ValueError, match=repr(value)):
+            id_mod.parse_livestream_simulation_app(value)
 
 
 # ---------- resolve_repo_relative_usd ----------
@@ -172,8 +133,7 @@ class TestConstructionWithoutKit:
         driver = id_mod.IsaacDriver()
         assert driver._should_quit is False
         assert driver._app is None
-        assert not hasattr(driver, "_rclpy_inited")
-        assert not hasattr(driver, "init_rclpy")
+        assert not hasattr(driver, "_app_launcher")
 
     def test_default_usd_is_empty(self):
         assert id_mod.IsaacDriver.USD == ""
@@ -218,8 +178,8 @@ class TestBootExtensionKitArgs:
     def test_none_is_noop(self):
         assert id_mod.boot_extension_kit_args(None) == []
 
-    def test_default_boot_extensions_include_core_nodes(self):
-        assert "isaacsim.core.nodes" in id_mod.IsaacDriver.BOOT_EXTENSIONS
+    def test_default_boot_extensions(self):
+        assert id_mod.IsaacDriver.BOOT_EXTENSIONS == ("isaacsim.core.nodes",)
 
 
 # ---------- A7 contract shape + lifecycle-order spy (ADR-0017 additions) ----
@@ -235,53 +195,133 @@ class TestSceneAttrShape:
         assert id_mod.IsaacDriver.SCENE == ""
 
 
+def _install_simulation_app(monkeypatch, calls):
+    class SimulationApp:
+        def __init__(self, launch_config, experience=None):
+            calls.append("simulation_app")
+            self.config = deepcopy(launch_config)
+            self.experience = experience
+            self.argv_at_init = list(sys.argv)
+
+        def is_running(self):
+            return False
+
+        def close(self):
+            calls.append("close")
+
+    isaacsim = types.ModuleType("isaacsim")
+    isaacsim.SimulationApp = SimulationApp
+    monkeypatch.setitem(sys.modules, "isaacsim", isaacsim)
+    monkeypatch.setattr(id_mod.signal, "signal", lambda *_: None)
+    monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
+    return SimulationApp
+
+
+class _HostedDriver(id_mod.IsaacDriver):
+    def _open_stage(self):
+        return object()
+
+    def _ensure_scene_defaults(self, stage):
+        pass
+
+    def _play_timeline(self):
+        pass
+
+
+class TestPlayTimeline:
+    def _play(self, monkeypatch, *, impl_missing=False, callbacks_available=True):
+        events = []
+
+        def module(name, parent=None):
+            full_name = f"{parent.__name__}.{name}" if parent else name
+            fake = types.ModuleType(full_name)
+            fake.__path__ = []
+            monkeypatch.setitem(sys.modules, full_name, fake)
+            if parent:
+                setattr(parent, name, fake)
+            return fake
+
+        settings = types.SimpleNamespace(
+            set=lambda key, value: events.append(("set", key, value)),
+        )
+        module("settings", module("carb")).get_settings = lambda: settings
+        timeline = types.SimpleNamespace(
+            set_looping=lambda flag: events.append(("set_looping", flag)),
+            set_end_time=lambda end: events.append(("set_end_time", end)),
+            play=lambda: events.append(("play",)),
+        )
+        module("timeline", module("omni")).get_timeline_interface = lambda: timeline
+
+        def manager(source):
+            class SimulationManager:
+                if callbacks_available:
+                    @staticmethod
+                    def enable_warm_start_callback(flag):
+                        events.append(("warm_start", source, flag))
+
+            return SimulationManager
+
+        core = module("core", module("isaacsim"))
+        package = module("simulation_manager", core)
+        package.SimulationManager = manager("package")
+        impl = module("impl", package)
+        if impl_missing:
+            monkeypatch.setitem(sys.modules, f"{impl.__name__}.simulation_manager", None)
+        else:
+            module("simulation_manager", impl).SimulationManager = manager("impl")
+
+        class TimelineDriver(id_mod.IsaacDriver):
+            pass
+
+        driver = TimelineDriver()
+        driver._app = types.SimpleNamespace(update=lambda: events.append(("update",)))
+        driver._play_timeline()
+        return events
+
+    def test_prefers_impl_warm_start(self, monkeypatch):
+        events = self._play(monkeypatch)
+        assert [e for e in events if e[0] == "warm_start"] == [
+            ("warm_start", "impl", True),
+        ]
+
+    def test_uses_package_warm_start_when_impl_missing(self, monkeypatch):
+        events = self._play(monkeypatch, impl_missing=True)
+        assert ("warm_start", "package", True) in events
+
+    def test_warns_and_plays_when_callbacks_unavailable(self, monkeypatch, capsys):
+        events = self._play(monkeypatch, callbacks_available=False)
+        output = capsys.readouterr().out
+        assert "[isaac_driver] Warning: warm-start callback unavailable" in output
+        assert ("play",) in events
+
+    def test_sets_fixed_time_stepping_and_rate_limit(self, monkeypatch):
+        events = self._play(monkeypatch)
+        settings = dict(event[1:] for event in events if event[0] == "set")
+        assert settings["/app/runLoops/main/rateLimitEnabled"] is True
+        assert settings["/app/runLoops/main/rateLimitFrequency"] == 60
+        assert settings["/app/player/useFixedTimeStepping"] is True
+
+    def test_configures_and_plays_timeline_before_updates(self, monkeypatch):
+        events = self._play(monkeypatch)
+        assert ("set_looping", False) in events
+        assert ("set_end_time", 1e10) in events
+        assert [e[0] for e in events] == [
+            "warm_start", "set", "set", "set", "set_looping", "set_end_time", "play",
+        ] + ["update"] * 10
+
+    def test_updates_app_ten_times(self, monkeypatch):
+        assert self._play(monkeypatch).count(("update",)) == 10
+
+
 class TestLifecycleOrderSpy:
-    """Hosted pure-side spy on ``IsaacDriver.run()`` call order
-    (ADR-0017 section 7: lifecycle call order is verified hosted via a
-    pure-side spy). Greenfield addition on top of the ported baseline.
-
-    Fake ``isaaclab`` / ``isaaclab.app`` modules are injected so ``run()``'s
-    function-local ``from isaaclab.app import AppLauncher`` resolves on the
-    host (ADR-0018); the Kit-touching internals are overridden with
-    recorders. ``monkeypatch`` restores ``sys.modules`` and
-    ``signal.signal`` afterwards, keeping the import-safety invariant
-    intact for siblings.
-    """
-
-    @staticmethod
-    def _fake_isaaclab_app(calls):
-        # Parent package stub so ``from isaaclab.app import AppLauncher``
-        # resolves the parent before the submodule.
-        pkg = types.ModuleType("isaaclab")
-        pkg.__path__ = []  # mark as a package
-        app_mod = types.ModuleType("isaaclab.app")
-
-        class _FakeApp:
-            def is_running(self):
-                return False
-
-            def update(self):
-                pass
-
-            def close(self):
-                calls.append("close")
-
-        class _FakeLauncher:
-            def __init__(self, _args):
-                calls.append("app_launcher")
-                self.app = _FakeApp()
-
-        app_mod.AppLauncher = _FakeLauncher
-        return pkg, app_mod
-
     def test_run_walks_lifecycle_in_order(self, monkeypatch):
         calls = []
-        pkg, app_mod = self._fake_isaaclab_app(calls)
-        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
-        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
-        monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
-        # Do not install real process-wide handlers from inside a test.
-        monkeypatch.setattr(id_mod.signal, "signal", lambda *_args: None)
+        simulation_app = _install_simulation_app(monkeypatch, calls)
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
+        monkeypatch.setattr(
+            id_mod.signal, "signal",
+            lambda signum, handler: calls.append((signum, handler)),
+        )
 
         class _SpyDriver(id_mod.IsaacDriver):
             USD = "model/usd/robot/foo/foo.usd"
@@ -305,11 +345,15 @@ class TestLifecycleOrderSpy:
             def shutdown(self):
                 calls.append("shutdown")
 
-        argv_before = list(sys.argv)
-        _SpyDriver().run()
+        driver = _SpyDriver()
+        driver.run()
 
+        assert isinstance(driver._app, simulation_app)
+        assert not hasattr(driver, "_app_launcher")
         assert calls == [
-            "app_launcher",
+            "simulation_app",
+            (id_mod.signal.SIGINT, driver._on_signal),
+            (id_mod.signal.SIGTERM, driver._on_signal),
             "open_stage",
             "ensure_scene_defaults",
             "play_timeline",
@@ -318,10 +362,6 @@ class TestLifecycleOrderSpy:
             "shutdown",
             "close",
         ]
-        # run() injects boot-time --enable kit args around AppLauncher
-        # construction (isaac#248) but must restore sys.argv afterwards so
-        # nothing else parsing argv sees the transient flags.
-        assert sys.argv == argv_before
 
     def test_in_flight_exception_reported_before_close(
         self, monkeypatch, capsys
@@ -331,44 +371,21 @@ class TestLifecycleOrderSpy:
         # ModuleNotFoundError looked like a silent Kit shutdown for two
         # releases). run() must print the traceback BEFORE close().
         calls = []
-        pkg, app_mod = self._fake_isaaclab_app(calls)
+        app = _install_simulation_app(monkeypatch, calls)
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
         stderr_at_close = []
 
-        real_close = app_mod.AppLauncher
+        def close(self):
+            stderr_at_close.append(capsys.readouterr().err)
+            calls.append("close")
 
-        class _CapturingLauncher(real_close):
-            def __init__(self, args):
-                super().__init__(args)
-                inner_close = self.app.close
+        monkeypatch.setattr(app, "close", close)
 
-                def _close():
-                    stderr_at_close.append(capsys.readouterr().err)
-                    inner_close()
-
-                self.app.close = _close
-
-        app_mod.AppLauncher = _CapturingLauncher
-        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
-        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
-        monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
-        monkeypatch.setattr(id_mod.signal, "signal", lambda *_args: None)
-
-        class _FailingDriver(id_mod.IsaacDriver):
-            USD = "model/usd/robot/foo/foo.usd"
-
-            def _open_stage(self):
-                return object()
-
-            def _ensure_scene_defaults(self, stage):
-                pass
-
-            def _play_timeline(self):
-                pass
-
+        class _FailingDriver(_HostedDriver):
             def setup(self, stage):
                 raise ModuleNotFoundError("No module named 'fake_missing_mod'")
 
-        with pytest.raises(ModuleNotFoundError):
+        with pytest.raises(ModuleNotFoundError, match="fake_missing_mod"):
             _FailingDriver().run()
 
         assert calls[-1] == "close"
@@ -379,111 +396,60 @@ class TestLifecycleOrderSpy:
 
     def test_clean_run_prints_no_traceback(self, monkeypatch, capsys):
         calls = []
-        pkg, app_mod = self._fake_isaaclab_app(calls)
-        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
-        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
-        monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
-        monkeypatch.setattr(id_mod.signal, "signal", lambda *_args: None)
-
-        class _OkDriver(id_mod.IsaacDriver):
-            USD = "model/usd/robot/foo/foo.usd"
-
-            def _open_stage(self):
-                return object()
-
-            def _ensure_scene_defaults(self, stage):
-                pass
-
-            def _play_timeline(self):
-                pass
-
-        _OkDriver().run()
+        _install_simulation_app(monkeypatch, calls)
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
+        _HostedDriver().run()
+        assert calls == ["simulation_app", "close"]
         assert "Traceback" not in capsys.readouterr().err
 
 
-class TestKitExtraArgs:
-    """``ISAAC_KIT_EXTRA_ARGS`` is split with ``str.split()`` and appended
-    to the argv ``AppLauncher`` sees, after the boot ``--enable`` args and
-    inside the save/restore window (isaac#422)."""
+class TestSimulationAppLaunch:
+    @pytest.mark.parametrize("value, tokens", [
+        (None, []),
+        ("", []),
+        ("   ", []),
+        (" \t\n ", []),
+        ("--/app/a=1", ["--/app/a=1"]),
+        ("  --/app/a=1\t--/app/b=2   --enable x ",
+         ["--/app/a=1", "--/app/b=2", "--enable", "x"]),
+    ])
+    def test_kit_args_use_launch_config(self, monkeypatch, value, tokens):
+        _install_simulation_app(monkeypatch, [])
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
+        if value is None:
+            monkeypatch.delenv("ISAAC_KIT_EXTRA_ARGS", raising=False)
+        else:
+            monkeypatch.setenv("ISAAC_KIT_EXTRA_ARGS", value)
+        monkeypatch.setattr(sys, "argv", ["driver.py", "--caller-option"])
 
-    BOOT = id_mod.boot_extension_kit_args(id_mod.IsaacDriver.BOOT_EXTENSIONS)
+        driver = _HostedDriver()
+        driver.BOOT_EXTENSIONS = ("test.first", "test.second")
+        driver.run()
 
-    def _run_capturing_argv(self, monkeypatch):
-        """Run a driver and return the sys.argv seen at AppLauncher time."""
-        seen = []
-        pkg = types.ModuleType("isaaclab")
-        pkg.__path__ = []
-        app_mod = types.ModuleType("isaaclab.app")
+        assert driver._app.config["extra_args"] == [
+            "--enable", "test.first", "--enable", "test.second", *tokens,
+        ]
+        assert driver._app.argv_at_init == ["driver.py", "--caller-option"]
+        assert sys.argv == ["driver.py", "--caller-option"]
 
-        class _App:
-            def is_running(self):
-                return False
+    @pytest.mark.parametrize("mode", ["0", "1", "2"])
+    def test_run_passes_livestream_and_experience(self, monkeypatch, mode):
+        _install_simulation_app(monkeypatch, [])
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
+        monkeypatch.setenv("ISAAC_LIVESTREAM", mode)
+        driver = _HostedDriver()
+        driver.run()
+        assert driver._app.config["headless"] is True
+        assert "livestream" not in driver._app.config
+        assert driver._app.experience == (STREAM_EXPERIENCE if mode != "0" else None)
 
-            def update(self):
-                pass
-
-            def close(self):
-                pass
-
-        class _Launcher:
-            def __init__(self, _args):
-                seen.append(list(sys.argv))
-                self.app = _App()
-
-        app_mod.AppLauncher = _Launcher
-        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
-        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
-        monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
-        monkeypatch.setattr(id_mod.signal, "signal", lambda *_args: None)
-        monkeypatch.setattr(sys, "argv", ["prog"])
-
-        class _Driver(id_mod.IsaacDriver):
-            USD = "model/usd/robot/foo/foo.usd"
-
-            def _open_stage(self):
-                return object()
-
-            def _ensure_scene_defaults(self, stage):
-                pass
-
-            def _play_timeline(self):
-                pass
-
-        _Driver().run()
-        assert len(seen) == 1
-        return seen[0]
-
-    def test_unset_adds_nothing(self, monkeypatch):
-        monkeypatch.delenv("ISAAC_KIT_EXTRA_ARGS", raising=False)
-        assert self._run_capturing_argv(monkeypatch) == ["prog"] + self.BOOT
-
-    @pytest.mark.parametrize("value", ["", "   ", " \t\n "])
-    def test_empty_or_whitespace_adds_nothing(self, monkeypatch, value):
-        monkeypatch.setenv("ISAAC_KIT_EXTRA_ARGS", value)
-        assert self._run_capturing_argv(monkeypatch) == ["prog"] + self.BOOT
-
-    def test_single_arg_follows_boot_args(self, monkeypatch):
-        monkeypatch.setenv("ISAAC_KIT_EXTRA_ARGS", "--/app/isaac_test/marker=1")
-        assert self._run_capturing_argv(monkeypatch) == (
-            ["prog"] + self.BOOT + ["--/app/isaac_test/marker=1"]
-        )
-
-    def test_multiple_args_split_on_whitespace(self, monkeypatch):
-        monkeypatch.setenv(
-            "ISAAC_KIT_EXTRA_ARGS", "  --/app/a=1\t--/app/b=2   --enable x "
-        )
-        got = self._run_capturing_argv(monkeypatch)
-        # 1 prog + boot tokens + 4 extra tokens.
-        assert len(got) == 1 + len(self.BOOT) + 4
-        assert got == (
-            ["prog"] + self.BOOT
-            + ["--/app/a=1", "--/app/b=2", "--enable", "x"]
-        )
-
-    def test_argv_restored_after_run(self, monkeypatch):
-        monkeypatch.setenv("ISAAC_KIT_EXTRA_ARGS", "--/app/a=1")
-        self._run_capturing_argv(monkeypatch)
-        assert sys.argv == ["prog"]
+    def test_invalid_livestream_fails_before_kit_starts(self, monkeypatch):
+        calls = []
+        _install_simulation_app(monkeypatch, calls)
+        monkeypatch.setenv("ISAAC_LIVESTREAM", "3")
+        with pytest.raises(ValueError, match="'3'"):
+            _HostedDriver().run()
+        assert calls == []
 
 
 class TestIoPlugin:
@@ -505,11 +471,7 @@ class TestIoPlugin:
             return TestIoPlugin._Prim("/foo")
 
     def _run(self, monkeypatch, calls):
-        pkg, app_mod = TestLifecycleOrderSpy._fake_isaaclab_app(calls)
-        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
-        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
-        monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
-        monkeypatch.setattr(id_mod.signal, "signal", lambda *_args: None)
+        _install_simulation_app(monkeypatch, calls)
         stage = self._Stage()
         usd = self.USD
 

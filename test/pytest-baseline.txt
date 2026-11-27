@@ -287,8 +287,10 @@
 # isaac#289: test_readme_multi_instance.py adds 24 docs cases (687 -> 711, docs 44 -> 68).
 # isaac#453: merge queue wiring adds 2 workflow and 2 scope-selection cases (711 -> 715, core 618 -> 622).
 # isaac#405: +1 hosted core test for the Dependabot comment guard: 715 -> 716 (core 622 -> 623).
-# isaac#276 removes 35 net core cases (ROS I/O and host-leg guards): 716 -> 681, core 623 -> 588.
-HOSTED_UNIT_BASELINE = 681
+# isaac#479: test_isaac_driver.py 48 -> 57 (SimulationApp launch, streaming-mode
+#   equivalence, 6 _play_timeline cases): 716 -> 725.
+# isaac#276 removes 35 net core cases (ROS I/O and host-leg guards): 725 -> 690.
+HOSTED_UNIT_BASELINE = 690
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -317,8 +319,9 @@ HOSTED_UNIT_BASELINE = 681
 #   isaac#338 adds 16 core cases (core 602 -> 618).
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#405 adds 1 core case (core 622 -> 623).
-#   isaac#276 removes 35 net core cases (core 623 -> 588).
-HOSTED_UNIT_BASELINE_CORE = 588
+#   isaac#479 adds 9 driver cases (core 623 -> 632).
+#   isaac#276 removes 35 net core cases (core 632 -> 597).
+HOSTED_UNIT_BASELINE_CORE = 597
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -392,8 +395,11 @@ HOSTED_UNIT_BASELINE_DOCS = 68
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-# Host cross-container leg removed in isaac#276. The ROS round-trip belongs to isaac_ros_io.
-GPU_INTEGRATION_BASELINE = 30
+# isaac#479 replaces the availability smoke (1) with PhysX and Newton wheel
+#   motion (2): 34 -> 35.
+# isaac#276 removes two in-container ROS cases and two host round-trip cases.
+#   The 31 remaining cases all run in the Isaac test container.
+GPU_INTEGRATION_BASELINE = 31
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
@@ -409,9 +415,10 @@ AGGREGATE_TARGET = 126
 #   test, all core: 90 -> 106.
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
-#   isaac#276 removes 4 host-leg cases (core 119 -> 115).
+#   isaac#497 adds 9 stream smoke cases (stream 81 -> 90).
+#   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 222 -> 218).
 BATS_BASELINE_CORE = 115
 BATS_BASELINE_GUI = 0
-BATS_BASELINE_STREAM = 81
+BATS_BASELINE_STREAM = 90
 BATS_BASELINE_HEADLESS = 13
 BATS_BASELINE_DOCS = 0

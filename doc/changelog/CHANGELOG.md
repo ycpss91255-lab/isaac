@@ -6,7 +6,7 @@
 
 - **移除 `isaac_devkit` 內建的 ROS 2 I/O（isaac#276）。** `IsaacDriver` 預設只啟用 `isaacsim.core.nodes`。ROS I/O 由 `ISAAC_IO_PLUGIN` 載入外部插件，所需的 Kit 擴充套件可透過 `ISAAC_KIT_EXTRA_ARGS` 啟用。感測器仍接受並驗證 YAML 的 `ros:` 欄位，建立後回傳 USD prim 或掛載路徑。camera_bot 範例改為建立相機並執行模擬迴圈。
   - `isaac_ros_io` 移植時可從本次移除前的 `origin/main` 提取訂閱與感測器發布的 OmniGraph 實作。兩個檔案均保存在提交 `170de8c`。[ros_io.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/ros_io.py) · [sensor_ros.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/sensor_ros.py)
-  - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 30 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 681 例（core 588），Bats 共 209 例（core 115）。
+  - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 31 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 690 例（core 597），Bats 共 218 例（core 115）。
 
 ### Fixed
 - **修正 GPU 共用工作流程的版本檢查（isaac#405、#406）。** pytest 統一從 `gpu_pin.py` 的 `GPU_REUSABLE_TAG` 讀取版本，並確認 Dependabot 註解標示目前的 `v0.4.0`。呼叫端清單不符時，錯誤訊息會列出缺少或多出的工作流程，並提示更新清單與文件。版本與呼叫端結構以 pytest 的檢查為準，Bats 的版本檢查改為從 `gpu_pin.py` 讀取同一個 `GPU_REUSABLE_TAG`，並涵蓋全部 4 個呼叫端（含 `ci-headless-smoke.yaml`）。devel-test 映像把 `gpu_pin.py` 一併放進 `/smoke_test/`。升級 tag 需改 4 個工作流程檔、`gpu_pin.py` 與 Dependabot 註解，沒有其他副本。
@@ -18,7 +18,7 @@
 - **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 
 ### Added
-
+- **新增 stream smoke 在 GPU 主機忙碌時的診斷測試（isaac#497）。** 九個 Bats 案例涵蓋訊號埠或媒體埠被占用時提早失敗（有 `ss` 時也能偵測 UDP 媒體埠占用）、略過連接埠檢查、啟動與就緒時的主機負載及就緒耗時，以及逾時時回報就緒標記與連接埠占用者。stream 組由 81 增至 90 項。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
 - **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。
@@ -27,6 +27,7 @@
 - **新增 stream smoke 的 CI 路徑分組回歸測試（isaac#459）。** 測試逐一模擬只改一個相依檔案的 PR，要求每次都選到 `stream` 組。串流 Kit experience 與獨立 smoke 腳本應歸入 `stream`，共用的 entrypoint 與 `script/hooks/pre/*` 應選取全部組別。Hosted baseline 683 -> 691（core 642 -> 650）。
 - **headless stage 開機檢查（isaac#461）。** headless stage 之前只被 build、從來沒有被啟動過；base 的 compose 替它加 `restart: unless-stopped`，所以啟動指令一壞就是容器一直重啟，而 hosted pytest、bats、GPU 整合與串流 smoke 全部是綠的。新增 `script/ci/headless_smoke.sh`：以獨立 compose project 執行 `./script/run.sh -t headless -d`，在 settle 視窗（預設 20 秒）內要求 `State.Status == running` 且 `RestartCount == 0`（重啟迴圈中的容器在兩次重啟之間也是 running，所以不能只看 Status），結束時一律 `compose down`。新增 `ci-headless-smoke.yaml` 與 `main.yaml` 的 `headless-smoke` job（headless 組被選中時才跑，GPU runner、與 `core-gpu` 相同的 fork 防護），`gate` 的 needs 加入它。新增 `headless_smoke_spec.bats`（13 個）與 `test_headless_smoke_wiring.py`（6 個）。Hosted baseline 676 -> 683（core 642、headless 6）；bats headless 0 -> 13。
 ### Changed
+- **`IsaacDriver.run()` 改用 `isaacsim.SimulationApp` 啟動 Kit（isaac#479）。** 啟動前驗證 `ISAAC_LIVESTREAM`。`ISAAC_LIVESTREAM=1` 原本使用原生串流，現在與模式 2 選用相同的 WebRTC experience（行為變更）。串流由 experience 檔決定，啟動設定不再包含 `livestream` 鍵。開機擴充套件與 `ISAAC_KIT_EXTRA_ARGS` 透過 `extra_args` 傳入，保留呼叫端的 `sys.argv`。播放前啟用 #447 的 physics warm start 與 60 Hz 限速。新增 6 個 hosted 單元測試，以模擬的 `carb`、`omni` 與 `simulation_manager` 模組驗證 `_play_timeline`。GPU 測試以 PhysX、Newton 的 Jetbot 雙輪位移取代套件可用性檢查。Hosted 基準 716 → 725（core 623 → 632），GPU 基準 34 → 35。
 - **縮小 `Co-authored-by` 的比對範圍（isaac#414）。** 共同作者的姓名僅含 Claude 時不再誤判，也能辨識版本號緊接模型名稱或以連字號相連的寫法，例如 `Claude Sonnet4.5`、`Claude Opus4` 和 `Claude-3`。
 - **Workflow / job 命名規則與 lint（isaac#443，#434 PR4）。** 規則寫在 `doc/workflow-naming.md`：檔名 `<category>-<feature>.yaml`（category 為 ci / release / bot / tool）、顯示名稱 `<Category>: <Feature Words>`、job id 小寫 kebab-case、不加 job 層 `name:`、CI job id 為 `changes` / `gate` / `release` 或以組別開頭（`core-` `gui-` `stream-` `headless-` `docs-`）。`script/ci/lint_workflow_names.py` 檢查 `.github/workflows/*.yaml`，並掃文件有沒有殘留已改掉的名稱；它在 `docs-unit` job 執行，也由 `test_workflow_naming.py` 固定。改名：`stream-smoke.yaml` -> `ci-stream-smoke.yaml`、顯示名稱 `Stream Smoke (GPU)` -> `CI: Stream Smoke`（`main.yaml` 的 `uses:`、路徑規則 `ci-stream-*`、文件與測試同步）。**Required check 不受影響**：required 只有 `gate`，job 名稱變動不碰 branch protection。**例外（精確檔名）**：`main.yaml`（org 通用入口、base 的 `init.sh` 建立）；`base-version-monitor.yaml`（`init.sh` 的 `_sync_base_monitor_workflow` 在該路徑不存在時產生，改檔名會在下次 base 升級時於旁邊重新產生一份；`init.sh` 只建立不覆蓋，所以內容不會被蓋回去，但檔名會，故保留原名與內容，原因寫在文件裡）；`publish-stream-source.yaml`（isaac#432 會刪，不改）。Hosted baseline 633 -> 676（core 641）。
 ### Removed

@@ -315,10 +315,9 @@ class _FakeExtManager:
 @pytest.fixture
 def fake_kit(monkeypatch):
     """Install a fake ``omni.kit.app`` and make ``isaacsim.core.utils``
-    unimportable, as it is under the Isaac Lab AppLauncher experience
-    (the deprecated extension lives in extsDeprecated and is never
-    loaded there, so ``import isaacsim.core.utils...`` raises
-    ModuleNotFoundError)."""
+    unimportable, as it is under the default and streaming experiences for
+    ``isaacsim.SimulationApp``. Both omit the extension in extsDeprecated,
+    so importing its modules raises ``ModuleNotFoundError``."""
     import types
 
     mgr = _FakeExtManager()
