@@ -1,6 +1,6 @@
 # isaac — workspace
 
-NVIDIA Isaac Sim workspace content (scripts, docs, USD/URDF models) for `ycpss91255-lab/isaac`.
+NVIDIA Isaac Sim workspace content (scripts, docs, USD models) for `ycpss91255-lab/isaac`.
 
 This directory holds the editable content (driver scripts, documentation, 3D models) that runs inside the Isaac Sim Docker development environment defined at the repo root. It used to be a separate repo, `ycpss91255-lab/isaac`, which wrapped the Docker environment as a `docker/` submodule. Both were merged into this single repo per [#78](https://github.com/ycpss91255-lab/isaac/issues/78), and the research repo is archived.
 
@@ -20,7 +20,6 @@ src/
 ├── script/        # Driver scripts (run inside Isaac Sim Kit / standalone Python)
 └── model/         # 3D models
     ├── sw/        # SolidWorks raw source
-    ├── urdf/      # URDF + mesh
     └── usd/       # Authored / converted USD
 ```
 
