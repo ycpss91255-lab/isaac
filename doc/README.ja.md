@@ -129,6 +129,16 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 - 1 つの image はまだ共有される：毎回の build で lint/bats 用ツール image `test-tools:<base バージョン>`（現在は `test-tools:v0.42.0`）も build され、その名前は pin した base バージョンだけで決まる。同じ base バージョンを pin する host 上のすべての checkout と repo が同じ tag を書き込むため、別の checkout が build 中かもしれないときは削除しないこと。`just docker build --clean-tools` は全員の分をまとめて削除する。これは base の `build.sh` に由来し、上流では [base#1551](https://github.com/ycpss91255-lab/base/issues/1551) で追跡している。
 - isolate 前に起動した container は共有 project に残る。`docker compose -p <hub>-isaac ps -a` で一覧し、自分のものを名前で停止する。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` は共有 project 全体（別の checkout の container を含む）を停止する。
 
+## ローカルの USD モデルをマウントする
+
+Isaac にはサンプルモデルが同梱されていません。`sim_asset` の USD モデル、または `asset_converter` で変換した USD モデルを使ってください。
+
+1. `cp setup.isaac_sample.toml setup.local.toml` を実行して、Git の管理対象外のローカル設定ファイルを作成します。すでにファイルがある場合は、このチェックアウトの設定を保持するため、既存のファイルにサンプルの設定を統合してください。
+2. モデルのマウント設定の `source` を、モデルがあるディレクトリに変更します。どのマシンでもシーンから同じパスを参照できるように、読み取り専用のマウント先は `/home/${USER_NAME}/models/sim_asset` のままにします。モデルのマウントを追加する場合は、対応するコンテナ内のパスをコロン区切りで `MODEL_PATH` に追加します。
+3. `just docker run -t headless -d` でコンテナを起動します。シーンは実行ごとに `just run scene` で指定します。
+
+Base はローカル設定を適用するときに `[[volumes]]` のリスト全体を置き換えます。ローカル設定には `setup.toml` のマウントをすべて残し、リポジトリにマウントが追加されたら反映してください。
+
 ## WebRTC livestream への接続
 
 Isaac Sim 6.2.0 は NVCF（`omni.services.livestream.nvcf`）livestream プロトコルを使用。デスクトップ client またはブラウザベースのビューアで接続：

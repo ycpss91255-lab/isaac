@@ -129,6 +129,16 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 - 有一個 image 仍然共用：每次 build 也會 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名稱只由 pin 住的 base 版本決定。host 上所有 pin 同一個 base 版本的 checkout 與 repo 都寫同一個 tag，所以別的 checkout 可能正在 build 時不要刪它。`just docker build --clean-tools` 會替所有人把它刪掉。它來自 base 的 `build.sh`，上游追蹤在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前啟動的 container 還留在共用 project 裡。用 `docker compose -p <hub>-isaac ps -a` 列出，按名稱停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 會停掉整個共用 project，包含別的 checkout 的 container。
 
+## 掛載本機 USD 模型
+
+Isaac 不附範例模型。請使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的轉換輸出。
+
+1. 執行 `cp setup.isaac_sample.toml setup.local.toml`，建立 Git 會忽略的本機設定檔。若已有本機設定檔，請將範例合併進去，以保留這個 checkout 的設定。
+2. 將模型掛載的 `source` 改成模型所在的目錄。唯讀掛載的目標保持為 `/home/${USER_NAME}/models/sim_asset`，讓場景在每台機器上都能解析相同的路徑。若新增模型掛載，請將對應的容器內路徑加入 `MODEL_PATH`，並以冒號分隔。
+3. 執行 `just docker run -t headless -d` 啟動容器。每次執行時用 `just run scene` 指定場景。
+
+Base 套用本機設定時會取代整份 `[[volumes]]` 清單。請在本機設定檔中保留 `setup.toml` 的所有掛載，並在專案新增掛載時同步更新。
+
 ## 連接 WebRTC livestream
 
 Isaac Sim 6.2.0 用 NVCF（`omni.services.livestream.nvcf`）livestream 協定。可用桌面 client 或瀏覽器 viewer 連線：
