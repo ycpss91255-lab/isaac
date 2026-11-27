@@ -1,6 +1,6 @@
 # TEST.md
 
-**222 tests** total (bats). Hosted pytest collects **763 tests**.
+**222 tests** total (bats). Hosted pytest collects **764 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 655 | 35 | 809 |
+| core | 119 | 656 | 35 | 810 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 90 | 19 | 0 | 109 |
 | headless | 13 | 6 | 0 | 19 |
@@ -386,7 +386,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **763 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **764 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -428,7 +428,7 @@ The hosted suite collects **763 tests** on a host without Isaac Sim. CI runs `te
 | `test_xc_compose_project_isolation.py` | 4 | Hosted guard for the isaac-side root cause of `ycpss91255-lab/omniverse_web_viewer#55`: the cross-container round-trip's default `COMPOSE_PROJECT` is the dedicated `xc-isaac-roundtrip` (not the `${DOCKER_HUB_USER}-${IMAGE_NAME}` stream-stack project, e.g. `<user>-isaac`), so its project-level teardown can never reach a co-hosted manual `stream` container; asserts the dedicated literal, the isolation intent (distinct from any `${user}-${image}` derivation, which would still coincide), and that the `XC_COMPOSE_PROJECT` env override still wins. Loads the integration module by file path with env cleaned -- pure, no docker/GPU. |
 | `test_xc_roundtrip_asset_migration.py` | 4 | Hosted guard for the cross-container round-trip migration onto the official Jetbot asset (isaac#325): expected camera topic / frame_id are `/jetbot/camera/color/image_raw` / `jetbot_camera_color_optical_frame`; the ament `camera_subscriber` sibling is pointed at that topic via its `camera_topic` parameter (no ament package change); the test module fetches the USD through `fetch_test_asset("jetbot")`; the Isaac runner takes `--robot-usd` and no longer imports `example_driver` or references camera_bot. Reads the real module + runner source; no docker, GPU or network. |
 | ~~`test_render_settings.py`~~ | ~~13~~ | Moved to `ycpss91255-lab/isaac_physics_test` with `viz_render.py` (isaac#309). The converged-render recipe `_capture_noise_runner.py` used is now inlined there. |
-| `test_sim_version.py` | 10 | `isaac_devkit.sim_version.isaac_sim_version` (isaac#295): the Isaac Sim release read from `/isaac-sim/VERSION` (`6.2.0-rc.15+...` -> `6.2.0`, `6.0.1-rc.7+...` -> `6.0.1`, a bare `5.1.0`), `unknown` for an absent or empty file, the default path; plus a structural scan over `src/script/*.py` and `test/verify_*.py` that no script writes `isaac_variant` as a literal; the scan fails when either glob matches nothing, so it cannot pass vacuously (isaac#360). Pure -- tmp trees (each glob empty on its own, planted literal reported) and source reads. |
+| `test_sim_version.py` | 11 | `isaac_devkit.sim_version.isaac_sim_version` (isaac#295): the Isaac Sim release read from `/isaac-sim/VERSION` (`6.2.0-rc.15+...` -> `6.2.0`, `6.0.1-rc.7+...` -> `6.0.1`, a bare `5.1.0`), `unknown` for an absent or empty file, the default path; plus a structural scan over `src/script/*.py` and `test/verify_*.py` that no script writes `isaac_variant` as a literal; the scan fails when either glob matches nothing, so it cannot pass vacuously (isaac#360). Pure -- tmp trees (each glob empty on its own, planted literal reported) and source reads. |
 | `test_adr_drop_isaac_lab.py` | 4 | ADR-0026 (isaac#476), `docs`. Checks the superseded ADR and repository names in the decision, the status in ADR-0018, URDF import ownership in ADR-0020, and the reference in ADR-0017's Isaac Lab amendment. |
 | `test_readme_multi_instance.py` | 24 | `docs`. Six checks per README across four languages (isaac#289) cover section placement, the ADR-0019 and multi_run#15 links, per-instance cache, memory and project guidance, headless ports, and the absence of personal identifiers. |
 | `test_no_ai_attribution.py` | 30 | PR commit checks (isaac#413, isaac#414). Clean commits, ordinary mentions, and human co-author names containing Claude pass. Model names and versions, anthropic.com co-author, author, or committer addresses, generation notices (including Markdown links), and session trailers flag the offending commit SHAs. Coverage includes indentation, mixed case, and versions written without a space (`Claude Sonnet4.5`, `Claude Opus4`, and `Claude-3`). With a stubbed git log, an empty range succeeds and an invalid range reports an error with exit code 2. Omitting both the range and `--stdin` is a usage error. |
