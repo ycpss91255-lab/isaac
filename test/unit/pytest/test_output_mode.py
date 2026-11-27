@@ -1,9 +1,7 @@
-"""Output-mode resolver (isaac#366).
+"""Output-mode resolver (isaac#514).
 
-``ISAAC_OUTPUT_MODE`` selects exactly one output path for the whole
-container: ``python`` (default; Python callbacks, no ROS) or ``ros`` (the
-native OmniGraph ROS 2 bridge; no Python data). The resolver is pure --
-no Isaac or ROS import -- so it is hosted-testable (ADR-0025).
+``ISAAC_OUTPUT_MODE`` defaults to ``python`` for Python callbacks.
+Any other explicit value raises ValueError.
 """
 
 import sys
@@ -28,19 +26,20 @@ def test_unset_defaults_to_python():
     assert resolve_output_mode({}) == "python"
 
 
-@pytest.mark.parametrize("value", ["ros", "python"])
+@pytest.mark.parametrize("value", ["python"])
 def test_valid_values_pass_through(value):
     assert resolve_output_mode({"ISAAC_OUTPUT_MODE": value}) == value
 
 
-@pytest.mark.parametrize("value", ["ROS", "Python", "", "both", " ros", "ros "])
+@pytest.mark.parametrize("value", ["ros", "ROS", "Python", "", "both", " ros", "ros "])
 def test_invalid_values_raise_naming_value_and_allowed_set(value):
     with pytest.raises(ValueError) as exc:
         resolve_output_mode({"ISAAC_OUTPUT_MODE": value})
     msg = str(exc.value)
     assert repr(value) in msg
     assert "ISAAC_OUTPUT_MODE" in msg
-    assert "'ros'" in msg and "'python'" in msg
+    assert "'python'" in msg
+    assert "'ros'" not in msg.replace(repr(value), "", 1)
 
 
 def test_other_variables_are_ignored():
@@ -49,12 +48,13 @@ def test_other_variables_are_ignored():
 
 def test_reads_os_environ_by_default(monkeypatch):
     monkeypatch.setenv("ISAAC_OUTPUT_MODE", "ros")
-    assert resolve_output_mode() == "ros"
+    with pytest.raises(ValueError, match="ISAAC_OUTPUT_MODE"):
+        resolve_output_mode()
     monkeypatch.delenv("ISAAC_OUTPUT_MODE")
     assert resolve_output_mode() == "python"
 
 
 def test_constants():
     assert ENV_VAR == "ISAAC_OUTPUT_MODE"
-    assert set(MODES) == {"ros", "python"}
+    assert set(MODES) == {"python"}
     assert DEFAULT_MODE == "python"

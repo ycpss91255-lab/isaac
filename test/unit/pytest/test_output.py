@@ -87,6 +87,6 @@ def test_unregister_stops_delivery(monkeypatch):
     assert calls == [1]
 
 
-def test_ros_mode_is_not_available_yet():
-    with pytest.raises(NotImplementedError, match="ros"):
+def test_ros_mode_raises_value_error():
+    with pytest.raises(ValueError, match="ISAAC_OUTPUT_MODE"):
         setup_output({"ISAAC_OUTPUT_MODE": "ros"})
