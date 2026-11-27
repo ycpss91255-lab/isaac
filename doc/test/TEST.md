@@ -1,6 +1,6 @@
 # TEST.md
 
-**212 tests** total (bats). Hosted pytest collects **876 tests**.
+**219 tests** total (bats). Hosted pytest collects **876 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 108 | 735 | 35 | 878 |
+| core | 115 | 735 | 35 | 885 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 52 | 0 | 143 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 83 | 0 | 83 |
 
-The `**212 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -327,6 +327,27 @@ Behavioral guard for `script/git/merge-train.sh` (#368). Hermetic: stub `gh` (ca
 | `merge-train: the script source never hard-codes the squash flag` | `grep -n -e "--squash" script/git/merge-train.sh` prints nothing. |
 | `merge-train: the one required check is the summary job gate (isaac#434)` | `REQUIRED_CHECKS` is exactly `gate`; the two pre-#434 required-check names are gone. |
 
+## test/bats/smoke/gui_stage_static_spec.bats (3)
+
+In `setup.toml`, `stage:gui` sets `gui.mode = "force"` because `auto` would inherit the top-level `off`. The resolver test checks that only `gui` resolves to `gui=true`, enabling `DISPLAY` and the X11 socket mount for that service.
+
+| Test | Description |
+|------|-------------|
+| `setup.toml disables GUI by default and explicitly for every non-GUI stage` | Checks that the top-level mode and each non-GUI stage override are `off`. |
+| `every auto-emitted Dockerfile service stage has a setup.toml override` | Requires a section for each emitted Dockerfile stage and an explicit `gui.mode` of `off`, `auto`, or `force` in every stage section. |
+| `effective GUI per stage: only gui mounts X11` | Validates each stage override key and resolves the Docker flags with `DISPLAY` unset and the parent GUI flag disabled. Expects `gui=true` for `gui` and `gui=false` for every other configured stage. |
+
+## test/bats/smoke/pr_template_gui_spec.bats (4)
+
+Both #428 specs read files from the checkout when run locally. In the devel-test image they read the Dockerfile, resolver libraries, setup.toml, contributor guide, and PR template under `/lint`. A missing input fails setup with its path.
+
+| Test | Description |
+|------|-------------|
+| `PR template has an unchecked GUI screenshot item` | Checks that one unchecked Markdown item in the PR template mentions both GUI and a screenshot. |
+| `contributor guide requires visual evidence for GUI PRs` | Checks the merge rule and looks for the execution command, Isaac Sim, and the scene in the guide. |
+| `contributor guide records the Xvfb Kit screenshot experiment` | Checks for Xvfb, `--no-window`, menu readiness, the screenshot API, and CI status. |
+| `contributor guide uses a generic machine label and omits personal identifiers` | Requires an approved label and checks for home paths, email addresses, and the current username when set to a non-root account. |
+
 ## test/bats/smoke/workflow_pin_spec.bats (4)
 
 The Bats pin checks scan text and read the expected tag from `GPU_REUSABLE_TAG` in `test/unit/pytest/gpu_pin.py` (no hard-coded tag in the spec). The authoritative structural guard is `test_workflow_pins.py`, which parses each workflow's jobs.
@@ -400,7 +421,7 @@ The hosted suite collects **876 tests** on a host without Isaac Sim. isaac#491 a
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |
 | `test_ros_io.py` | 23 | Greenfield `isaac_devkit.ros_io` pure surface: `parse_ros2_io_config`, `expected_attr_paths`, `_build_graph_topology`, `RosIo.latest` non-blocking fresh-once bookkeeping against an injected reader. |
 | `test_dockerfile_no_ros.py` | 5 | Checks the Dockerfile, scripts, and config for ROS references, verifies removal of the obsolete files and Dockerfile instructions, and checks the cross-container test's Fast DDS fixture path, and that `setup.toml` carries no ROS build argument or environment entry. |
-| `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "auto"` (stream / headless / devel-test stay `off`). No docker/GPU. |
+| `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "force"` (stream / headless / devel-test stay `off`). No docker/GPU. |
 | `test_test_groups.py` | 25 | Test-group contract (isaac#434), `core`: every pytest module has exactly one `pytestmark` group (static AST check over `test/unit/pytest` and `test/integration/pytest`, with unmarked / two-group / unknown-group / function-level-marker detector self-tests on temp trees); every bats spec has exactly one `# bats file_tags=<group>` (non-group tags allowed, `test_tags` may not name a group) plus per-group bats counts; the collection-time plugin `test/group_markers.py` aborts a subprocess pytest run for an ungrouped or two-group test, accepts a grouped one, and `-m <other group>` collects nothing without an unknown-marker warning; the plugin and `script/ci/scope_groups.py` agree on the five groups; `test/pytest-baseline.txt` has a floor per group that sums to the total, the bats counts meet the `BATS_BASELINE_*` floors, and the 'Tests by group' table above matches the specs and the baseline. |
 | `test_changed_groups.py` | 61 | `core`. Scope selection for CI (isaac#434), `script/ci/changed_groups.py`: push / dispatch / tag run every group; a PR runs the groups its paths belong to plus `docs`; docs-only paths touch only `docs`; a shared layer (Dockerfile, compose, `setup.toml`, config, `.base`, `main.yaml`, the CI scripts and baseline) runs all five; a test file follows the group it declares (not a path pattern); `ci-<group>-*` workflow files follow the group in their name; an unknown or deleted path is `core`, never nothing; dispatch group list validated; outputs (`build`, `stages`, `bats_skip`) per scenario; the CLI prints `$GITHUB_OUTPUT` lines and reads the PR diff with `git diff --name-only base...head` (stub `git`). Each stream smoke input must select `stream` on its own, with the shared entrypoint and pre-hooks selecting all five groups (isaac#459). A merge group selects all five groups and the CLI enables every flag without PR SHAs (isaac#453). |
 | `test_ci_gate.py` | 10 | `core`. The required-check summary job (isaac#434), `script/ci/gate_result.py`: success and skipped jobs pass; failure or cancelled fails; `changes` not succeeding fails even when everything else is skipped (nothing was checked); empty needs fails; CLI exit codes 0 / 1 / 2. |
@@ -443,7 +464,7 @@ The GPU suite collects **35 tests**. CI runs 33 inside the Isaac test container 
 | `test_camera_ros2_headless.py::test_camera_custom_yaml_publishes_frame_headless` | M0 gate (#127): headless Isaac boots (CUDA probe + Kit-log Vulkan/CUDA markers), `custom.yaml` camera publish chain builds via `camera_setup.setup_camera`, and >= 1 `sensor_msgs/Image` arrives on `/forklift/camera/color/image_raw` with `frame_id=forklift_camera_color_optical_frame`. Pass criterion = `[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]` marker lines (Kit `_exit(0)`s, return code is meaningless). The runner sets `BOOT_EXTENSIONS = ()`, so the ROS 2 bridge is enabled at runtime by `setup_camera` after headless `SimulationApp` startup -- the isaac#248 regression path. |
 | `test_example_gpu_integration.py` (8) | M2 gate (#132), re-proven on the Isaac Lab backend (#154): boots a headless scene -- now the official NVIDIA Jetbot USD fetched via `test/test_assets.py` (#325, replacing the removed bundled camera_bot), spawned through the framework Isaac Lab adapter (#154) -- and makes the strong L1-L4 + `cmd_vel` assertions on the live scene. `test_l4_boot_and_clean_exit_markers` (`[BOOT OK]` + `[EXIT CLEAN]`, nothing raised); `test_cuda_and_vulkan_init` (libcuda device count + Kit-log CUDA/Vulkan markers); `test_l1_base_link_valid_and_rigidbody` (`/World/Robot/chassis` IsValid + `RigidBodyAPI`; the Jetbot has no `base_link`); `test_l1_link_and_joint_counts` (live Jetbot = 3 links / 2 joints / root `/jetbot`, from pxr inspection of the pinned asset); `test_l3_camera_topic_frame_and_message` (topic + `frame_id` + >= 1 `sensor_msgs/Image`); `test_ros_io_latest_none_before_publish` (non-blocking None); `test_cmd_vel_round_trip` (in-process Twist `vx=0.42 wz=0.21` echoes through `io.latest()`); `test_l4_injected_sigint_runs_shutdown` (live SIGINT -> `shutdown()`). Marker-line acceptance (Kit `_exit(0)`); headless; timeout = boot budget x 1.5 (600 s); retry <= 1, logged. Runner `_example_headless_runner.py` (takes `--robot-usd`; builds its scene in memory, no bundled scene files). The genuine cross-container round-trip lives in `test_cross_container_roundtrip.py` (below). |
 | `test_joint_drive_integration.py` (1) | Creates a revolute USD joint, applies a runtime drive and reads the angular stiffness and damping back from its DriveAPI. |
-| `test_output_hub_gpu.py` (4) | OutputHub delivery (isaac#365): one runner boot (`_output_hub_runner.py`, official Jetbot) builds python-mode output with an RGB and a depth camera, joint state and an IMU prim, steps 300 ticks and the four tests assert RGB uint8 `480x640x3`, depth float32 `480x640`, joint names present, IMU orientation length 4. Marker-line acceptance. NOT run locally; first run is CI `gpu-integration`. |
+| `test_output_hub_gpu.py` (4) | OutputHub delivery (isaac#365): one runner boot (`_output_hub_runner.py`, official Jetbot) builds python-mode output with an RGB and a depth camera, joint state and an IMU prim, steps 300 ticks and the four tests assert RGB uint8 `480x640x3`, depth float32 `480x640`, joint names present, IMU orientation length 4. Marker-line acceptance. Executed on a real GPU in the devel-test container (isaac#384): 4 passed, 0 skipped; the runtime `IMU.create(...)` + IMU reader path is confirmed (orientation length 4). |
 | `test_kit_extra_args_integration.py` (2) | `ISAAC_KIT_EXTRA_ARGS` (isaac#422): `_kit_extra_args_runner.py` boots a minimal `IsaacDriver` and reads `/app/isaac_test/marker` back through carb settings. With `ISAAC_KIT_EXTRA_ARGS=--/app/isaac_test/marker=1` the value is `1`; without the variable the setting is absent (control). First proof is the CI GPU job. |
 | `test_io_plugin_integration.py` (2) | `ISAAC_IO_PLUGIN` (isaac#423): `_io_plugin_runner.py` boots a minimal `IsaacDriver` (no boot extensions) on the official Jetbot asset (`fetch_test_asset`). With `ISAAC_IO_PLUGIN=_io_plugin_marker:make_marker` the fake plugin's marker prim exists once the timeline is playing; without it the marker is absent and `sys.modules` holds no `rclpy` / `isaacsim.ros2*` module. First proof is the CI GPU job. |
 | `test_cross_container_roundtrip.py` (2) | M2 gate (#132, PRD Pre-Publish item 1): the genuine Isaac<->ament cross-container ROS 2 round-trip, host-orchestrated against a sibling `ros:humble` container running the `example/ros2/` ament nodes (the proven #127/#131 `docker run --rm ros:humble` + `ROS_DOMAIN_ID` / `fastdds.xml` pattern on the host network). `test_sim_to_ament_camera_received` (sim -> ament: the ament `example_app_py camera_subscriber` node receives a real sim frame from the official Jetbot asset (#325, replacing camera_bot), `[FRAME OK] ... frame_id=jetbot_camera_color_optical_frame`, topic `/jetbot/camera/color/image_raw` passed via `-p camera_topic:=`); `test_ament_to_sim_cmd_vel_received` (ament -> sim: the ament `cmd_vel_publisher` node's Twist `vx=0.37 wz=0.19` crosses the boundary and the Isaac `RosIo.latest('/cmd_vel')` picks it up, `[XC CMD_VEL RX]`). Isaac side = `_cross_container_runner.py` (takes `--robot-usd`, builds its scene in memory; underscore-prefixed, not collected); it publishes NOTHING on `/cmd_vel` so every command observed crossed the container boundary. Because it spawns sibling containers it runs on the GPU HOST (not inside the Isaac container) -- `assert_pytest_baseline.sh --gpu` runs it as a host leg and sums it into the GPU totals. Skipped (not failed) without docker / the built `isaac:test` image; a skip does not advance the `passed > 0` gate. Marker-line acceptance; headless; retry <= 1, logged. Proven on the RTX 5090. |
