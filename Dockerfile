@@ -8,8 +8,8 @@
 #
 # Stage tree (isaac#427): devel is the shared layer (isaac code + common
 # config); gui / stream / headless are the three leaves, each `FROM devel`.
-# Only the gui service mounts X11 (see `[gui]` / `[stage:gui]` in
-# .setup.conf); the Dockerfile itself carries no X11 packages.
+# Only the gui service mounts X11. setup.toml enables it with
+# `[stage:gui] gui.mode = "force"` while the top-level GUI mode is off.
 #
 #   sys -> devel-base -> devel -+-> gui
 #                               +-> stream -> producer
@@ -24,7 +24,7 @@
 #                   (+ fastdds.xml, ROS_DISTRO bake, env-wrapper shim)
 #   test-tools-stage - Lint binaries (shellcheck / hadolint / bats) for devel-test
 #   devel-test    - Lint + bats smoke test (ephemeral, discarded after build)
-#   gui           - Isaac Sim desktop GUI (the only stage whose service mounts X11)
+#   gui           - Isaac Sim desktop GUI (X11 via `[stage:gui] gui.mode = "force"` in setup.toml)
 #   headless      - Isaac Sim, no streaming (ISAAC_LIVESTREAM=0; pure inference / batch)
 #   stream        - Isaac Sim + WebRTC streaming (ISAAC_LIVESTREAM=2; devel observation)
 #   producer      - Baked WebRTC stream-source producer (FROM stream; published image)
@@ -557,9 +557,8 @@ WORKDIR "${HOME}/work"
 CMD ["sleep", "infinity"]
 
 ############################## gui ##############################
-# [isaac #427] Desktop GUI variant. The image is the same as devel; what
-# makes it the GUI stage is its compose service: `[stage:gui] gui.mode =
-# auto` in .setup.conf mounts X11 / DISPLAY here and nowhere else.
+# [isaac #427] Desktop GUI variant. In setup.toml, `[stage:gui] gui.mode = "force"`
+# makes Compose mount the X11 socket and pass DISPLAY only to the gui service.
 #
 # Usage:
 #   just docker run -t gui

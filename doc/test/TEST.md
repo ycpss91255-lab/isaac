@@ -1,6 +1,6 @@
 # TEST.md
 
-**214 tests** total.
+**215 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 120 | 650 | 40 | 810 |
+| core | 121 | 650 | 40 | 811 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
@@ -328,25 +328,26 @@ Behavioral guard for `script/git/merge-train.sh` (#368). Hermetic: stub `gh` (ca
 | `merge-train: the script source never hard-codes the squash flag` | `grep -n -e "--squash" script/git/merge-train.sh` prints nothing. |
 | `merge-train: the one required check is the summary job gate (isaac#434)` | `REQUIRED_CHECKS` is exactly `gate`; the two pre-#434 required-check names are gone. |
 
-## test/bats/smoke/gui_stage_static_spec.bats (2)
+## test/bats/smoke/gui_stage_static_spec.bats (3)
 
-These checks read the committed inputs to setup. In the current `.base`, a stage set to `auto` inherits the resolved top-level GUI flag. With the committed default of `off`, the Compose emitter omits both `DISPLAY` and the X11 socket mount even for `gui`.
+In `setup.toml`, `stage:gui` sets `gui.mode = "force"` because `auto` would inherit the top-level `off`. The resolver test checks that only `gui` resolves to `gui=true`, enabling `DISPLAY` and the X11 socket mount for that service.
 
 | Test | Description |
 |------|-------------|
-| `setup.toml sets GUI off by default and auto only for stage:gui` | Parses the actual TOML and checks the default and every declared stage override. |
-| `every auto-emitted Dockerfile service stage has a setup.toml override` | Uses setup’s stage parser to catch missing sections when services are added. The default covers the template-managed `devel` service. |
+| `setup.toml disables GUI by default and explicitly for every non-GUI stage` | Checks that the top-level mode and each non-GUI stage override are `off`. |
+| `every auto-emitted Dockerfile service stage has a setup.toml override` | Requires a section for each emitted Dockerfile stage and an explicit `gui.mode` of `off`, `auto`, or `force` in every stage section. |
+| `effective GUI per stage: only gui mounts X11` | Validates each stage override key and resolves the Docker flags with `DISPLAY` unset and the parent GUI flag disabled. Expects `gui=true` for `gui` and `gui=false` for every other configured stage. |
 
 ## test/bats/smoke/pr_template_gui_spec.bats (4)
 
-Both #428 specs read files from the checkout when run locally. In the devel-test image they expect the same inputs under `/lint`. The image already contains the Dockerfile and the stage parser. It still needs `setup.toml`, `.github/pull_request_template.md`, and `CONTRIBUTING.md` at those relative paths for the checks to pass there.
+Both #428 specs read files from the checkout when run locally. In the devel-test image they read the Dockerfile, resolver libraries, setup.toml, contributor guide, and PR template under `/lint`. A missing input fails setup with its path.
 
 | Test | Description |
 |------|-------------|
 | `PR template has an unchecked GUI screenshot item` | Checks that one unchecked Markdown item in the PR template mentions both GUI and a screenshot. |
 | `contributor guide requires visual evidence for GUI PRs` | Checks the merge rule and looks for the execution command, Isaac Sim, and the scene in the guide. |
 | `contributor guide records the Xvfb Kit screenshot experiment` | Checks for Xvfb, `--no-window`, menu readiness, the screenshot API, and CI status. |
-| `contributor guide uses a generic machine label and omits personal identifiers` | Requires an approved label and checks for the prohibited username, email addresses, and home paths. |
+| `contributor guide uses a generic machine label and omits personal identifiers` | Requires an approved label and checks for home paths, email addresses, and the current username when set to a non-root account. |
 
 ## test/bats/smoke/workflow_pin_spec.bats (4)
 
@@ -417,7 +418,7 @@ Host-runnable unit tests for the `isaac_devkit` framework pure surface (no Isaac
 | `test_prim_summary.py` | 11 | Greenfield `PrimSummary` surface: `parse_urdf_expected` (pure URDF-XML expectation, fixed-joint merge), `_summarize_prim_records` (pure stage-record fold), the L1 diff-zero agreement on matching inputs. |
 | `test_ros_io.py` | 23 | Greenfield `isaac_devkit.ros_io` pure surface: `parse_ros2_io_config`, `expected_attr_paths`, `_build_graph_topology`, `RosIo.latest` non-blocking fresh-once bookkeeping against an injected reader. |
 | `test_example_driver.py` | 14 | `example/sim/example_driver.py` pure surface (#131): three-file scene merge (`load_three_file_scene`), expected robot/`base_link` prim-path strings, `cmd_vel_to_planar_velocity` controller mapping, `SCENE` attr shape, the `run()` SCENE-driven lifecycle-order spy + injected-SIGINT shutdown, and example import-safety. |
-| `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `.setup.conf` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = off` with only `[stage:gui] gui.mode = auto` (stream / headless / devel-test stay `off`). No docker/GPU. |
+| `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = off` with only `[stage:gui] gui.mode = "force"` (stream / headless / devel-test stay `off`). No docker/GPU. |
 | `test_test_groups.py` | 25 | Test-group contract (isaac#434), `core`: every pytest module has exactly one `pytestmark` group (static AST check over `test/unit/pytest` and `test/integration/pytest`, with unmarked / two-group / unknown-group / function-level-marker detector self-tests on temp trees); every bats spec has exactly one `# bats file_tags=<group>` (non-group tags allowed, `test_tags` may not name a group) plus per-group bats counts; the collection-time plugin `test/group_markers.py` aborts a subprocess pytest run for an ungrouped or two-group test, accepts a grouped one, and `-m <other group>` collects nothing without an unknown-marker warning; the plugin and `script/ci/scope_groups.py` agree on the five groups; `test/pytest-baseline.txt` has a floor per group that sums to the total, the bats counts meet the `BATS_BASELINE_*` floors, and the 'Tests by group' table above matches the specs and the baseline. |
 | `test_changed_groups.py` | 47 | `core`. Scope selection for CI (isaac#434), `script/ci/changed_groups.py`: push / dispatch / tag run every group; a PR runs the groups its paths belong to plus `docs`; docs-only paths touch only `docs`; a shared layer (Dockerfile, compose, `.setup.conf`, config, `.base`, `main.yaml`, the CI scripts and baseline) runs all five; a test file follows the group it declares (not a path pattern); `ci-<group>-*` workflow files follow the group in their name; an unknown or deleted path is `core`, never nothing; dispatch group list validated; outputs (`build`, `stages`, `bats_skip`) per scenario; the CLI prints `$GITHUB_OUTPUT` lines and reads the PR diff with `git diff --name-only base...head` (stub `git`). Each stream smoke input must select `stream` on its own, with the shared entrypoint and pre-hooks selecting all five groups (isaac#459). |
 | `test_ci_gate.py` | 9 | `core`. The required-check summary job (isaac#434), `script/ci/gate_result.py`: success and skipped jobs pass; failure or cancelled fails; `changes` not succeeding fails even when everything else is skipped (nothing was checked); empty needs fails; CLI exit codes 0 / 1 / 2. |
