@@ -309,8 +309,10 @@
 # isaac#327 (re-merge 2): -14 +1 core (822 -> 809, core 681 -> 668).
 # isaac#442: 65 tracker and bot workflow cases, all core:
 #   809 -> 874, core 668 -> 733.
-# isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (874 -> 878, core 733 -> 737).
-HOSTED_UNIT_BASELINE = 878
+# isaac#533 adds two core cases for the first line of the tracker PR body.
+# isaac#493 adds 6 PR scope and build cases (hosted 876 -> 882, core 735 -> 741).
+# isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (882 -> 886, core 741 -> 745).
+HOSTED_UNIT_BASELINE = 886
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -318,7 +320,7 @@ HOSTED_UNIT_BASELINE = 878
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 809。
+#   以下五組的測試數量下限合計為 882。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -351,8 +353,9 @@ HOSTED_UNIT_BASELINE = 878
 #   isaac#491 adds 19 core cases (core 662 -> 681).
 #   isaac#327: -14 +1 core (core 681 -> 668).
 #   isaac#442 adds 65 core cases (core 668 -> 733).
-#   isaac#446 adds 4 core cases (core 733 -> 737).
-HOSTED_UNIT_BASELINE_CORE = 737
+#   isaac#493 adds 6 core cases (core 735 -> 741).
+#   isaac#446 adds 4 core cases (core 741 -> 745).
+HOSTED_UNIT_BASELINE_CORE = 745
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -449,7 +452,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#479: replace the availability smoke (1) with PhysX and Newton wheel
 #   motion (2): 34 -> 35.
-GPU_INTEGRATION_BASELINE = 35
+# isaac#447: timeline settings and clock checks on both engines add 4 core cases.
+GPU_INTEGRATION_BASELINE = 39
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
@@ -468,8 +472,8 @@ AGGREGATE_TARGET = 126
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
-#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115).
-BATS_BASELINE_CORE = 115
+#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
+BATS_BASELINE_CORE = 119
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13
