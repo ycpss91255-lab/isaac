@@ -85,6 +85,21 @@ def test_host_user_joins_the_group_resolved_from_the_official_gid():
     pytest.fail("expected a supplementary group derived from the base GID for USER_NAME")
 
 
+def test_mjcf_loop_uses_posix_sh_and_lists_each_directory():
+    extension = "/isaac-sim/exts/isaacsim.asset.importer.mjcf"
+    runs = [run for run in re.findall(r"(?im)^RUN\s+(.+)$", _SYS)
+            if extension in run and re.search(r"\bfor\s+dir\s+in\s", run)]
+    assert runs, "expected the MJCF directory loop"
+    for run in runs:
+        assert "[[" not in run and "{,.ui}" not in run, run
+        paths = re.search(r"\bfor\s+dir\s+in\s+([^;]+);\s*do\b", run)
+        assert paths, run
+        assert {extension + "/data", extension + ".ui/data", extension + "/data/mjcf"} <= (
+            set(shlex.split(paths[1]))
+        )
+        assert re.search(r'\[\s+-d\s+"\${dir}"\s+\]', run), run
+
+
 def test_mjcf_group_write_rule_is_nonrecursive_and_inherited_by_both_targets():
     stages = [body for header, body in _STAGES if header.split()[-1] in {"sys", "devel-base"}]
     runs = [cmd for stage in stages for cmd in re.findall(r"(?im)^RUN\s+(.+)$", stage)
@@ -110,6 +125,61 @@ def test_mjcf_group_write_rule_is_nonrecursive_and_inherited_by_both_targets():
                for rule in write_rules), "include the UI extension's data directory"
     # The default import writes next to nv_ant.xml, one directory below data.
     assert any("/mjcf" in rule for rule in write_rules), "include the existing data/mjcf directory"
+
+
+@pytest.mark.parametrize("path", ["/isaac-sim/kit/data", "/isaac-sim/kit/cache"])
+def test_kit_directory_is_created_and_writable_by_runtime_user(path, tmp_path):
+    # Model the requested modes on a local directory without privileged chown.
+    directory = tmp_path / "kit-dir"
+    owner_is_user = group_is_base = False
+    for header, stage in _STAGES:
+        shared = header.split()[-1] in {"sys", "devel-base", "devel"}
+        for run in re.findall(r"(?im)^RUN\s+(.+)$", stage):
+            if path not in run:
+                continue
+            # Resolve the probed GID whether used inline or saved in a shell variable.
+            run = re.sub(r'\$\(\s*cat\s+"?/etc/isaac/base-gid"?\s*\)', "BASE-GID", run)
+            gid_vars = re.findall(r'\b(\w+)="?BASE-GID"?(?=[;&\s]|$)', run)
+            targets = {path}
+            for var, paths in re.findall(r"\bfor\s+(\w+)\s+in\s+([^;]+);", run):
+                if path in shlex.split(paths):
+                    targets.update({"$" + var, "${" + var + "}"})
+
+            for command, args in re.findall(r"\b(mkdir|chown|chgrp|chmod)\s+([^;&|]+)", run):
+                words = [word.rstrip("/") for word in shlex.split(args)]
+                if targets.isdisjoint(words):
+                    continue
+                assert not any(w == "--recursive" or re.fullmatch(r"-[A-Za-z]*R[A-Za-z]*", w)
+                               for w in words), (command, args)
+                if not shared:
+                    continue
+                if command == "mkdir":
+                    assert "-p" in words or "--parents" in words, args
+                    if not directory.exists():
+                        directory.mkdir()
+                        directory.chmod(0o755)
+                        if "-m" in words:
+                            subprocess.run(["chmod", words[words.index("-m") + 1], directory],
+                                           check=True)
+                    continue
+                assert directory.exists(), f"mkdir -p {path} before {command}"
+                operand = next(w for w in words if not w.startswith("-"))
+                if command == "chmod":
+                    subprocess.run(["chmod", operand, directory], check=True)
+                    continue
+                operand = re.sub(r"\$\{(\w+)\}", r"$\1", operand)
+                if command == "chown":
+                    owner, _, group = operand.partition(":")
+                    owner_is_user = owner == "$USER_UID" and group == "$USER_GID"
+                else:
+                    group = operand
+                group_is_base = group == "BASE-GID" or group in {"$" + var for var in gid_vars}
+
+    assert directory.exists(), f"mkdir -p {path} in a shared stage"
+    mode = directory.stat().st_mode
+    assert (owner_is_user and mode & 0o300 == 0o300) or (
+        group_is_base and mode & 0o030 == 0o030
+    ), f"{path} must grant the host owner or official group write and search permission"
 
 
 def test_uid_setup_preserves_the_official_tree_ownership():

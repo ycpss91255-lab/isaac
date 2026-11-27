@@ -106,13 +106,20 @@ COPY --from=base /tmp/base-uid /tmp/base-gid /etc/isaac/
 
 # The MJCF UI exports beside its input XML in data/mjcf. Lab ships the
 # same Sim assets under a different group from its configured user.
-RUN official_gid="$(cat /etc/isaac/base-gid)"; \
-    for dir in /isaac-sim/exts/isaacsim.asset.importer.mjcf{,.ui}/data \
+RUN set -e; official_gid="$(cat /etc/isaac/base-gid)"; \
+    for dir in /isaac-sim/exts/isaacsim.asset.importer.mjcf/data \
+               /isaac-sim/exts/isaacsim.asset.importer.mjcf.ui/data \
                /isaac-sim/exts/isaacsim.asset.importer.mjcf/data/mjcf; do \
-        [[ -d "${dir}" ]] || continue; \
+        [ -d "${dir}" ] || continue; \
         chgrp "${official_gid}" "${dir}"; \
         chmod g+w "${dir}"; \
     done
+
+# Kit writes here at runtime. Existing official subdirectories keep their permissions.
+RUN official_gid="$(cat /etc/isaac/base-gid)" && \
+    mkdir -p /isaac-sim/kit/data /isaac-sim/kit/cache && \
+    chgrp "${official_gid}" /isaac-sim/kit/data /isaac-sim/kit/cache && \
+    chmod g+wx /isaac-sim/kit/data /isaac-sim/kit/cache
 
 # Rename colliding accounts in place so numeric file ownership stays valid.
 # A base account's home can contain official files. Give it a host-user home
