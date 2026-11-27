@@ -327,7 +327,9 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-HOSTED_UNIT_BASELINE = 694
+# isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
+# isaac#436: official startuptests wiring adds 3 core cases (705 -> 708).
+HOSTED_UNIT_BASELINE = 708
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -350,8 +352,8 @@ HOSTED_UNIT_BASELINE = 694
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-#   Official startuptests wiring (isaac#436) adds 3 core tests.
-HOSTED_UNIT_BASELINE_CORE = 653
+#   Official startuptests wiring (isaac#436) adds 3 core tests (core 664 -> 667).
+HOSTED_UNIT_BASELINE_CORE = 667
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -527,8 +529,8 @@ AGGREGATE_TARGET = 126
 #   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
-#   Official startuptests (isaac#436) adds 2 cases to gpu_job_scripts_spec.
-BATS_BASELINE_CORE = 116
+#   Official startuptests (isaac#436) adds 5 cases to gpu_job_scripts_spec.
+BATS_BASELINE_CORE = 119
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 81
 BATS_BASELINE_HEADLESS = 13

@@ -8,8 +8,8 @@
 #
 # Stage tree (isaac#427): devel is the shared layer (isaac code + common
 # config); gui / stream / headless are the three leaves, each `FROM devel`.
-# Only the gui service mounts X11 (see `[gui]` / `[stage:gui]` in
-# .setup.conf); the Dockerfile itself carries no X11 packages.
+# Only the gui service mounts X11 (see `[gui]` / `["stage:gui"]` in
+# setup.toml); the Dockerfile itself carries no X11 packages.
 #
 #   sys -> devel-base -> devel -+-> gui
 #                               +-> stream -> producer
@@ -40,7 +40,7 @@
 # tty / profiles. Stage names must match `^[a-z][a-z0-9_-]*$` and must
 # not collide with `latest` / `v[0-9]*` (reserved release tag
 # namespace). `headless` / `stream` below are the two repo-side entrypoint
-# variants emitted via this mechanism. No setup.conf change needed; run
+# variants emitted via this mechanism. No setup.toml change needed; run
 # any wrapper to regenerate compose.yaml, then `just docker run -t <stage>`.
 #
 # Backward-compat: the legacy stage names `base` and `test` are still
@@ -152,12 +152,8 @@ ARG CONFIG_DIR="/tmp/config"
 # /tmp/config/. The first brings .base/dist/config/ defaults; the second
 # overlays <repo>/config/ on top. File-level merge — files in
 # <repo>/config/ replace same-path files in /tmp/config/; files only in
-# .base/dist/config/ stay; files only in <repo>/config/ are added. Mental
-# model is the same as setup.conf section-replace, just at file
-# granularity. Trim <repo>/config/ files that match base default to
-# start receiving template-side improvements (we did this in the
-# rebase: only docker/setup.conf, shell/bashrc, ros2/fastdds.xml
-# remain in <repo>/config/).
+# .base/dist/config/ stay; files only in <repo>/config/ are added.
+# Trim <repo>/config/ files that match base defaults to receive template updates.
 ARG CONFIG_SRC="config"
 
 # [isaac #149 / ADR-0018] Isaac Lab as a baked base tool (alongside Isaac
@@ -267,7 +263,7 @@ COPY --chown="${USER}":"${GROUP}" --chmod=0755 "${CONFIG_SRC}" "${CONFIG_DIR}"
 # [isaac] Fast DDS profile (UDPv4-only, no built-in transports). Per
 # Isaac Sim 5.1 official ROS 2 install guide, required for cross-container
 # DDS to work reliably on a shared host (--net=host). Pointed to by
-# FASTRTPS_DEFAULT_PROFILES_FILE in setup.conf [environment]. Lands
+# FASTRTPS_DEFAULT_PROFILES_FILE in setup.toml [environment]. Lands
 # directly at /isaac-sim/ (not via CONFIG_DIR) because the runtime path
 # is what the env var references — no override mechanism needed.
 COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
@@ -286,8 +282,8 @@ COPY --chmod=0644 config/ros2/fastdds.xml /isaac-sim/fastdds.xml
 #       SimulationApp instead of the kit binary directly.
 COPY --chmod=0644 apps/*.kit /isaac-sim/apps/
 
-# [isaac] ROS distro is a build-time choice — set via
-# setup.conf [build] arg_N=ROS_DISTRO=<value> (default humble). Bake
+# [isaac] Set the ROS distro at build time via the [[build.args]] entry in
+# setup.toml with key = "ROS_DISTRO" (default value = "humble"). Bake
 # the value into a const file consumed by the headless / stream ENTRYPOINT
 # shim, so runtime `-e ROS_DISTRO=...` flags are ignored. Rebuild
 # (just docker build) to switch distros.
@@ -557,8 +553,8 @@ CMD ["sleep", "infinity"]
 
 ############################## gui ##############################
 # [isaac #427] Desktop GUI variant. The image is the same as devel; what
-# makes it the GUI stage is its compose service: `[stage:gui] gui.mode =
-# auto` in .setup.conf mounts X11 / DISPLAY here and nowhere else.
+# makes it the GUI stage is its compose service: `["stage:gui"]` in setup.toml sets
+# `"gui.mode" = "auto"`, which mounts X11 / DISPLAY here and nowhere else.
 #
 # Usage:
 #   just docker run -t gui
