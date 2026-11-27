@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
+
 ### Fixed
 - **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
 - **調整 `test_sim_version.py` 的 docstring 換行（isaac#376）。** 模組與 `_find_hardcoded_variants` 的 docstring 每行最多 79 個字元。新增一項 core 測試檢查模組 docstring 的行長，hosted 測試基準 756 -> 757，core 648 -> 649。

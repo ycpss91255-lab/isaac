@@ -1,7 +1,6 @@
 """Hosted guard: the cross-container round-trip runs on the official Jetbot (#325).
 
-``test_cross_container_roundtrip`` used to boot the bundled ``example/sim/``
-camera_bot through ``example_driver``. #325 moves it onto the official Jetbot
+``test_cross_container_roundtrip`` uses the official Jetbot
 USD fetched via ``test/test_assets.py`` (same approach as
 ``test_example_gpu_integration``). The GPU/docker legs cannot run on a hosted
 runner, so this reads the real module + runner source and pins the migration:
