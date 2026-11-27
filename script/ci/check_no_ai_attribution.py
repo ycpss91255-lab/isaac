@@ -6,9 +6,11 @@ Usage:
   git log --format=... | check_no_ai_attribution.py --stdin
 
 Checked per commit: the message, author name/email, committer name/email.
-Patterns (case-insensitive): a Co-authored-by trailer naming Claude or an
-anthropic.com address, "Generated with Claude Code", a Claude-Session
-trailer, and any author / committer address at anthropic.com.
+All checks are case-insensitive. A Co-authored-by trailer matches an address
+at anthropic.com, the exact name "Claude", or a name starting with "Claude"
+followed by Opus, Sonnet, Haiku, Code, or a numeric version. Other checks
+match "Generated with Claude Code", a Claude-Session trailer, or an author /
+committer address at anthropic.com.
 
 Commits already on the base branch are outside the range and are not
 examined.
@@ -25,7 +27,9 @@ GIT_FORMAT = FIELD_SEP.join(["%H", "%an", "%ae", "%cn", "%ce", "%B"]) + RECORD_S
 
 _MESSAGE_PATTERNS = (
     ("Co-authored-by trailer naming Claude or anthropic.com",
-     re.compile(r"^\s*co-authored-by:.*(claude|anthropic\.com)", re.I | re.M)),
+     re.compile(r"^[ \t]*co-authored-by:(?:.*@anthropic\.com(?=[>\s]|$)|"
+                r"[ \t]*claude(?:[ \t]*(?:<|\r?$)|"
+                r"[ \t]+(?:opus|sonnet|haiku|code|\d+(?:\.\d+)*)\b))", re.I | re.M)),
     ("Generated with Claude Code",
      re.compile(r"generated with \[?claude code", re.I)),
     ("Claude-Session trailer",

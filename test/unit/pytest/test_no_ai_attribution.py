@@ -70,6 +70,40 @@ def test_co_authored_by_claude_name_with_other_email_fails():
     assert result.returncode != 0
 
 
+@pytest.mark.parametrize("identity", [
+    "Jean Claude <jc@example.com>",
+    "Claude Monet <cm@example.org>",
+])
+def test_human_co_author_with_claude_in_name_passes(identity):
+    result = _run(_record("a" * 40, f"x\n\nCo-authored-by: {identity}\n"))
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("identity", [
+    "Claude <noreply@anthropic.com>",
+    "Claude Opus 4.8 <x@y.z>",
+    "Claude Sonnet 4.5 <x@y.z>",
+    "Claude 3.5 Sonnet <x@y.z>",
+    "Claude 4 <x@y.z>",
+    "Claude Haiku <x@y.z>",
+    "Claude Code <x@y.z>",
+    "Alex Smith <alex@anthropic.com>",
+])
+def test_model_name_or_anthropic_co_author_fails(identity):
+    result = _run(_record("a" * 40, f"x\n\nCo-authored-by: {identity}\n"))
+    assert result.returncode != 0
+
+
+@pytest.mark.parametrize("line", [
+    "   Co-authored-by: Claude <noreply@anthropic.com>",
+    "Co-Authored-By: CLAUDE OPUS 4.8 <noreply@anthropic.com>",
+    "Generated with [Claude Code](https://claude.com/claude-code)",
+], ids=["indented-trailer", "mixed-case-trailer", "markdown-link"])
+def test_attribution_format_variants_fail(line):
+    result = _run(_record("a" * 40, f"x\n\n{line}\n"))
+    assert result.returncode != 0
+
+
 def test_generated_with_claude_code_fails_case_insensitive():
     result = _run(_record("d" * 40, "x\n\ngenerated WITH claude code\n"))
     assert result.returncode != 0
@@ -114,3 +148,36 @@ def test_find_violations_returns_sha_and_reason():
     commits = module.parse_log(_record("6" * 40, "x\n\nClaude-Session: z"))
     found = module.find_violations(commits)
     assert [sha for sha, _ in found] == ["6" * 40]
+
+
+def test_empty_git_range_passes(monkeypatch):
+    module = _load()
+    calls = []
+
+    def empty_log(args, **kwargs):
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", empty_log)
+    assert module.main(["base..head"]) == 0
+    (command,) = calls
+    assert command[:2] == ["git", "log"]
+    assert "base..head" in command
+
+
+def test_invalid_git_range_reports_error(monkeypatch, capsys):
+    module = _load()
+
+    def invalid_range(args, **kwargs):
+        return subprocess.CompletedProcess(args, 128, stdout="", stderr="unknown revision")
+
+    monkeypatch.setattr(module.subprocess, "run", invalid_range)
+    assert module.main(["base..head"]) == 2
+    assert "error:" in capsys.readouterr().err
+
+
+def test_missing_range_and_stdin_is_usage_error():
+    module = _load()
+    with pytest.raises(SystemExit) as exc:
+        module.main([])
+    assert exc.value.code == 2
