@@ -170,6 +170,10 @@ def test_build_receives_the_selected_stages_and_bats_skip(jobs):
     ]
 
 
+def test_core_build_disables_gha_buildx_cache(jobs):
+    assert jobs["core-build"]["with"]["disable_cache"] is True
+
+
 def test_release_waits_for_gate_and_only_runs_on_tags(jobs):
     cfg = jobs["release"]
     needs = cfg["needs"] if isinstance(cfg["needs"], list) else [cfg["needs"]]
