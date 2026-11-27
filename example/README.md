@@ -5,7 +5,7 @@ doubles as the scaffold template (ADR-0017). It is what a newcomer or an
 agent is handed to get from zero to a live camera topic and then to their
 own robot, **without reading framework source**.
 
-- [`sim/`](sim/) -- the Isaac side: the `camera_bot` URDF, the three-file
+- [`sim/`](sim/) -- the Isaac side: the `camera_bot` USD, the three-file
   scene, the per-sensor `custom.yaml`, and `example_driver.py` (publishes a
   camera stream, drives a chassis from `/cmd_vel`).
 - [`ros2/`](ros2/) -- the app side: minimal ROS 2 packages that subscribe
@@ -37,19 +37,12 @@ docker run --rm --net=host ros:humble bash -c '
 
 That first frame is the M1 "time-to-first-topic" milestone.
 
-### 2. Swap the URDF (swap in your own robot)
+### 2. Swap in your own robot USD
 
-The robot model is [`sim/model/camera_bot.urdf`](sim/model/camera_bot.urdf)
-(two links: `base_link` chassis + `camera_link` mount point). To run a
-different minimal robot:
+The example loads [camera_bot.usd](sim/model/usd/robot/camera_bot/camera_bot.usd). To use your own robot:
 
-1. Drop your URDF in `sim/model/<your_robot>.urdf`. Keep a `base_link` (the
-   body that moves under `/cmd_vel`) and a link to mount the camera on.
-2. Re-import it to USD once (the importer runs in its own SimulationApp, so
-   the output USD is committed): `just import-model sim/model/<your_robot>.urdf`.
-3. Point [`sim/scene/robot.yaml`](sim/scene/robot.yaml) at the new model:
-   set `source_urdf` and `model` to your files and `robot.name` to your
-   robot's name.
+1. Produce its USD with [asset_converter](https://github.com/ycpss91255-lab/asset_converter) and place it under `sim/model/usd/robot/`, together with any referenced assets.
+2. In [sim/scene/robot.yaml](sim/scene/robot.yaml), set `robot.model` to the USD path relative to `sim/` and set `robot.name`. The example driver expects a `base_link` chassis. Set the camera's `link` to its mount on the robot.
 
 `just run` again -- your robot boots, still publishing the camera topic.
 
