@@ -31,11 +31,11 @@ def _run_blocks():
     return blocks
 
 
-def _index_of(blocks, needle):
+def _index_of(blocks, *needles):
     for i, block in enumerate(blocks):
-        if needle in block:
+        if all(needle in block for needle in needles):
             return i
-    raise AssertionError(f"no RUN contains {needle!r}")
+    raise AssertionError(f"no RUN contains all of {needles!r}")
 
 
 def _restore_block(blocks):
@@ -44,13 +44,13 @@ def _restore_block(blocks):
     return blocks[restore_idx], restore_idx, lab_idx
 
 
-def test_numpy_restore_runs_after_isaaclab_install_and_before_xacro():
+def test_numpy_restore_runs_after_isaaclab_install_and_before_prebundle_check():
     blocks = _run_blocks()
     _, restore_idx, lab_idx = _restore_block(blocks)
-    xacro_idx = _index_of(blocks, "pip install --no-cache-dir xacro")
-    assert lab_idx < restore_idx < xacro_idx, (
+    check_idx = _index_of(blocks, "pip_prebundle", "-xtype l")
+    assert lab_idx < restore_idx < check_idx, (
         f"numpy restore (RUN {restore_idx}) must run after the Isaac Lab install "
-        f"(RUN {lab_idx}) and before the xacro install (RUN {xacro_idx})"
+        f"(RUN {lab_idx}) and before the pip_prebundle integrity check (RUN {check_idx})"
     )
 
 
