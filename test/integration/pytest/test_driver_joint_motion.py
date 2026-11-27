@@ -79,3 +79,5 @@ def test_driver_timeline_clock(driver_run):
     assert monotonic == "True", match.group()
     assert float(sim_hz) == pytest.approx(60, rel=0.15), match.group()
     assert float(wall_hz) > 20, match.group()
+    # Allow 15% above 60 Hz to verify that IsaacDriver applies its 60 Hz rate limit.
+    assert float(wall_hz) < 69, match.group()
