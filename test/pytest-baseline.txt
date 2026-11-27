@@ -469,8 +469,8 @@ AGGREGATE_TARGET = 126
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
-#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115).
-BATS_BASELINE_CORE = 115
+#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
+BATS_BASELINE_CORE = 119
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13

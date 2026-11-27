@@ -132,7 +132,7 @@ print(job["uses"] if field == "uses" else job["with"][field])
     > "${fake}/test/assert_pytest_baseline.sh"
   chmod +x "${fake}"/script/*.sh "${fake}"/script/ci/*.sh "${fake}"/test/*.sh
 
-  GITHUB_WORKSPACE="${fake}" GITHUB_RUN_ID=111 GITHUB_RUN_ATTEMPT=2 \
+  ISAAC_CI_CACHE_ROOT="${fake}/ci-cache" GITHUB_WORKSPACE="${fake}" GITHUB_RUN_ID=111 GITHUB_RUN_ATTEMPT=2 \
     OBSERVED="${fake}/observed.txt" \
     bash "${fake}/script/ci/gpu_integration_job.sh" >/dev/null
   local project

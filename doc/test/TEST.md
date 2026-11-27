@@ -1,6 +1,6 @@
 # TEST.md
 
-**219 tests** total (bats). Hosted pytest collects **882 tests**.
+**223 tests** total (bats). Hosted pytest collects **882 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 115 | 741 | 35 | 891 |
+| core | 119 | 741 | 35 | 895 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 52 | 0 | 143 |
 | headless | 13 | 6 | 0 | 19 |
@@ -264,7 +264,7 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `guard: no .env.generated yet -> nothing to check, passes` | No resolved identity means nothing to refuse. |
 | `pre hooks: build/run/stop refuse a shared checkout and pass an isolated one` | The real baked hooks exit non-zero on the shared identity and zero on an isolated one. |
 
-## test/bats/smoke/gpu_job_scripts_spec.bats (7)
+## test/bats/smoke/gpu_job_scripts_spec.bats (11)
 
 Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. Hermetic -- stub `setup.sh` / `build.sh` / `assert_pytest_baseline.sh`, no docker or GPU.
 
@@ -277,6 +277,10 @@ Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration
 | `gpu_job_cache_dirs makes the workspace world-writable (rootless Docker)` | Creates a restricted-permission file and directory, runs the integration job, and asserts both are widened to include other-read-write (and execute for directories) by the `chmod -R a+rwX` at the end of `gpu_job_cache_dirs`. On a rootless Docker daemon the container's non-root user maps to a host subuid, so the mounted workspace must be world-writable. |
 | `stream smoke job: a failed smoke fails the job and prints the full kit log` | A failing smoke exits with its status and prints the kit log. |
 | `stream smoke job: a failed smoke with no kit log still fails with the smoke's status` | A failing smoke with no log file still exits with the smoke's exit code. |
+| `gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag` | `isaac-sim/kit/cache` and `isaac-sim/nvidia/computecache` become symlinks into `<ISAAC_CI_CACHE_ROOT>/<BASE_IMAGE tag>/{kit-cache,computecache}`, outside the workspace; old workspace contents are dropped (isaac#260). |
+| `gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag` | An explicit `ISAAC_CI_CACHE_KEY` selects the persistent cache directory instead of the Dockerfile tag. |
+| `gpu integration job: both caches survive workspace cleanup between runs` | Files in the persistent cache dirs remain after the workspace `isaac-sim/` is wiped and the job runs again. |
+| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | Mounts are writable when the baseline stub runs; state dirs (`kit/data`, `ov/*`, ...) stay real workspace dirs, not links, so state starts cold. |
 
 ## test/bats/smoke/cleanup_merged_worktree_spec.bats (14)
 
