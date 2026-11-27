@@ -299,8 +299,10 @@
 # isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
 # isaac#487: +14 name-scan and CI cases, +1 standalone smoke path check,
 #   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
-# isaac#430 re-merge: 756 -> 761 (core 648 -> 653).
-HOSTED_UNIT_BASELINE = 761
+# isaac#376: the module docstring length check adds one core test (756 -> 757, core 648 -> 649).
+# isaac#359: test_standalone_smoke_matrix.py adds 7 core cases (757 -> 764, core 649 -> 656).
+# isaac#430 re-merge: 764 -> 769 (core 656 -> 661).
+HOSTED_UNIT_BASELINE = 769
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -333,7 +335,9 @@ HOSTED_UNIT_BASELINE = 761
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#479: +9 core (test_isaac_driver.py 48 -> 57): core 623 -> 632.
 #   isaac#487 adds 16 core cases (core 632 -> 648).
-HOSTED_UNIT_BASELINE_CORE = 653
+#   isaac#376 adds 1 core case (core 648 -> 649).
+#   isaac#359 adds 7 core cases (core 649 -> 656).
+HOSTED_UNIT_BASELINE_CORE = 661
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
