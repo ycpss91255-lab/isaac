@@ -8,8 +8,8 @@
   across containers even with --ipc=host) and forces UDPv4 only, so
   participants on the host network reliably discover each other.
 
-  Pointed to by FASTRTPS_DEFAULT_PROFILES_FILE in setup.conf
-  [environment]; baked into the image at /isaac-sim/fastdds.xml.
+  The cross-container test mounts this file at /cfg/fastdds.xml and sets
+  FASTRTPS_DEFAULT_PROFILES_FILE to that path for each participant.
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
     <transport_descriptors>

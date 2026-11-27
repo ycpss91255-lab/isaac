@@ -4,6 +4,7 @@ import os
 import re
 import runpy
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,21 @@ def test_image_inputs_have_no_ros_configuration_references():
         for number, line in enumerate(lines, 1):
             if ROS_TERMS.search(line):
                 hits.append(f"{path.relative_to(REPO_ROOT)}:{number}: {line}")
+    assert not hits, "\n".join(hits)
+
+
+def test_setup_toml_has_no_ros_environment():
+    with (REPO_ROOT / "setup.toml").open("rb") as source:
+        setup = tomllib.load(source)
+
+    pattern = re.compile(r"ROS|RMW|FASTRTPS")
+    hits = []
+    for arg in setup.get("build", {}).get("args", []):
+        if pattern.search(arg["key"]):
+            hits.append(f"build.args key: {arg['key']}")
+    for key, value in setup.get("environment", {}).items():
+        if pattern.search(key) or pattern.search(str(value)):
+            hits.append(f"environment.{key} = {value!r}")
     assert not hits, "\n".join(hits)
 
 

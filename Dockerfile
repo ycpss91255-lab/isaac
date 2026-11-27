@@ -174,9 +174,8 @@ ARG CONFIG_SRC="config"
 #
 # RL learning frameworks (rl_games / rsl_rl / sb3 / skrl / robomimic) are
 # NOT installed yet (`--install none` below; Isaac Lab 3.0 treats `none`
-# as the old name for `core`): the current product is single-scene + ROS 2
-# service, no reinforcement learning. They are DEFERRED, not excluded --
-# parallel-environment / RL-style work is planned later (the "C" /
+# as the old name for `core`). The current product runs a single scene.
+# Parallel-environment / RL-style work is planned later (the "C" /
 # InteractiveScene direction in ADR-0018). When that lands, replace the
 # `--install none` line with the full install:
 #
@@ -326,8 +325,7 @@ RUN cat "${CONFIG_DIR}"/shell/bashrc >> "${HOME}/.bashrc" && \
 # anything else that writes under ~/.cache then fails -- concretely
 # warp's '~/.cache/warp' PermissionError kills omni.replicator.core at
 # extension startup, which unregisters the SDG node templates
-# (DispatchSync etc.) the ROS2 camera publish chain needs: graph builds,
-# zero frames published.
+# (including DispatchSync). The camera graph then builds but produces no frames.
 RUN mkdir -p "${HOME}/.cache" "${HOME}/.nv" && \
     chown "${USER}":"${GROUP}" "${HOME}/.cache" "${HOME}/.nv"
 
@@ -335,8 +333,7 @@ RUN mkdir -p "${HOME}/.cache" "${HOME}/.nv" && \
 # shell helpers that should run during `docker build` under
 # <repo>/script/docker/<name>.sh, then COPY them into a build-time
 # scratch location and RUN them. Cleanup keeps the final image lean.
-# Runtime helpers (entrypoint, ros bringup, ...) stay under
-# <repo>/script/ as before; the two classes are deliberately split.
+# Runtime helpers such as the entrypoint live under <repo>/script/.
 #
 # Example (uncomment and adapt):
 #COPY --chmod=0755 script/docker/build_helper.sh /tmp/build_helper.sh
