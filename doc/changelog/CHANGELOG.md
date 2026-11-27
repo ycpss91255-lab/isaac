@@ -16,6 +16,7 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
+- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 769 增至 803（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 90 增至 91。
 - **新增 stream smoke 在 GPU 主機忙碌時的診斷測試（isaac#497）。** 九個 Bats 案例涵蓋訊號埠或媒體埠被占用時提早失敗（有 `ss` 時也能偵測 UDP 媒體埠占用）、略過連接埠檢查、啟動與就緒時的主機負載及就緒耗時，以及逾時時回報就緒標記與連接埠占用者。stream 組由 81 增至 90 項。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
