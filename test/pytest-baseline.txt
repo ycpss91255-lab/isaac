@@ -150,6 +150,7 @@
 #   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
+#   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
 #   test_repo_config.py (2): .dockerignore keeps isaac-sim/ out of the
 #   build context, and setup.toml [deploy] uses gpu_runtime. Pure -- AST,
 #   file reads and a fake clock. Live count was then 388.
