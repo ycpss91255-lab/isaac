@@ -456,6 +456,8 @@ COPY test/bats/smoke/ /smoke_test/
 # [isaac#402] Workflow files baked so workflow_pin_spec.bats cannot pass vacuously
 # on a missing directory (bats runs non-recursively, so this is not a spec).
 COPY .github/workflows/ /smoke_test/workflows/
+# [isaac#405] Single tag source for the gpu-self-hosted pin; workflow_pin_spec.bats reads it.
+COPY test/unit/pytest/gpu_pin.py /smoke_test/gpu_pin.py
 # [#104] Shared host.yaml parser, baked next to host_yaml_spec.bats.
 COPY script/host_yaml.sh /smoke_test/host_yaml.sh
 # [#233] Tier A stream-smoke decision logic (client-connect sequence +
