@@ -22,8 +22,6 @@ Marker lines (the pytest layer asserts on these)::
     [BOOT OK]                       SimulationApp + scene built, hooks reached
     [L1 BASE_LINK OK] path=... valid=True rigidbody=True
     [L1 COUNTS OK] links=N joints=N
-    [L1 URDF DIFF OK] prim_diff=0 joint_diff=0 root=...
-    [L1 URDF DIFF FAIL] ...         actual != URDF-parse-expected
     [CAMERA GRAPH OK] graph=...     setup_camera built the OmniGraph chain
     [L3 CAMERA OK] topic=... frame_id=... width=... height=... count=N
     [L3 CAMERA MISSING] ...         budget exhausted without a frame
@@ -148,7 +146,7 @@ def _main() -> None:
             IsaacDriver,
             parse_livestream_env,
         )
-        from isaac_devkit.model_import import (  # noqa: E402
+        from isaac_devkit.usd_model import (  # noqa: E402
             _summarize_prim_records,
         )
 
@@ -269,14 +267,7 @@ def _main() -> None:
                 # Fold the live committed-USD robot subtree into a
                 # PrimSummary with the same pure summarizer the unit tests
                 # exercise, then report the OBSERVED link/joint structure.
-                # The robot reference roots at /World/Robot; re-root to
-                # /<robot_name> so the records line up with the importer's
-                # own /<robot_name> rooting (the URDF->USD diff=0 contract
-                # is asserted separately by a subprocess re-import in
-                # test_example_gpu_integration.py, the proven
-                # test_model_import.py pattern -- it cannot run here
-                # because importing in-process needs a second
-                # SimulationApp).
+                # Report paths relative to the USD robot root.
                 robot_root = stage.GetPrimAtPath(self._robot_prim_path)
                 records = []
                 for prim in Usd.PrimRange(robot_root):
