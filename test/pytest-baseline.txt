@@ -150,6 +150,7 @@
 #   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
+#   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
 #   test_repo_config.py (2): .dockerignore keeps isaac-sim/ out of the
 #   build context, and setup.toml [deploy] uses gpu_runtime. Pure -- AST,
 #   file reads and a fake clock. Live count was then 388.
@@ -284,11 +285,14 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-# ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646.
-# isaac#447 adds 11 hosted core cases in test_isaac_driver.py (48 -> 59): 646 -> 657 (core 601 -> 612).
+# ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
+# isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
+# isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
+# isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
+# isaac#447 adds 11 hosted core cases in test_isaac_driver.py (48 -> 59): 687 -> 698 (core 618 -> 629).
 #   Nine cover sim-loop setup (3 in TestPlayTimelineSimLoop plus 2 for the rebound
 #   package manager) and launcher args (6 in TestLauncherArgs).
-HOSTED_UNIT_BASELINE = 657
+HOSTED_UNIT_BASELINE = 698
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -312,11 +316,15 @@ HOSTED_UNIT_BASELINE = 657
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
-HOSTED_UNIT_BASELINE_CORE = 612
+#   isaac#411 adds 1 core case (core 601 -> 602).
+#   isaac#381 adds 4 docs cases (docs 20 -> 24).
+#   isaac#338 adds 16 core cases (core 602 -> 618).
+#   isaac#447 adds 11 core cases (core 618 -> 629).
+HOSTED_UNIT_BASELINE_CORE = 629
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 20
+HOSTED_UNIT_BASELINE_DOCS = 44
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
@@ -419,7 +427,9 @@ AGGREGATE_TARGET = 126
 #   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
-BATS_BASELINE_CORE = 113
+#   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
+#   forwarding case, raising core from 113 to 119.
+BATS_BASELINE_CORE = 119
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 81
 BATS_BASELINE_HEADLESS = 13
