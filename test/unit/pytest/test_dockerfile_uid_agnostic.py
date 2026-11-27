@@ -19,20 +19,6 @@ _STAGES = re.findall(r"(?ims)^FROM[ \t]+([^\n]+)\n(.*?)(?=^FROM\s|\Z)", _ACTIVE)
 _SYS = next(body for header, body in _STAGES if re.search(r"\sAS\s+sys\s*$", header, re.I))
 
 
-def test_recursive_chown_targets_only_children_of_home():
-    for command in re.findall(r"\bchown\s+([^;&|<>\n]+)", _ACTIVE):
-        args = shlex.split(command)
-        if not any(a == "--recursive" or re.fullmatch(r"-[a-zA-Z]*R[a-zA-Z]*", a)
-                   for a in args):
-            continue
-        operands = [a for a in args if not a.startswith("-")]
-        # --reference supplies the owner in place of the usual first operand.
-        targets = operands if any(a.startswith("--reference=") for a in args) else operands[1:]
-        assert targets, command
-        for path in targets:
-            assert path.startswith(("${HOME}/", "$HOME/")) and ".." not in path.split("/"), command
-
-
 def test_dockerfile_has_no_literal_official_uid():
     assert "1234" not in _DOCKERFILE
 
@@ -119,12 +105,3 @@ def test_ci_runs_uid_matrix_without_a_gpu():
                 if "--no-gpu" in args and "--dry-run" not in args:
                     return
     pytest.fail("expected a CI run step invoking script/ci/uid_matrix.sh --no-gpu")
-
-
-def test_ci_rejects_recursive_chown_in_the_dockerfile():
-    for step in _ci_steps():
-        if not re.search(r"\bgrep\b[^\n]*chown[^\n]*(?:R|recursive)[^\n]*Dockerfile\b", step):
-            continue
-        if re.search(r"!\s*grep\b", step) or re.search(r"\b(?:exit [1-9]\d*|false)\b", step):
-            return
-    pytest.fail("expected a CI grep step that fails on forbidden recursive chown")

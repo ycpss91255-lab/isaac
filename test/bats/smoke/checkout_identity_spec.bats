@@ -6,12 +6,12 @@
 #
 # Why: every checkout of this repo on one host used to resolve the same image
 # tag (${DOCKER_HUB_USER}/isaac:<stage>, from the committed
-# `[image] rule_1 = string:isaac`) and therefore the same compose project
+# `[[image.rules]] rule = "string:isaac"`) and therefore the same compose project
 # (${DOCKER_HUB_USER}-isaac). base's build auto-prune then deleted another
 # checkout's image, and `stop` / `run` tore down another checkout's
 # containers (upstream: base#1550, base#1551). The isaac-side stopgap gives
 # each checkout its own image name through base's per-checkout
-# `.setup.conf.local` layer, and refuses build/run/stop while a checkout is
+# `setup.local.toml` layer, and refuses build/run/stop while a checkout is
 # still on the shared identity.
 #
 # Behavioral: the spec drives the real script and the real hooks against a

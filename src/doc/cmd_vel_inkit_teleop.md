@@ -1,6 +1,6 @@
 # cmd_vel teleop in-kit SOP — OpenBase Chassis SE(2) Slide
 
-> **LEGACY(2026-05-20 起)**:本 SOP 走的 in-kit Script Editor 路徑已不是預設,改走 **standalone-with-livestream**(`./exec.sh -t headless /isaac-sim/python.sh <script>`)。
+> **LEGACY(2026-05-20 起)**:本 SOP 走的 in-kit Script Editor 路徑已不是預設,改走 **standalone-with-livestream**(`just docker exec -t headless /isaac-sim/python.sh <script>`)。
 > 新 driver 一律走新 SOP `standalone_livestream_workflow.md`(對應 `adr/0005-standalone-with-livestream-as-default-dev-entrypoint.md`)。
 > 本文件保留當歷史參考 / 偶爾需要 interactive REPL 偵錯時用。
 > ADR-0002(本 SOP 對應的決策,已移至 isaac_physics_test)保留歷史紀錄;entrypoint pattern 的最新決策見 ADR-0005。
@@ -41,7 +41,7 @@ CoreSAM grill-with-docs Q1-Q4 grilling 後決定，路徑對照：
 
 ```bash
 cd isaac_ws/src/docker
-./build.sh                # 第一次 / 改 Dockerfile 後跑
+just docker build         # 第一次 / 改 Dockerfile 後跑
 ```
 
 ### 2. OpenBase USD 在 `isaac_ws/src/model/usd/robot/openbase/openbase.usda`
@@ -53,13 +53,13 @@ ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/model/usd/robot/openbase/ope
 不存在的話 (從 `openbase_minimal.urdf` 走 import_urdf.py 規 SW → URDF → openUSD pipeline)：
 
 ```bash
-./run.sh -t standalone -d
-./exec.sh -t standalone /isaac-sim/python.sh \
+just docker run -t standalone -d
+just docker exec -t standalone /isaac-sim/python.sh \
     /home/yunchien/work/src/script/import_urdf.py \
     --no-fix-base \
     /home/yunchien/work/src/model/urdf/robot/openbase/openbase_minimal.urdf \
     /home/yunchien/work/src/model/usd/robot/openbase/openbase.usda
-./stop.sh
+just docker stop
 ```
 
 > URDF 改 → 重跑此步覆寫 openbase.usda。**會 wipe** 任何手工加在 USD 內的 prim（lights / GroundPlane / Action Graph 等）— 不需要擔心，因為 isaac_physics_test 的 `cmd_vel_planar_move.py` setup phase 會自己 re-create lights / GroundPlane / gravity disable / debug cube。
@@ -81,9 +81,9 @@ ls /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker/config/ros2/fastdds.x
 ```bash
 cd /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker
 
-./stop.sh                  # 收掉殘留
-./run.sh -t headless -d    # 起 runheadless.sh -v
-docker ps | grep headless  # 預期: yunchien-isaac-headless Up
+just docker stop                # 收掉殘留
+just docker run -t headless -d  # 起 runheadless.sh -v
+docker ps | grep headless       # 預期: yunchien-isaac-headless Up
 ```
 
 kit + WebRTC ext 載完約 30-60 秒。等 `ss -tln | grep 8011` 出現 LISTEN 表示 WebRTC server ready。
@@ -175,7 +175,7 @@ i/j/k/l/, 等鍵控 base 方向。
 
 ```bash
 cd /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker
-./stop.sh
+just docker stop
 ```
 
 ---
@@ -196,7 +196,7 @@ cd /home/yunchien/workspace/coreSAM_ws/isaac_ws/src/docker
 | 症狀 | 原因 | 修 |
 |---|---|---|
 | WebRTC 連不上 localhost:8011 | kit 還沒 ready | 等 30-60s，`ss -tln \| grep 8011` 確認 LISTEN |
-| `[exec] Container '...' is not running` | run.sh 沒帶 `-d`，跑成 `compose run --rm` 一次性 | `./stop.sh && ./run.sh -t headless -d` |
+| `[exec] Container '...' is not running` | `just docker run` 沒帶 `-d`，跑成 `compose run --rm` 一次性 | `just docker stop && just docker run -t headless -d` |
 | 看不到 base | base 跑出 camera 視野 | Stage panel 點 base_link → viewport 按 **F** focus |
 | pos.x = 0 + lin = 0 + ticks 持續增加 | timeline 沒 play | viewport 按 Spacebar |
 | pos.x = 0 + lin = 0 + USD_PATH 是 `openbase_free.usda` | articulation root blocks dc velocity write | USD_PATH 用 `model/usd/robot/openbase/openbase.usda` (root free rigid body)；script 已 hardcode |

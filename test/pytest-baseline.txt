@@ -327,7 +327,9 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-HOSTED_UNIT_BASELINE = 699
+# isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
+# isaac#474: +33 core (check_no_recursive_chown 27, uid_agnostic 6): 705 -> 738.
+HOSTED_UNIT_BASELINE = 738
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -350,9 +352,8 @@ HOSTED_UNIT_BASELINE = 699
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-#   isaac#474 host-UID user setup: test_dockerfile_uid_agnostic.py (8),
-#   core: 691 -> 699 (core 650 -> 658); bats core 114 -> 118.
-HOSTED_UNIT_BASELINE_CORE = 658
+#   isaac#474 host-UID user setup: core 664 -> 697; bats core 114 -> 118.
+HOSTED_UNIT_BASELINE_CORE = 697
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pre-build hook: host-side, runs before build.sh main logic.
 # Receives the same "$@" as build.sh. Non-zero exit aborts the wrapper.
-# Skipped when ./build.sh runs with --dry-run.
+# Skipped when just docker build runs with --dry-run.
 #
 # Refuses to build while this checkout still uses the image tag / compose
 # project that every checkout on this host shares (stopgap for base#1550 /
