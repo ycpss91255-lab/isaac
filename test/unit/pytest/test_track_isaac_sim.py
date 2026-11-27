@@ -25,6 +25,22 @@ def tracker():
     return module
 
 
+@pytest.fixture
+def ngc_tags():
+    path = Path(__file__).resolve().parents[2] / "fixtures/ngc_isaac_sim_tags.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_parse_stable_tags_excludes_year_tags(tracker, ngc_tags):
+    assert set(tracker.parse_stable_tags(ngc_tags)) == {
+        "6.0.1", "6.1.0", "6.2.0", "6.2.0.1",
+    }
+
+
+def test_latest_stable_from_ngc_tags(tracker, ngc_tags):
+    assert tracker.latest_stable(tracker.parse_stable_tags(ngc_tags)) == "6.2.0.1"
+
+
 def test_ngc_tags_list_keeps_only_three_or_four_numeric_components(tracker):
     digest = "sha256-" + "a" * 64
     tags = [
@@ -49,6 +65,11 @@ def test_latest_stable_compares_numeric_components_in_any_tag_order(tracker):
 )
 def test_should_bump_only_for_a_newer_version(tracker, current, latest, expected):
     assert tracker.should_bump(current, latest) is expected
+
+
+def test_should_bump_rejects_year_tag(tracker):
+    with pytest.raises(ValueError):
+        tracker.should_bump("6.2.0.1", "2022.2.1")
 
 
 # The image's run_tests.py matches script basenames against each suite's
@@ -153,3 +174,24 @@ def test_read_and_update_only_the_base_image_pin(tracker, tmp_path):
     tracker.update_base_version(dockerfile, "6.2.1")
     assert dockerfile.read_text() == "\n".join(lines).replace(old_pin, new_pin)
     assert tracker.read_base_version(dockerfile) == "6.2.1"
+
+
+def test_read_base_version_rejects_year_pin(tracker, tmp_path):
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text('ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:2022.2.1"\n')
+    with pytest.raises(ValueError):
+        tracker.read_base_version(dockerfile)
+
+
+@pytest.mark.parametrize(
+    "current,target",
+    [("2022.2.1", "6.2.0.1"), ("6.2.0.1", "2022.2.1")],
+    ids=["year-pin", "year-target"],
+)
+def test_update_base_version_rejects_year_pin(tracker, tmp_path, current, target):
+    dockerfile = tmp_path / "Dockerfile"
+    original = f'ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:{current}"\n'
+    dockerfile.write_text(original)
+    with pytest.raises(ValueError):
+        tracker.update_base_version(dockerfile, target)
+    assert dockerfile.read_text() == original

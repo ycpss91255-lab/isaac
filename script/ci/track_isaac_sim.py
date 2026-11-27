@@ -22,7 +22,7 @@ from urllib.request import Request, urlopen
 IMAGE = "nvcr.io/nvidia/isaac-sim"
 REGISTRY = "https://nvcr.io/v2/nvidia/isaac-sim/"
 AUTH = "https://nvcr.io/proxy_auth?scope=repository:nvidia/isaac-sim:pull"
-VERSION = r"[0-9]+(?:\.[0-9]+){2,3}"
+VERSION = r"[0-9]{1,3}(?:\.[0-9]+){2,3}"
 PIN = re.compile(rf'^(ARG BASE_IMAGE="{re.escape(IMAGE)}:)({VERSION})(")$', re.M)
 ACCEPT = ", ".join((
     "application/vnd.oci.image.index.v1+json",
