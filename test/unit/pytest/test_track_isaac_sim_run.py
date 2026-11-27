@@ -249,6 +249,18 @@ def test_override_selects_inventory_comparison_in_pr_heading(tracker, repo):
     assert f"## 官方測試清單（比較 `{_OVERRIDE}` 與 `{_LATEST}`）" in repo.pr_body.splitlines()
 
 
+def test_pr_body_first_line_uses_override(tracker, repo):
+    tracker.run(_OVERRIDE)
+
+    assert repo.pr_body.splitlines()[0] == f"更新官方 Isaac Sim 映像，從 `{_OVERRIDE}` 升至 `{_LATEST}`。"
+
+
+def test_pr_body_first_line_uses_pin_when_override_is_empty(tracker, repo):
+    tracker.run("")
+
+    assert repo.pr_body.splitlines()[0] == f"更新官方 Isaac Sim 映像，從 `{_PIN}` 升至 `{_LATEST}`。"
+
+
 def test_dry_run_prints_planned_pr_without_writes(tracker, repo, capsys):
     tracker.run("", dry_run=True)
 

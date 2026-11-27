@@ -303,7 +303,9 @@
 #   Hosted collection after merging main: 764 -> 775 (core 656 -> 667).
 # isaac#429 after merging main: -1 cross-container Fast DDS fixture check; net
 #   +10 core versus main (core 733 -> 743, hosted 874 -> 884).
-HOSTED_UNIT_BASELINE = 884
+# isaac#533 adds two core cases for the first line of the tracker PR body
+#   (hosted 884 -> 886, core 743 -> 745).
+HOSTED_UNIT_BASELINE = 886
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -311,7 +313,7 @@ HOSTED_UNIT_BASELINE = 884
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 809。
+#   以下五組的測試數量下限合計為 876。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -345,7 +347,7 @@ HOSTED_UNIT_BASELINE = 884
 #   isaac#327: -14 +1 core (core 681 -> 668).
 #   isaac#442 adds 65 core cases (core 668 -> 733).
 #   isaac#429 adds 11 net core cases (core 656 -> 667).
-HOSTED_UNIT_BASELINE_CORE = 743
+HOSTED_UNIT_BASELINE_CORE = 745
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -449,8 +451,8 @@ AGGREGATE_TARGET = 126
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
-#   isaac#430 removes 11 core bats tests (119 -> 108).
-BATS_BASELINE_CORE = 108
+#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
+BATS_BASELINE_CORE = 119
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13
