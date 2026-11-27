@@ -591,19 +591,20 @@ def _spawn_prim(stage, spec):
             ("rigid_props", UsdPhysics.RigidBodyAPI, "PhysxRigidBodyAPI", prim, ("dynamic",)),
             ("mass_props", UsdPhysics.MassAPI, None, prim, ("dynamic",)),
         ):
-            if spec.mobility in mobility:
-                schema.Apply(anchor)
             props = options.pop(key, None)
-            if props is None:
-                continue
-            if procedural:
+            matched = False
+            if props is not None and not procedural:
+                # Find the asset's colliders or bodies before mobility adds the API to the root.
+                children = iter(Usd.PrimRange(anchor))
+                for child in children:
+                    if child.HasAPI(schema):
+                        _set_physics_properties(child, schema, props, physx_schema)
+                        matched = True
+                        children.PruneChildren()
+            if props is not None and not matched and (procedural or spec.mobility in mobility):
                 _set_physics_properties(anchor, schema, props, physx_schema)
-                continue
-            children = iter(Usd.PrimRange(anchor))
-            for child in children:
-                if child.HasAPI(schema):
-                    _set_physics_properties(child, schema, props, physx_schema)
-                    children.PruneChildren()
+            elif spec.mobility in mobility:
+                schema.Apply(anchor)
 
         _bind_spawn_materials(target, directory, options)
         if options.pop("activate_contact_sensors", False):

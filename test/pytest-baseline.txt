@@ -10,6 +10,7 @@
 # GPU 40 -> 34, bats core 114 -> 113. Other group floors stay unchanged.
 #
 # isaac#478 adds 12 hosted core tests for joint-drive gains and one GPU test for material binding.
+# Collision override placement (#478) adds two hosted core cases and one GPU adapter test.
 #
 # Format: KEY = VALUE (int). Lines starting with # are ignored.
 #
@@ -287,7 +288,7 @@
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
 # isaac#478: 2 scene adapter export tests and 2 import-safety tests, all core.
-HOSTED_UNIT_BASELINE = 658
+HOSTED_UNIT_BASELINE = 660
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -310,7 +311,7 @@ HOSTED_UNIT_BASELINE = 658
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 617
+HOSTED_UNIT_BASELINE_CORE = 619
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -402,7 +403,7 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-GPU_INTEGRATION_BASELINE = 35
+GPU_INTEGRATION_BASELINE = 36
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.

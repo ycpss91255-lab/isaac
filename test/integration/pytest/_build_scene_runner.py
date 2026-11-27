@@ -14,6 +14,7 @@ Marker lines (the pytest layer asserts on these)::
 
     [ADAPTER PRIM] path=<p> valid=<bool>     ground / light / robot root
     [ADAPTER OBJECT] path=<p> valid=<bool> rigidbody=<bool>
+    [ADAPTER COLLISION] root_rest=<float or None> mesh_rest=<float or None>
     [ADAPTER MATERIAL] path=<p> bound_on_object=<bool> diffuse=<rgb>
     [ADAPTER CHASSIS] valid=<bool>           Jetbot articulation body
     [ADAPTER OK] ground=<bool> light=<bool> robot=<bool> objects=<N>
@@ -58,7 +59,7 @@ def _main() -> None:
     exit_code = 1
     try:
         import omni.usd
-        from pxr import UsdPhysics, UsdShade
+        from pxr import Usd, UsdPhysics, UsdShade
 
         from isaac_devkit.scene import build_scene
 
@@ -75,7 +76,10 @@ def _main() -> None:
                     "model": object_usd,
                     "pose": {"xyz": [1.0, 0.0, 0.5], "rpy": [0.0, 0.0, 0.0]},
                     "mobility": "dynamic",
-                    "spawn_overrides": {"visual_material_diffuse": (0.2, 0.4, 0.6)},
+                    "spawn_overrides": {
+                        "visual_material_diffuse": (0.2, 0.4, 0.6),
+                        "collision_props": {"contact_offset": 0.02, "rest_offset": 0.001},
+                    },
                 }
             ],
         }
@@ -124,6 +128,10 @@ def _main() -> None:
                         break
             print(f"[ADAPTER ORIENT] path={path} quat={quat}", flush=True)
 
+        def _authored_rest_offset(prim):
+            attr = prim.GetAttribute("physxCollision:restOffset")
+            return attr.Get() if attr and attr.HasAuthoredValueOpinion() else None
+
         objects_root = stage.GetPrimAtPath("/World/Objects")
         obj_children = (
             list(objects_root.GetChildren()) if objects_root.IsValid() else []
@@ -133,6 +141,15 @@ def _main() -> None:
             has_rb = bool(prim.HasAPI(UsdPhysics.RigidBodyAPI))
             print(
                 f"[ADAPTER OBJECT] path={p} valid=True rigidbody={has_rb}",
+                flush=True,
+            )
+            mesh_rest = None
+            for child in Usd.PrimRange(prim):
+                if child != prim and child.HasAPI(UsdPhysics.CollisionAPI):
+                    mesh_rest = _authored_rest_offset(child)
+                    break
+            print(
+                f"[ADAPTER COLLISION] root_rest={_authored_rest_offset(prim)} mesh_rest={mesh_rest}",
                 flush=True,
             )
             material, binding = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()

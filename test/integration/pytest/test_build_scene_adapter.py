@@ -115,6 +115,18 @@ def test_adapter_spawns_mobility_dynamic_object(adapter_run):
     )
 
 
+def test_adapter_authors_rest_offset_on_collision_mesh(adapter_run):
+    """The NVIDIA cube's collision mesh receives the rest offset override."""
+    match = re.search(
+        r"\[ADAPTER COLLISION\] root_rest=(\S+) mesh_rest=(\S+)", adapter_run.stdout
+    )
+    assert match, f"no [ADAPTER COLLISION] marker:\n{adapter_run.stdout}"
+    root_rest, mesh_rest = match.groups()
+    assert root_rest == "None"
+    assert mesh_rest != "None"
+    assert float(mesh_rest) == pytest.approx(0.001)
+
+
 def test_adapter_binds_spawn_override_diffuse_color(adapter_run):
     """The cube's own binding resolves to a surface shader with the override color."""
     m = re.search(
