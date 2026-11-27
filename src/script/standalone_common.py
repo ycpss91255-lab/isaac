@@ -47,8 +47,7 @@ def openbase_usd_path() -> Path:
         raise FileNotFoundError(
             f"OpenBase USD not found at {p}. "
             "Robot models have moved to the sim_asset repository "
-            "(ycpss91255-lab/sim_asset). Clone it and regenerate the "
-            "USD from URDF, or copy the USD into this path."
+            "(ycpss91255-lab/sim_asset). Copy the robot USD to this path."
         )
     return p
 
@@ -167,10 +166,7 @@ def setup_openbase_stage(app: Any, usd_path: Path) -> Any:
     from pxr import PhysxSchema, UsdLux, UsdPhysics
 
     if not usd_path.is_file():
-        raise FileNotFoundError(
-            f"USD not found: {usd_path}\n"
-            "Generate it with src/script/import_urdf.py first."
-        )
+        raise FileNotFoundError(f"USD not found: {usd_path}")
     ctx = omni.usd.get_context()
     if not ctx.open_stage(str(usd_path)):
         raise RuntimeError(f"open_stage() returned False for {usd_path}")
