@@ -19,9 +19,3 @@ Paths are relative to the sim_asset repository root. See “分層與規則” a
 | omwr | `model/robot/custom/omwr/` | `usd/robot/custom/omwr/` |
 | openbase | `model/robot/guiritter/openbase/` | `usd/robot/guiritter/openbase/` |
 | forklift_blocky | -- | `usd/temp/forklift_blocky/` |
-
-## Test fixtures
-
-The `openbase_minimal` URDF fixture used by the GPU model-import
-integration test lives at `test/fixtures/urdf/openbase_minimal/` and is
-self-contained (no dependency on the sim_asset repository).

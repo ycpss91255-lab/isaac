@@ -166,10 +166,7 @@ def setup_openbase_stage(app: Any, usd_path: Path) -> Any:
     from pxr import PhysxSchema, UsdLux, UsdPhysics
 
     if not usd_path.is_file():
-        raise FileNotFoundError(
-            f"USD not found: {usd_path}\n"
-            "Generate it with src/script/import_urdf.py first."
-        )
+        raise FileNotFoundError(f"USD not found: {usd_path}")
     ctx = omni.usd.get_context()
     if not ctx.open_stage(str(usd_path)):
         raise RuntimeError(f"open_stage() returned False for {usd_path}")
