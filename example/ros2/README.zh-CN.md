@@ -1,9 +1,6 @@
 # example/ros2 -- 应用端 ROS 2 模板
 
-这个目录放的是 base repo ROS 2 示例的**应用端**。Isaac driver
-（[`example/sim/`](../sim/)）发布相机图像、并从 `/cmd_vel` 驱动底盘；这里
-的包就是消费端的对手方 -- 普通的 ROS 2 节点，跑在另一个 ROS 2 Humble
-容器内，**订阅相机**并**发布 `/cmd_vel`**。
+这些 ROS 2 Humble 节点订阅 Isaac 场景的相机图像，并通过 `/cmd_vel` 发布速度指令。
 
 这就是「ROS 2 默认双向拓扑」在结构上的体现（ADR-0017 第 6 节）：框架负责
 Isaac 端的桥接 wiring；你的应用逻辑写在这边的标准 ROS 2 包里。
@@ -20,13 +17,12 @@ Isaac 端的桥接 wiring；你的应用逻辑写在这边的标准 ROS 2 包里
 
 ## Topic
 
-节点名称与默认 topic 与 Isaac 示例（[`example/sim/`](../sim/)）发布／订阅
-的一致，所以两端在同一个 DDS 网络下开箱即连：
+下表列出节点的默认值。如果场景使用其他相机命名空间，请将 `camera_topic` 设为对应的图像 topic，例如 Jetbot 集成测试场景的 `/jetbot/camera/color/image_raw`。
 
-| 方向 | Topic | 类型 | 由谁设置 |
+| 方向 | Topic | 类型 | ROS 2 参数 |
 |---|---|---|---|
-| Isaac -> 应用（inbound） | `/camera_bot/camera/color/image_raw` | `sensor_msgs/Image` | `example/sim/config/sensor/custom.yaml` |
-| 应用 -> Isaac（outbound） | `/cmd_vel` | `geometry_msgs/Twist` | `example/sim/scene/scene.yaml` |
+| Isaac -> 应用（inbound） | `/camera_bot/camera/color/image_raw` | `sensor_msgs/Image` | `camera_topic` |
+| 应用 -> Isaac（outbound） | `/cmd_vel` | `geometry_msgs/Twist` | `cmd_vel_topic` |
 
 ## 前置需求
 
@@ -60,10 +56,9 @@ docker run --rm -v "$PWD":/ws -w /ws ros:humble bash -c '
 干净的执行会报告 `0 errors, 0 failures`（C++ 的 `cppcheck` linter 会被
 skip，因为 base image 没有那个可选工具 -- 那是 skip，不是 failure）。
 
-## 对着示例跑
+## 连接 Isaac 场景
 
-先把 Isaac 示例（见 [`example/sim/`](../sim/)）在一台与本容器共用 DDS
-网络的 host 上启动，然后：
+在与节点相同的 DDS domain 启动会发布相机图像并订阅速度指令的场景。如果使用默认 topic，请运行：
 
 ```bash
 docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
@@ -82,8 +77,8 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
   ros2 run example_app_py cmd_vel_publisher'
 ```
 
-`[CMD_VEL OK]` 各行对应 Isaac driver 收到并应用到底盘的 Twist。C++ 包
-用法相同：`ros2 run example_app_cpp camera_subscriber` /
+每一行 `[CMD_VEL OK]` 表示节点已发布一条 Twist。C++ 包使用相同的参数：
+`ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`。
 
 完整的 Isaac <-> ament 跨容器往返（节点真的收到 live 的 sim topic）由
@@ -96,8 +91,7 @@ GPU 集成测试（#132）断言；这里的模板以 `colcon build` + `ament_li
 2. 改包名：目录、`package.xml` 的 `name`，以及（Python）`setup.py` 的
    `package_name` ／内层模块目录，或（C++）`CMakeLists.txt` 的
    `project()`。
-3. 把 `camera_topic` ／ `cmd_vel_topic` 参数指向你的 topic（或保留默认值
-   来对接示例）。
+3. 将 `camera_topic` 和 `cmd_vel_topic` 设为场景使用的 topic。
 4. 把节点内容换成你的应用逻辑。
 
 ## 许可

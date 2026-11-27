@@ -50,36 +50,20 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：Isaac を起動してシーンを実行する
 
-`example/` の camera_bot シーンは headless で動作し、ROS 2 camera topic を publish し `/cmd_vel` を subscribe する。container の working directory は repo root（`~/work` に mount）なので、スクリプトのパスは repo からの相対パス。以下の手順は Isaac Sim 6.2.0（RTX 5090）で検証済み：
+このリポジトリにはシミュレーションのサンプルを同梱していません。[Isaac Sim 公式サンプル](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)からヘッドレスで実行できるスクリプトを選び、`path/to/your_scene.py` をコンテナ内のパスに置き換えてください。相対パスの起点はリポジトリのルート（`~/work`）です。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 EXAMPLE_TICK_BUDGET=100000 exec /isaac-sim/python.sh example/sim/example_driver.py'
-# prints [CAMERA GRAPH OK] and [BOOT OK] in about 30 s
-
-# In a second terminal: the camera topic, from a sibling ROS 2 container on the same domain
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash && ros2 topic echo --once /camera_bot/camera/color/image_raw sensor_msgs/msg/Image --field header'
-# frame_id: camera_bot_camera_color_optical_frame
+  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh path/to/your_scene.py'
 
 just docker stop
 ```
 
-この例は意図的にプライベートな ROS domain（`77`）で動かしている。共有 host ではデフォルトの domain 0 に別の `/cmd_vel` publisher がいることがあり、それもロボットを動かしてしまう。空いている domain（0〜101）を選び、両側で同じ `ROS_DOMAIN_ID` を使うこと。
+ROS 2 を使うシーンでは、シーンと ROS 2 クライアントで同じ未使用の `ROS_DOMAIN_ID`（ここでは `77`）を指定してください。
 
-**初回起動では、camera topic は `[BOOT OK]` の約 2 分後に現れる。** camera publisher は最初の frame の render が終わってから現れ、cache が空のときは renderer がまず shader をコンパイルする。あるコールド実行では topic が `[BOOT OK]` の 1 分 52 秒後に現れ、`ros2 topic echo --once` はその 2 秒後に返った。その実行で残った cache で再実行すると、topic は `[BOOT OK]` から 3 秒以内に存在した。待ち時間は DDS discovery ではない：Isaac が publish している間は、新しく起動した sibling container がすぐに topic を見つけた。`echo` で待つ代わりに出現を監視するには：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=77 ros:humble bash -c \
-  'source /opt/ros/humble/setup.bash &&
-   until ros2 topic list | grep -q image_raw; do sleep 1; done &&
-   ros2 topic hz /camera_bot/camera/color/image_raw'
-# average rate: ~30
-```
-
-`EXAMPLE_TICK_BUDGET` を指定しない場合、driver は 1800 update（headless で約 2 分）後に自動で停止し、`[EXIT CLEAN]` を出力する。Kit は session log を host 側の `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` に書き込む。最新のものを追うには：
+Kit は session log を host 側の `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` に書き込む。最新のものを追うには：
 
 ```bash
 tail -f "$(ls -t isaac-sim/kit/logs/Kit/*/*/kit_*.log | head -1)"
@@ -93,7 +77,7 @@ container の `docker logs` には idle の main process（`sleep infinity`）�
 
 Kit は起動のたびに、実行に影響しない警告をいくつか出力する：
 
-- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`、最初の 2 秒で約 40 行。OmniHub は Nucleus asset 用の任意のローカル cache サービスである。その helper（`/usr/local/bin/hub`）は container 内で `Permission denied` で終了するため、Kit は asset を直接読み込む。ここの例はローカルファイルしか使わない。
+- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`、最初の 2 秒で約 40 行。OmniHub は Nucleus asset 用の任意のローカル cache サービスである。その helper（`/usr/local/bin/hub`）は container 内で `Permission denied` で終了するため、Kit は asset を直接読み込む。
 - `Extensions config 'extension.toml' doesn't exist '/home/<user>/work/<dir>'`、repo のトップレベルディレクトリごとに 1 行（約 15 行）。これはこの修正より前に build した image で出る：experience ファイルの `extsUser` extension フォルダが image になく、container user もそれを作成できないため、Kit が代わりに作業ディレクトリで extension を探していた。現在の image はこのフォルダを作成する。まだこの警告が出る場合は `just docker build -t <stage>` でその stage を再 build すること。
 
 ### driver スクリプトの停止
@@ -288,7 +272,7 @@ kit terminal に `[ros2_test_sub] /host/test <- 'hello-from-host'` と出力さ�
 
 #### 追加の Kit 引数（`ISAAC_KIT_EXTRA_ARGS`）
 
-`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -299,7 +283,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### 起動プラグイン（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
