@@ -1,5 +1,14 @@
 # Custom Streaming Kit Experience for `SimulationApp`-Driven Workflows
 
+> **Status: Superseded (2026-11-27, isaac#484)**
+>
+> On isaac-sim 6.2.0.1, the segfault no longer reproduces when headless
+> `SimulationApp` starts the official experience with `livestream=2`.
+> A headless Chromium WebRTC peer connected on the default port 49100 for
+> three five-minute runs with each experience. Both streamed at about 59 fps
+> with the same picture and boot time. The custom Kit experience was removed.
+> Both streaming scripts now use NVIDIA's `/isaac-sim/apps/isaacsim.exp.full.streaming.kit`.
+
 > **Editorial note (2026-09-07):** The wrapper commands (`./exec.sh`, `./run.sh`) and the
 > `-t standalone` stage name in this ADR predate the justfile migration and ADR-0014
 > (sim-runtime stage taxonomy). Current equivalents: `./exec.sh` -> `just docker exec`,

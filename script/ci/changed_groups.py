@@ -71,11 +71,9 @@ _DOCS = (
     ".github/dependabot.yml",
 )
 
-# Stage-specific files include Kit experiences and the standalone stream smoke
-# script. Tests carry their own group declaration.
+# Stage-specific files select their group. Tests carry their own group declaration.
 _PATH_RULES = (
     ("stream", (
-        "apps/*",
         "script/ci/stream_smoke*",
         "script/ci/producer_smoke.sh",
         "script/ci/publish_stream_source.sh",

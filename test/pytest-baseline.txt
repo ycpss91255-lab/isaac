@@ -126,10 +126,8 @@
 #   --enable -- the dependency belongs in the experience, not in a second
 #   declaration here); one covers the new --media-port / ISAAC_STREAM_PORT
 #   knob (6.0 makes the media port explicit, so two producers on one host
-#   collide on it even with distinct signalling ports). Two pin the
-#   EXPERIENCE, which is where the defect actually was: apps/
-#   isaacsim.exp.base.python.streaming.kit must depend on
-#   omni.kit.livestream.app and must define primaryStream.streamType.
+#   collide on it even with distinct signalling ports). Two tests checked
+#   the former custom experience's livestream dependency and stream type.
 #   Three pin the PUBLISH PATH: the job runs where Kit can boot, the build
 #   step does not push, and the push stands behind an unconditional
 #   producer_smoke.sh with no continue-on-error. That last group is the one
@@ -327,7 +325,7 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-HOSTED_UNIT_BASELINE = 691
+HOSTED_UNIT_BASELINE = 693
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -350,9 +348,11 @@ HOSTED_UNIT_BASELINE = 691
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
+#   isaac#484 replaces two custom experience checks with four checks for the
+#   official experience and removal of the custom file (stream 19 -> 21).
 HOSTED_UNIT_BASELINE_CORE = 650
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 19
+HOSTED_UNIT_BASELINE_STREAM = 21
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 HOSTED_UNIT_BASELINE_DOCS = 16
 

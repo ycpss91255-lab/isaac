@@ -36,11 +36,7 @@ LOG_PATH = SCRIPT_DIR / "standalone_livestream_smoke.log"
 
 sim_app = SimulationApp(
     {"headless": True, "livestream": 2},
-    # SimulationApp's default experience (isaacsim.exp.base.python.kit) lacks
-    # the WebRTC livestream extensions, so `livestream: 2` alone never starts
-    # the streaming server. Pin to the custom kit experience shipped by
-    # ycpss91255-lab/isaac (#21 fix-B). See ADR-0007.
-    experience="/isaac-sim/apps/isaacsim.exp.base.python.streaming.kit",
+    experience="/isaac-sim/apps/isaacsim.exp.full.streaming.kit",
 )
 
 # Imports below must come after SimulationApp() — they load Kit-side modules.
