@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pre-run hook: host-side, runs before run.sh main logic.
 # Receives the same "$@" as run.sh. Non-zero exit aborts the wrapper.
-# Skipped when ./run.sh runs with --dry-run.
+# Skipped when just docker run runs with --dry-run.
 #
 # 1. Refuses to run while this checkout still uses the image tag / compose
 #    project that every checkout on this host shares (stopgap for
