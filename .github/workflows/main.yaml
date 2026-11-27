@@ -35,7 +35,9 @@ on:
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A new run replaces a pending run in the same group even with cancel-in-progress false.
+  # Use run_id to give each non-PR run its own group.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # release uses softprops/action-gh-release@v2 which needs

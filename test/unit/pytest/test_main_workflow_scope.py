@@ -13,6 +13,7 @@ Structural guards for the things a path-filtered CI can silently get wrong:
 """
 
 from pathlib import Path
+import re
 
 import pytest
 import yaml
@@ -56,10 +57,37 @@ def test_only_changes_and_docs_unit_run_unconditionally_before_gate(jobs):
     assert unconditional == {"changes", "docs-unit"}
 
 
-def test_concurrency_groups_runs_by_pr_number_or_ref(doc):
-    assert "concurrency" in doc
-    group = " ".join(doc["concurrency"]["group"].split())
-    assert "${{ github.event.pull_request.number || github.ref }}" in group
+def _concurrency_group(doc, event_name, run_id, pr_number=None):
+    """Expand dotted context names and || fallbacks in the group template."""
+    context = {
+        "github.workflow": "CI",
+        "github.event_name": event_name,
+        "github.event.pull_request.number": pr_number,
+        "github.ref": "refs/heads/main",
+        "github.run_id": run_id,
+    }
+
+    def resolve(match):
+        for name in match.group(1).split("||"):
+            value = context[name.strip()]
+            if value:
+                return str(value)
+        return ""
+
+    return re.sub(r"\$\{\{([^{}]+)\}\}", resolve, doc["concurrency"]["group"])
+
+
+def test_concurrency_groups_pull_requests_by_number(doc):
+    group = _concurrency_group(doc, "pull_request", run_id=100, pr_number=42)
+    assert group == _concurrency_group(doc, "pull_request", run_id=101, pr_number=42)
+    assert group != _concurrency_group(doc, "pull_request", run_id=102, pr_number=43)
+
+
+@pytest.mark.parametrize("event_name", ["push", "workflow_dispatch", "merge_group"])
+def test_concurrency_groups_non_pr_runs_separately_on_the_same_ref(doc, event_name):
+    first = _concurrency_group(doc, event_name, run_id=100)
+    second = _concurrency_group(doc, event_name, run_id=101)
+    assert first != second
 
 
 def test_concurrency_cancels_in_progress_only_for_pull_requests(doc):
