@@ -7,6 +7,7 @@
 - **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
 
 ### Fixed
+- **修正 Isaac Sim 更新 PR 內文首行顯示的舊版號（isaac#533）。** 首行使用測試清單實際比較的舊版號：指定 `--current-version` 時使用該值，否則使用 Dockerfile 的 `BASE_IMAGE` 版號。
 - **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
 - **調整 `test_sim_version.py` 的 docstring 換行（isaac#376）。** 模組與 `_find_hardcoded_variants` 的 docstring 每行最多 79 個字元。新增一項 core 測試檢查模組 docstring 的行長，hosted 測試基準 756 -> 757，core 648 -> 649。
 - **移除 `.base/` 以外受 Git 追蹤檔案中的個人帳號名稱（isaac#487）。** 可在組織 secret `FORBIDDEN_NAMES` 設定要掃描的名稱，以逗號分隔。獨立掃描步驟與 hosted core 測試都會讀取這份清單，若無法取得 secret（例如來自 fork 的 PR），掃描程式會輸出 `SKIPPED` 並說明略過原因。Core 組改用內含 Git 的 `python:3.12` 映像檔，pytest 只要有一項測試被跳過，CI 就會失敗。Core 組的 pytest 使用 `-rA`，在 CI 日誌中逐行列出每項測試的名稱與結果。新增 16 個 core 測試案例，hosted 測試總數由 740 增至 756，core 由 632 增至 648。

@@ -292,7 +292,7 @@ def open_items(endpoint):
 
 
 def planned_pr_body(pin, current, latest, diff, runner_changed):
-    body = render_pr_body(pin, latest, diff)
+    body = render_pr_body(current, latest, diff)
     if current != pin:
         body = body.replace("## 官方測試清單", f"## 官方測試清單（比較 `{current}` 與 `{latest}`）")
     if runner_changed:
