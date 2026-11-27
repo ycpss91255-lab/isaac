@@ -65,11 +65,6 @@ exclude_also = [
     # Standard non-runtime lines.
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
-    # model_import: Isaac-side conversion + CLI driver.
-    "def _convert_urdf\\(",
-    "def import_urdf\\(",
-    "def _parse_args\\(",
-    "def main\\(",
     # materials is now fully pure (color is a spawn-time cfg param,
     # ADR-0018 decision 7); no Isaac-side appliers to exclude.
     # sensors: Isaac-side dispatchers / builders.
