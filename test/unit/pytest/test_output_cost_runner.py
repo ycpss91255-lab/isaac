@@ -1,6 +1,7 @@
 """Hosted tests for the per-step output cost runner (isaac#385)."""
 
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -145,3 +146,100 @@ def test_parser_accepts_measurement_options(monkeypatch, tmp_path):
         assert args.case == case
         assert (args.repeats, args.warmup_sec, args.steps) == (4, 2.5, 120)
         assert Path(args.out) == out
+
+
+def test_noise_floor_is_opt_in_for_measurement(monkeypatch):
+    parser = _load_runner(monkeypatch).build_parser()
+    args = ["--case", "cam_1280", "--robot-usd", "robot.usd", "--out", "run.json"]
+    assert parser.parse_args([*args, "--noise-floor"]).noise_floor is True
+    assert parser.parse_args(args).noise_floor is False
+
+
+def test_noise_floor_flag_requires_a_case(monkeypatch, tmp_path):
+    runner = _load_runner(monkeypatch)
+    path = tmp_path / "cost.json"
+    path.write_text(json.dumps({"case": "jsimu", "runs": [
+        {"extra_ms": 0.5, "warmup_sec": 30.0, "loadavg": [1.0, 1.0, 1.0]},
+    ]}), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", [str(_RUNNER), "--render", str(path),
+                                     "--noise-floor"])
+    with pytest.raises(SystemExit) as exc:
+        runner._main()
+    assert exc.value.code == 2
+
+
+def test_noise_floor_ms_averages_absolute_run_differences(monkeypatch):
+    runner = _load_runner(monkeypatch)
+    runs = [{"diff_ms": diff} for diff in (-0.75, 0.25, 0.0)]
+    assert runner.noise_floor_ms(runs) == pytest.approx(1 / 3)
+
+
+@pytest.mark.parametrize("mode", ["cost", "noise_floor"])
+def test_measure_blocks_records_second_mean_minus_first(monkeypatch, mode):
+    runner = _load_runner(monkeypatch)
+    timings = iter([8.0, 1.0, 3.0, 4.0, 6.0, 3.0])
+    events = []
+
+    def measure(steps):
+        events.append(("measure", steps))
+        return next(timings)
+
+    run = runner._measure_blocks(
+        steps=3, measure=measure, register=lambda: events.append("register"),
+        unregister=lambda: events.append("unregister"),
+        noise_floor=(mode == "noise_floor"),
+    )
+    assert run["mode"] == mode
+    block = ("measure", 1)
+    if mode == "noise_floor":
+        assert events == [block, block] * 3
+        assert run["diff_ms"] == pytest.approx(-3.0)
+        assert "extra_ms" not in run
+    else:
+        assert events == [block, "register", block, "unregister"] * 3
+        assert run["extra_ms"] == pytest.approx(-3.0)
+
+
+def test_render_pools_legacy_and_tagged_cost_separately_from_noise(
+    monkeypatch, tmp_path, capsys,
+):
+    runner = _load_runner(monkeypatch)
+    metadata = {"warmup_sec": 30.0, "loadavg": [1.0, 1.0, 1.0]}
+    noise = {**metadata, "mode": "noise_floor"}
+    files = [
+        ("jsimu", [{**metadata, "extra_ms": 0.5}]),
+        ("jsimu", [{**metadata, "mode": "cost", "extra_ms": 1.5},
+                   {**noise, "diff_ms": 0.25}]),
+        ("jsimu", [{**noise, "diff_ms": 0.75}]),
+        ("cam_1280", [{**noise, "diff_ms": 2.0}]),
+    ]
+    paths = []
+    for i, (case, runs) in enumerate(files):
+        path = tmp_path / f"runs-{i}.json"
+        path.write_text(json.dumps({"case": case, "runs": runs}), encoding="utf-8")
+        paths.append(str(path))
+
+    monkeypatch.setattr(sys, "argv", [str(_RUNNER), "--render", *paths])
+    runner._main()
+    lines = capsys.readouterr().out.splitlines()
+    heading = lines.index("Noise floor (baseline vs baseline)")
+    cost_table = runner.render_table({"jsimu": {
+        "budget_ms": 5.0, "mean": 1.0, "min": 0.5, "max": 1.5,
+        "contaminated": True, "n": 2, "warmup_sec": "30.0",
+    }})
+    assert [line for line in lines[:heading] if line.startswith("|")] == (
+        cost_table.splitlines()
+    )
+
+    header, separator, *rows = [line for line in lines[heading + 1:]
+                                if line.startswith("|")]
+    assert header == "| case | n | noise floor ms | min..max |"
+    assert re.fullmatch(r"\|(?:\s*:?-+:?\s*\|){4}", separator)
+    expected = {"jsimu": (2, 0.5, 0.25, 0.75), "cam_1280": (1, 2.0, 2.0, 2.0)}
+    for line in rows:
+        name, n, floor, span = [cell.strip() for cell in line.strip("|").split("|")]
+        low, high = span.split("..")
+        assert (int(n), float(floor), float(low), float(high)) == pytest.approx(
+            expected.pop(name)
+        )
+    assert not expected

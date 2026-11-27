@@ -1,9 +1,13 @@
 """Measure Python output cost in Kit, or render saved runs with host Python.
 
-Use --case NAME --robot-usd JETBOT --out FILE to measure. Each repeat
-warms up the same output hub with and without a consumer, then times
-alternating blocks of uncapped updates at the case's simulation time step.
-Use --render FILE [FILE ...] to pool repeats by case.
+Use --case NAME --robot-usd JETBOT --out FILE to measure. After warm-up,
+each repeat times paired blocks of uncapped updates at the case's simulation
+time step. Cost runs enable a consumer for the second block of each pair.
+With --noise-floor, both blocks and their warm-ups run without a consumer.
+
+Use --render FILE [FILE ...] to pool JSON runs by case and mode. Runs without
+a mode default to cost. The noise floor is the mean absolute run difference
+in milliseconds per step. Its min..max column shows the signed differences.
 """
 
 import argparse
@@ -13,6 +17,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from functools import partial
 from pathlib import Path
 from statistics import fmean
 
@@ -45,6 +50,11 @@ def share_of_budget(extra_ms, budget):
     return 100 * extra_ms / budget
 
 
+def noise_floor_ms(runs):
+    """Return the mean magnitude of the baseline-to-baseline differences."""
+    return fmean(abs(run["diff_ms"]) for run in runs)
+
+
 def is_contaminated(load, spread, mean, load_threshold=2.0, spread_ratio=0.25):
     """Flag excessive one-minute host load or run-to-run variation."""
     return load > load_threshold or spread > spread_ratio * abs(mean)
@@ -75,6 +85,8 @@ def build_parser():
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--case", choices=(*CASES, "jsimu_200hz"))
     mode.add_argument("--render", nargs="+", type=Path, metavar="FILE")
+    parser.add_argument("--noise-floor", action="store_true",
+                        help="Measure paired baseline blocks for --case")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmup-sec", type=float, default=30.0,
                         help="Warm-up seconds per consumer state")
@@ -88,14 +100,17 @@ def build_parser():
 
 
 def _render(paths):
-    grouped = defaultdict(list)
+    cost_runs = defaultdict(list)
+    noise_runs = defaultdict(list)
+    groups = {"cost": cost_runs, "noise_floor": noise_runs}
     for path in paths:
         data = json.loads(path.read_text(encoding="utf-8"))
-        grouped[data["case"]].extend(data["runs"])
+        for run in data["runs"]:
+            groups[run.get("mode", "cost")][data["case"]].append(run)
 
     results = {}
     loads = []
-    for name, runs in sorted(grouped.items()):
+    for name, runs in sorted(cost_runs.items()):
         stats = summarize([run["extra_ms"] for run in runs])
         load = max(run["loadavg"][0] for run in runs)
         warmups = sorted({run["warmup_sec"] for run in runs})
@@ -105,8 +120,19 @@ def _render(paths):
             contaminated=is_contaminated(load, stats["spread"], stats["mean"]),
         )
         loads.append(f"{name} {load:.2f}")
-    print(render_table(results))
-    print("\nPeak one-minute host load by case: " + ", ".join(loads))
+    if results:
+        print(render_table(results))
+        print("\nPeak one-minute host load by case: " + ", ".join(loads))
+    if noise_runs:
+        if results:
+            print()
+        print("Noise floor (baseline vs baseline)")
+        print("| case | n | noise floor ms | min..max |")
+        print("| --- | ---: | ---: | ---: |")
+        for name, runs in sorted(noise_runs.items()):
+            diffs = [run["diff_ms"] for run in runs]
+            print(f"| {name} | {len(runs)} | {noise_floor_ms(runs):.4f} | "
+                  f"{min(diffs):.4f}..{max(diffs):.4f} |")
 
 
 def _discard_frame(frame):
@@ -129,10 +155,42 @@ def _measure_phase(app, out, steps):
     return (time.perf_counter() - start) * 1000 / steps
 
 
+def _measure_blocks(steps, measure, register, unregister, noise_floor):
+    """Measure up to five paired blocks, using the same step count in each pair."""
+    first = []
+    second = []
+    blocks = min(5, steps)
+    block_steps, remainder = divmod(steps, blocks)
+    for i in range(blocks):
+        count = block_steps + (i < remainder)
+        first.append(measure(count))
+        if noise_floor:
+            second.append(measure(count))
+        else:
+            register()
+            try:
+                second.append(measure(count))
+            finally:
+                unregister()
+
+    baseline = fmean(first)
+    other = fmean(second)
+    run = dict(baseline_ms=baseline, baseline_blocks_ms=first)
+    if noise_floor:
+        run.update(mode="noise_floor", second_baseline_ms=other,
+                   second_baseline_blocks_ms=second, diff_ms=other - baseline)
+    else:
+        run.update(mode="cost", with_output_ms=other,
+                   with_output_blocks_ms=second, extra_ms=other - baseline)
+    return run
+
+
 def _main():
     parser = build_parser()
     args = parser.parse_args()
     if args.render:
+        if args.noise_floor:
+            parser.error("--noise-floor requires --case")
         _render(args.render)
         return
     if not args.out or not args.robot_usd:
@@ -189,45 +247,37 @@ def _main():
                 out = setup_output(cameras=[camera])
                 kinds = [kind]
             timeline.play()
+            register = partial(out.register, _discard_frame, kinds=kinds)
+            unregister = partial(out.unregister, _discard_frame)
             _warm_up(app, out, args.warmup_sec)
-            out.register(_discard_frame, kinds=kinds)
+            if not args.noise_floor:
+                register()
             _warm_up(app, out, args.warmup_sec)
-            out.unregister(_discard_frame)
+            if not args.noise_floor:
+                unregister()
 
-            baseline_blocks = []
-            with_output_blocks = []
-            blocks = min(5, args.steps)
-            block_steps, remainder = divmod(args.steps, blocks)
-            for i in range(blocks):
-                steps = block_steps + (i < remainder)
-                baseline_blocks.append(_measure_phase(app, out, steps))
-                out.register(_discard_frame, kinds=kinds)
-                with_output_blocks.append(_measure_phase(app, out, steps))
-                out.unregister(_discard_frame)
-            loadavg = os.getloadavg()
+            run = _measure_blocks(args.steps, partial(_measure_phase, app, out),
+                                  register, unregister, args.noise_floor)
+            run.update(steps=args.steps, warmup_sec=args.warmup_sec,
+                       loadavg=os.getloadavg())
 
             # Empty sensor readings skip delivery and can mimic a cheap read.
-            received = set()
-            out.register(lambda frame: received.add(frame.kind), kinds=kinds)
-            app.update()
-            out.step(time.monotonic())
-            missing = set(kinds) - received
-            if missing:
-                raise RuntimeError(f"missing output kinds: {sorted(missing)}")
-            del out
+            if not args.noise_floor:
+                received = set()
+                out.register(lambda frame: received.add(frame.kind), kinds=kinds)
+                app.update()
+                out.step(time.monotonic())
+                missing = set(kinds) - received
+                if missing:
+                    raise RuntimeError(f"missing output kinds: {sorted(missing)}")
+            del register, unregister, out
             timeline.stop()
             app.update()
 
-            baseline = fmean(baseline_blocks)
-            with_output = fmean(with_output_blocks)
-            extra = with_output - baseline
-            runs.append(dict(baseline_ms=baseline, with_output_ms=with_output,
-                             baseline_blocks_ms=baseline_blocks,
-                             with_output_blocks_ms=with_output_blocks,
-                             extra_ms=extra, steps=args.steps,
-                             warmup_sec=args.warmup_sec, loadavg=loadavg))
-            print(f"[COST CASE] {name} run={len(runs)} extra_ms={extra:.4f}",
-                  flush=True)
+            runs.append(run)
+            metric = "diff_ms" if args.noise_floor else "extra_ms"
+            print(f"[COST CASE] {name} run={len(runs)} "
+                  f"{metric}={run[metric]:.4f}", flush=True)
         args.out.write_text(json.dumps({"case": name, "runs": runs}, indent=2)
                             + "\n", encoding="utf-8")
         print("[COST EXIT CLEAN]", flush=True)

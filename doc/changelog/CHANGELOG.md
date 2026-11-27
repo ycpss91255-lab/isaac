@@ -12,6 +12,7 @@
 
 ### Added
 - **新增 Python output API 每步成本量測 runner 與紀錄（isaac#385，#365 子項）。** `test/integration/pytest/_output_cost_runner.py` 在同一個 hub 內交錯量測「無 consumer（不讀 GPU）」與「有 no-op consumer（GPU->CPU 讀取）」兩種區塊，得到每步額外毫秒數；`doc/test/output-api-cost.md` 記錄 cam_640（30 / 60 Hz）、cam_1280、depth_640、jsimu（200 Hz）五列，每列 n = 3、含預算、額外成本、佔預算比例與暖機秒數。本次量測的主機為共用且忙碌（一分鐘 load 約 10 到 69），所以五列全部標為 contaminated，只能當上限參考，待閒置主機重跑。hosted pytest core +13、docs +4（總計 +17）。
+- **成本 runner 新增 `--noise-floor` 模式（isaac#385）。** 同一個 hub 內兩段都不掛 consumer 的 baseline 對 baseline 量測，`--render` 依 mode 分開彙整並輸出每個 case 的 noise floor（n、floor ms、min..max）。僅新增量測工具，尚未取得安靜機器上的實測數字。
 
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
 - **新增 `--fix-owner` 的 Bats 回歸測試（isaac#397）。** 五個案例用 Docker 替身驗證 chown 參數、重試成功與失敗，以及應略過 Docker 的兩種情況。另一個案例驗證批次清理會將 `--fix-owner` 和 PR 編號傳給單一 PR 的清理腳本。Bats core 113 -> 119。實際執行 `just cleanup-merged --dry-run` 的摘要符合規格的 `removed=N skipped=M` 格式（N、M 隨 worktree 狀態而變）。

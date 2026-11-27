@@ -1,6 +1,6 @@
 # TEST.md
 
-**213 tests** total (bats). Hosted pytest collects **704 tests**.
+**213 tests** total (bats). Hosted pytest collects **710 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 631 | 34 | 784 |
+| core | 119 | 637 | 34 | 790 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
@@ -375,7 +375,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **704 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **710 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -421,7 +421,7 @@ The hosted suite collects **704 tests** on a host without Isaac Sim. CI runs `te
 | `test_standalone_scripts.py` | 18 | The README-listed standalone drivers (`src/script/{ros2_test_pub,ros2_test_sub}_standalone.py`), from a README-only onboarding run on 6.2.0. Pins the pure helper `src/script/standalone_common.py`: `kit_config` follows `ISAAC_LIVESTREAM`, `PeriodicTimer` fires once per wall-clock period whatever the Kit update rate and does not burst after a stall, and `run_and_exit` turns an exception into exit code 1 and passes a return code through. The helper exposes no OpenBase path or stage setup functions, wheel names, or base-link constant (isaac#358). Each script has no `omni.isaac.dynamic_control` import (removed in 6.x), no hard-coded `/home/yunchien`, no module-top Isaac import or `SimulationApp(...)` (a module-top failure bypassed every handler and exited 0), and a `__main__` block that goes through `run_and_exit`. `ros2_test_pub` publishes on a `PeriodicTimer` instead of every 60 ticks (measured 3.5-7.5 Hz against a claimed ~1 Hz). The `move_openbase_planar` / `cmd_vel_planar` standalone scripts and their guards moved to `ycpss91255-lab/isaac_physics_test` (isaac#342). Pure -- AST parses, file reads, and a fake clock. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |
 | `test_test_assets.py` | 12 | Official Isaac test-asset fetch helper (`test/test_assets.py`, #324). Pins the NVIDIA Jetbot USD URL on the Omniverse S3 bucket with a version segment and SHA-256 digest; cache-hit path returns without calling `_download`; cache-miss path calls `_download`; the return value is a `Path`; an empty cache with a simulated `ConnectionError` raises `RuntimeError` naming the asset; an unknown asset name raises `KeyError`. #325 adds the pinned `nvidia_cube` entry (URL on the same bucket/version, SHA-256) and a structural guard that `test_build_scene_adapter.py` / `_build_scene_runner.py` no longer reference `example_driver` / `example/sim` and use `fetch_test_asset`. Pure -- mocked HTTP, filesystem only. |
-| `test_output_cost_runner.py` | 13 | `core`. Pure helpers of the Kit-side cost runner `test/integration/pytest/_output_cost_runner.py` (isaac#385): five-case table with budgets (33.3 / 16.7 / 5.0 ms), `budget_ms`, `summarize`, `share_of_budget`, `is_contaminated` (host load or relative spread), `render_table` column header and one row per case, CLI parser, and import safety (no Isaac / ROS import at module top). |
+| `test_output_cost_runner.py` | 19 | `core`. Pure helpers of the Kit-side cost runner `test/integration/pytest/_output_cost_runner.py` (isaac#385): five-case table with budgets (33.3 / 16.7 / 5.0 ms), `budget_ms`, `summarize`, `share_of_budget`, `is_contaminated` (host load or relative spread), `render_table` column header and one row per case, the `--noise-floor` paired-baseline mode (`noise_floor_ms`, mode-split rendering), CLI parser, and import safety (no Isaac / ROS import at module top). |
 | `test_output_cost_doc.py` | 4 | `docs`. Structure of `doc/test/output-api-cost.md` (isaac#385): the exact column header, five case rows each with `n >= 3`, at least six table lines, budgets equal to the runner's `CASES`, and the noise floor / contaminated / host load / #365 link statements. |
 | `test_headless_smoke_wiring.py` | 6 | Checks the headless smoke workflow, its CI scope and the scripts installed in the image. |
 | `test_producer_versions.py` | 6 | Checks the generated producer-version tables in the four READMEs. |
