@@ -63,6 +63,70 @@ alive_for() {
   }
 }
 
+# ── smoke_port_in_use ───────────────────────────────────────────────────────
+
+# Prefer the Kit media port, but allow the suite to run alongside a live stack.
+unused_tcp_port() {
+  local port=47998
+  while (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null; do
+    port=$((port + 1))
+  done
+  printf '%s\n' "${port}"
+}
+
+@test "port_in_use: a UDP-only listener is busy" {
+  UDP_PORT="$(unused_tcp_port)"
+  export UDP_PORT
+  cat > "${STATE}/ss" <<'STUB'
+#!/usr/bin/env bash
+if [[ " $* " == *" sport = :${UDP_PORT} "* &&
+      " $* " =~ [[:space:]](-[[:alpha:]]*u[[:alpha:]]*|--udp)[[:space:]] ]]; then
+  printf 'udp UNCONN 0 0 0.0.0.0:%s 0.0.0.0:*\n' "${UDP_PORT}"
+fi
+STUB
+  chmod +x "${STATE}/ss"
+  export PATH="${STATE}:${PATH}"
+
+  run --separate-stderr smoke_port_in_use "${UDP_PORT}"
+  [ "$status" -eq 0 ]
+}
+
+@test "port_in_use: an empty ss result and a closed TCP port are free" {
+  local port
+  port="$(unused_tcp_port)"
+  printf '#!/bin/sh\nexit 0\n' > "${STATE}/ss"
+  chmod +x "${STATE}/ss"
+  export PATH="${STATE}:${PATH}"
+
+  run --separate-stderr smoke_port_in_use "${port}"
+  [ "$status" -ne 0 ]
+}
+
+@test "port_in_use: a TCP listener is busy when ss is absent" {
+  local port
+  # Publish the kernel-assigned port only after listen(), then hold the
+  # listener until the test closes the coprocess pipe on exit.
+  coproc { python3 -c '
+import socket, sys
+try:
+    listener = socket.socket()
+except PermissionError:
+    print("socket-denied", flush=True)
+    sys.exit(0)
+with listener:
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    print(listener.getsockname()[1], flush=True)
+    sys.stdin.read()
+'; }
+  read -r port <&"${COPROC[0]}"
+  if [[ "${port}" == socket-denied ]]; then
+    skip "runner denies creating TCP sockets"
+  fi
+
+  ( PATH="${STATE}"; smoke_port_in_use "${port}" )
+}
+
 # ── smoke_marker_line ───────────────────────────────────────────────────────
 
 @test "marker_line: present marker prints its 1-based line number" {

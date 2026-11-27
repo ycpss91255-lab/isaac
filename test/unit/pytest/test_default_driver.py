@@ -77,30 +77,25 @@ class TestOpenStage:
 class TestRunLifecycle:
     def test_run_opens_plays_ticks_closes(self, monkeypatch):
         calls = []
-        pkg = types.ModuleType("isaaclab")
-        pkg.__path__ = []
-        app_mod = types.ModuleType("isaaclab.app")
+        isaacsim = types.ModuleType("isaacsim")
 
-        class _App:
-            ticks = 0
+        class SimulationApp:
+            def __init__(self, launch_config, experience=None):
+                self.ticks = 0
 
             def is_running(self):
-                return _App.ticks < 3
+                return self.ticks < 3
 
             def update(self):
-                _App.ticks += 1
+                self.ticks += 1
                 calls.append("update")
 
             def close(self):
                 calls.append("close")
 
-        class _Launcher:
-            def __init__(self, _args):
-                self.app = _App()
-
-        app_mod.AppLauncher = _Launcher
-        monkeypatch.setitem(sys.modules, "isaaclab", pkg)
-        monkeypatch.setitem(sys.modules, "isaaclab.app", app_mod)
+        isaacsim.SimulationApp = SimulationApp
+        monkeypatch.setitem(sys.modules, "isaacsim", isaacsim)
+        monkeypatch.delenv("ISAAC_IO_PLUGIN", raising=False)
         monkeypatch.delenv("ISAAC_LIVESTREAM", raising=False)
         monkeypatch.setattr(id_mod.signal, "signal", lambda *_a: None)
 

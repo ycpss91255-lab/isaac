@@ -6,7 +6,8 @@ name: Main CI/CD
 #
 #   - a change to a shared layer (Dockerfile, compose, setup.toml, config,
 #     the base subtree, this file) runs every group;
-#   - push to main, a release tag and a manual dispatch run every group;
+#   - pushes to main, release tags and merge groups run every group;
+#     manual dispatch runs every group by default;
 #   - docs always runs (cheap lint), so a docs-only PR never reaches the
 #     build or the GPU runner.
 #
@@ -21,6 +22,9 @@ on:
     tags:
       - 'v*'
   pull_request:
+  # Run the required `gate` check when the merge queue requests checks.
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
     inputs:
       groups:
