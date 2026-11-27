@@ -11,7 +11,7 @@
 # compose project. base v0.42.0 removed the --instance flag (base#666); the
 # project is now the single resolved PROJECT_NAME `setup apply` writes into
 # .env.generated. Left at the DEFAULT project (${DOCKER_HUB_USER}-${IMAGE_NAME},
-# e.g. yunchien-isaac) that teardown would reap a co-hosted manual `stream`
+# e.g. alice-isaac) that teardown would reap a co-hosted manual `stream`
 # container living in the same project on a shared GPU host. So the tier pins
 # a DISTINCT PROJECT_NAME in .env.generated (the derived cache run.sh's
 # _load_env reads, then _compute_project_name keeps) before the run.sh -t test

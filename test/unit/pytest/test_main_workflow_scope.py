@@ -48,6 +48,13 @@ def _triggers(doc):
     return doc.get("on", doc.get(True))
 
 
+def _condition(job):
+    expr = str(job["if"]).strip()
+    if expr.startswith("${{") and expr.endswith("}}"):
+        expr = expr[3:-2]
+    return " ".join(expr.split())
+
+
 def test_job_set_is_exactly_the_scoped_jobs_plus_changes_gate_release(jobs):
     assert set(jobs) == {"changes", "gate", "release", *SCOPED}
 
@@ -117,10 +124,19 @@ def test_there_is_no_schedule_trigger(doc):
     assert "schedule" not in _triggers(doc)
 
 
+def test_merge_queue_requests_checks(doc):
+    assert _triggers(doc).get("merge_group") == {"types": ["checks_requested"]}
+
+
+def test_changes_runs_unconditionally(jobs):
+    assert "if" not in jobs["changes"]
+
+
 def test_gate_needs_every_other_job_and_runs_always(jobs):
     gate = jobs["gate"]
+    assert gate.get("name", "gate") == "gate"
     assert set(gate["needs"]) == set(jobs) - {"gate", "release"}
-    assert "always()" in str(gate["if"])
+    assert _condition(gate) == "always()"
 
 
 def test_gate_runs_the_gate_script_with_needs_json(jobs):
@@ -135,7 +151,14 @@ def test_scoped_jobs_wait_for_changes_and_check_their_flag(jobs, job):
     cfg = jobs[job]
     needs = cfg["needs"] if isinstance(cfg["needs"], list) else [cfg["needs"]]
     assert "changes" in needs
-    assert f"needs.changes.outputs.{SCOPED[job]} == 'true'" in str(cfg["if"])
+    # Merge groups select every flag and have no pull_request payload.
+    expected = f"needs.changes.outputs.{SCOPED[job]} == 'true'"
+    if job in {"core-gpu", "stream-smoke", "headless-smoke"}:
+        expected += (
+            " && (github.event_name != 'pull_request' || "
+            "github.event.pull_request.head.repo.full_name == github.repository)"
+        )
+    assert _condition(cfg) == expected
 
 
 def test_docs_unit_always_runs_after_changes(jobs):
@@ -178,7 +201,7 @@ def test_release_waits_for_gate_and_only_runs_on_tags(jobs):
     cfg = jobs["release"]
     needs = cfg["needs"] if isinstance(cfg["needs"], list) else [cfg["needs"]]
     assert "gate" in needs
-    assert "refs/tags/" in str(cfg["if"])
+    assert _condition(cfg) == "startsWith(github.ref, 'refs/tags/')"
 
 
 def test_changes_job_exposes_every_flag_the_jobs_read(jobs):

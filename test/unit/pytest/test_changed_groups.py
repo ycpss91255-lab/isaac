@@ -40,7 +40,7 @@ def _pr(cg, *paths):
 # -- events -------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("event", ["push", "workflow_dispatch", "schedule", ""])
+@pytest.mark.parametrize("event", ["push", "merge_group", "workflow_dispatch", "schedule", ""])
 def test_non_pr_events_run_every_group(cg, event):
     assert cg.select(event, [], repo_root=_REPO_ROOT) == ALL
 
@@ -274,6 +274,14 @@ def test_cli_prints_github_output_lines_for_a_push():
     assert lines["groups"] == "core,gui,stream,headless,docs"
     assert lines["core"] == "true"
     assert lines["stages"] == "gui,stream,headless"
+
+
+def test_cli_merge_group_enables_every_flag_without_pr_shas(tmp_path):
+    result = _cli({"EVENT_NAME": "merge_group"}, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    lines = dict(line.split("=", 1) for line in result.stdout.splitlines())
+    for flag in [*ALL, "build"]:
+        assert lines[flag] == "true", flag
 
 
 def test_cli_exits_2_on_a_bad_dispatch_group():
