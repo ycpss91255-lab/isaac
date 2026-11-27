@@ -284,10 +284,11 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-# isaac#447 adds 11 hosted core cases in test_isaac_driver.py (48 -> 59): 642 -> 653 (core 601 -> 612).
+# ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646.
+# isaac#447 adds 11 hosted core cases in test_isaac_driver.py (48 -> 59): 646 -> 657 (core 601 -> 612).
 #   Nine cover sim-loop setup (3 in TestPlayTimelineSimLoop plus 2 for the rebound
 #   package manager) and launcher args (6 in TestLauncherArgs).
-HOSTED_UNIT_BASELINE = 653
+HOSTED_UNIT_BASELINE = 657
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -299,7 +300,7 @@ HOSTED_UNIT_BASELINE = 653
 #   A group with no tests yet (gui / headless) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py
-#   docs     -- test_producer_versions.py, test_no_ai_attribution.py
+#   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
 #   (9) and test_main_workflow_scope.py (15), all core: 565 -> 627 (core 592).
@@ -310,11 +311,12 @@ HOSTED_UNIT_BASELINE = 653
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
+#   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 HOSTED_UNIT_BASELINE_CORE = 612
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 16
+HOSTED_UNIT_BASELINE_DOCS = 20
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
