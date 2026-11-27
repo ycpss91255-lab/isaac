@@ -6,7 +6,8 @@ Isaac Sim.  The prim-creation helpers (set_xform_pose,
 set_camera_intrinsics, resolve_asset_url) require Isaac Sim and keep
 all ``pxr`` / ``omni`` imports function-local (ADR-0017 section 8).
 
-為相容既有 YAML，保留選填的 ``ros:`` 設定並驗證其欄位。
+For compatibility with existing YAML files, the loader preserves the optional
+``ros:`` section and validates its fields.
 """
 
 import math

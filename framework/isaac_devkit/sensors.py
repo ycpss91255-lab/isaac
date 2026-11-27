@@ -1,4 +1,4 @@
-"""依感測器類別在 USD stage 建立 prim，並回傳感測器或 mount 的路徑。
+"""Create prims on the USD stage by sensor category and return the sensor or mount path.
 
 Backward compatibility: ``load_config``, ``get_category``,
 ``validate_camera`` are re-exported from ``sensor_prim`` so existing
@@ -36,7 +36,7 @@ _STEREOLABS_EXTRA_PATH = "/isaac-sim/extra_exts/zed"
 
 
 def setup_sensor(cfg, stage):
-    """在 stage 建立感測器並回傳 prim 或 mount 路徑。"""
+    """Create the sensor on the stage and return its prim or mount path."""
     category = get_category(cfg)
     if category == "camera":
         return _setup_camera_dispatch(cfg, stage)
@@ -107,7 +107,7 @@ def _setup_camera_dispatch(cfg, stage):
 
 
 def _setup_lidar(cfg, stage):
-    """建立 RTX LiDAR 感測器並回傳其 prim 路徑。"""
+    """Create an RTX LiDAR sensor and return its prim path."""
     from isaac_devkit.sensor_prim import set_xform_pose
 
     parent_path = cfg["mount"]["parent_prim"]
@@ -149,7 +149,7 @@ def _setup_lidar(cfg, stage):
 
 
 def _setup_imu(cfg, stage):
-    """建立 IMU 感測器並回傳其 prim 路徑。
+    """Create an IMU sensor and return its prim path.
 
     Validates that parent_prim has RigidBodyAPI (physical constraint).
     """
@@ -177,8 +177,6 @@ def _setup_imu(cfg, stage):
     mount_prim = stage.DefinePrim(mount_path, "Xform")
     set_xform_pose(mount_prim, cfg["mount"]["pose"])
 
-    _enable_extensions("isaacsim.sensors.physics")
-
     import omni.kit.commands
     frequency_hz = sensor.get("frequency_hz", 200)
     sensor_period = 1.0 / frequency_hz if frequency_hz > 0 else 0.0
@@ -201,7 +199,7 @@ def _setup_imu(cfg, stage):
 
 
 def setup_camera(cfg, stage):
-    """建立相機並回傳 mount prim 的路徑。"""
+    """Create the camera and return its mount prim path."""
     validate_camera(cfg, source=cfg.get("_source", "<cfg>"))
 
     sensor_type = cfg["sensor"]["type"]
@@ -216,7 +214,7 @@ def setup_camera(cfg, stage):
 
 
 def _setup_realsense(cfg, stage):
-    """建立 RealSense D455 的 mount 並引用相機資產。
+    """Create the RealSense D455 mount and reference the camera asset.
 
     Layout:
         <parent_prim>/RealSenseMount        Xform with mount.pose applied
@@ -263,7 +261,7 @@ def _setup_realsense(cfg, stage):
 
 
 def _setup_custom(cfg, stage):
-    """依設定在 mount 下建立各個 Camera prim。
+    """Create each configured Camera prim under the mount.
 
     Layout:
         <parent_prim>/<frame_id_prefix>_mount      Xform with mount.pose

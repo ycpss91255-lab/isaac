@@ -6,7 +6,7 @@
   an :class:`~isaac_devkit.output_hub.OutputHub`; consumers register
   callbacks and the caller invokes :meth:`Output.step` once per
   ``app.update()``.
-* ``ros``: 由外部 I/O 插件提供。
+* External I/O plugins provide the ``ros`` output mode.
 
 Import safety (ADR-0017 section 8 / ADR-0023): no Isaac or ROS import at
 module top; the Isaac-side readers are imported inside :func:`setup_output`.

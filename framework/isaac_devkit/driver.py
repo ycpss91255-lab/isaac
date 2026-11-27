@@ -225,7 +225,7 @@ class IsaacDriver:
     USD: str = ""
     SCENE: str = ""
 
-    # 外部插件可透過 ISAAC_KIT_EXTRA_ARGS 指定額外的 Kit 擴充套件。
+    # External plugins can specify additional Kit extensions via ISAAC_KIT_EXTRA_ARGS.
     BOOT_EXTENSIONS: tuple = ("isaacsim.core.nodes",)
 
     def __init__(self) -> None:
