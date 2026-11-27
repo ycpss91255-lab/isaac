@@ -5,13 +5,12 @@ Launched as a subprocess by ``test_isaaclab_available.py`` via
 importable inside the built container: it launches the Isaac Lab
 ``AppLauncher`` headless (the same primitive the driver adopts in MR-5,
 #151), then imports ``isaaclab.sim`` (the spawn backend MR-3 builds on)
-and confirms the spawner + URDF-converter cfg surfaces and the pinned
-2.3 version are present.
+and checks the spawner configuration classes and package version.
 
 Marker-line acceptance (Kit ``_exit(0)`` swallows the return code, same
 convention as the other integration runners):
 
-    [ISAACLAB OK] version=<v> spawn=<bool> urdf_converter=<bool>
+    [ISAACLAB OK] version=<v> spawn=<bool>
     [EXIT CLEAN]
 
 Run inside the GPU-enabled test container:
@@ -38,20 +37,7 @@ def main() -> int:
     has_spawn = hasattr(sim_utils, "UsdFileCfg") and hasattr(
         sim_utils, "GroundPlaneCfg"
     )
-    # UrdfConverterCfg lives under isaaclab.sim.converters (model_import,
-    # MR-2). Importing it here also proves that surface is present.
-    try:
-        from isaaclab.sim.converters import UrdfConverterCfg  # noqa: F401
-
-        has_urdf_converter = True
-    except Exception:
-        has_urdf_converter = False
-
-    print(
-        f"[ISAACLAB OK] version={version} spawn={has_spawn} "
-        f"urdf_converter={has_urdf_converter}",
-        flush=True,
-    )
+    print(f"[ISAACLAB OK] version={version} spawn={has_spawn}", flush=True)
 
     # Print the clean-exit marker BEFORE close(): Kit's app.close() calls
     # _exit(0) on the way out and swallows anything after it (same

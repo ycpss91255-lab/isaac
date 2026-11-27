@@ -4,6 +4,11 @@
 # all green". This file is the single source of truth for those numbers;
 # the ratchet rule is no PR may drop a baseline.
 #
+# isaac#477 moves model conversion to asset_converter. Removing 69 hosted cases
+# and adding 6 USD-boundary checks lowers hosted 705 -> 642 (core 664 -> 601).
+# Six conversion-only GPU cases and one image smoke check also retire.
+# GPU 40 -> 34, bats core 114 -> 113. Other group floors stay unchanged.
+#
 # Format: KEY = VALUE (int). Lines starting with # are ignored.
 #
 # HOSTED_UNIT_BASELINE -- the M1 stage gate. Hosted unit pytest
@@ -24,23 +29,17 @@
 #   scene). The onboarding gate (#135) adds 13 hosted structure-check tests
 #   (test/unit/pytest/test_onboarding_gate.py: the M5 agent-proxy gate
 #   precondition -- 4 four-lang example-README existence checks, the README
-#   documents the three onboarding tasks (first-topic / URDF swap / in-scope
+#   documents the three onboarding tasks (first-topic / robot swap / in-scope
 #   sensor swap), the lidar/imu NotImplementedError out-of-scope callout,
-#   the URDF + sensor swap surfaces exist, and the agent_proxy_gate.sh
+#   the robot + sensor swap surfaces exist, and the agent_proxy_gate.sh
 #   harness passes its structure precondition + its --audit mode fails on a
 #   framework-source read and passes on a clean log). Live count is now
 #   221. MR (#151, ADR-0018): the driver moves onto Isaac Lab AppLauncher +
 #   SimulationContext; adds 8 hosted unit tests for the new pure helper
 #   parse_livestream_applauncher (the ISAAC_LIVESTREAM -> AppLauncher-args
 #   mapping; the lifecycle-order spy is rewritten in place, not added).
-#   Live count is now 229. MR (#150/#153, ADR-0018): model_import emits a
-#   single Isaac Lab instanceable USD and materials map color to a
-#   spawn-time cfg param. test_import_model.py is rewritten to the
-#   single-USD CLI contract (the Asset-Structure-3.0 template/validate
-#   helpers are gone): 20 -> 14 (-6). test_material_setup.py adds 10
-#   tests for the new pure material_cfg_from_yaml (color-only -> per-prim
-#   cfg-param mapping). Net +4. Live count is now 233 -- the enforced
-#   floor. MR (#152, ADR-0018 decisions 1/3): build_scene is rewritten as
+#   Live count is now 229. MR (#150/#153) brought the count to 233.
+#   MR (#152, ADR-0018 decisions 1/3): build_scene is rewritten as
 #   the pure YAML -> Isaac Lab sim_utils cfg adapter (to_isaaclab_cfg ->
 #   list[SpawnSpec]) plus a thin materialize/spawn tail; test_scene_builder.py
 #   adds the TestToIsaaclabCfg + TestRpyToQuat coverage (curated-field
@@ -50,44 +49,6 @@
 #   a value that already carries the model/usd/ segment (the example scene's
 #   robot entry) and adds 1 test for it (test_resolves_prefixed_model):
 #   38 -> 39. Live count is now 255 -- the enforced floor.
-#   Ingestion (#169/#170, ADR-0020 decision 6): the URDF preprocess
-#   (model_import._preprocess_urdf) gains xacro expansion (#169) and a
-#   best-effort meters unit sanity check (#170). test_import_model.py adds
-#   14 hosted tests (14 -> 28): xacro detection (4 -- .xacro extension /
-#   .urdf.xacro suffix / xmlns:xacro namespace / plain-URDF negative),
-#   xacro expansion (5 -- macro+property resolution, well-formed XML,
-#   _preprocess_urdf expands a xacro input, plain URDF passes through, and
-#   a missing-xacro-package raise-path with an actionable message), and the
-#   units heuristic (5 -- meters no-warn, mm warns, large <mesh scale>
-#   warns, malformed XML stays silent, the path-wrapper). The 8 xacro tests
-#   pytest.importorskip the standalone 'xacro' PyPI package; the hosted CI
-#   runner (assert_pytest_baseline.sh) now installs it so they collect and
-#   run.
-#
-#   #177 (Isaac Lab v2.3.2 + the 2.4.31 importer via Isaac Lab's Kit
-#   experience) adds 5 hosted tests (test_import_model.py 28 -> 33,
-#   TestSimulationAppKwargs): _simulation_app_kwargs is always headless,
-#   omits the experience key when the kit file is absent (falls back to the
-#   default experience), pins it when present, lets ISAACLAB_KIT_EXPERIENCE
-#   override the baked default, and the default constant points at Isaac
-#   Lab's python.kit (which pins the 2.4.31 importer). Pure (env +
-#   filesystem only, no Isaac import). Live count is now 274 -- the
-#   enforced floor.
-#
-#   Ingestion (#167/#168, ADR-0020 decisions 2/3): collider_type and the
-#   import-time joint drive are made configurable in model_import.
-#   test_import_model.py adds 22 hosted tests (33 -> 55): collider_type
-#   plumbing (#167 -- default-is-convex_hull, the built-in tuple, validate
-#   accepts the two built-ins / rejects unsupported (5 parametrized), and
-#   import_urdf rejects a bad collider before any Isaac import: 9), the
-#   import-time joint-drive gain resolution (#168 -- both-None is no drive,
-#   both-supplied float pair, one-sided raises (2 parametrized), negative
-#   raises (2 parametrized), and import_urdf rejects a one-sided drive
-#   before Isaac: 7), and the CLI plumbing (#167/#168 -- collider default /
-#   flag / unsupported-rejected, joint-drive flags default None / parse as
-#   floats: 6). All pure (no Isaac import: the JointDriveCfg build and the
-#   apply_joint_drive runtime helper are function-local isaaclab imports,
-#   GPU-covered). Live count is now 296 -- the enforced floor.
 #
 #   owv#55 isaac-side fix (dedicated cross-container compose project): adds
 #   3 hosted unit tests (test/unit/pytest/test_xc_compose_project_isolation.py:
@@ -153,13 +114,8 @@
 #   (`test_scene_builder.py` 39 -> 43, `TestOrientationXyzw`): the pure
 #   (w,x,y,z) -> (x,y,z,w) reorder `build_scene` must apply before handing an
 #   orientation to the `sim_utils` spawners, identity case included -- that is
-#   the case the bug hid in. Live count is now 330. Offline $(find <pkg>)
-#   resolution (isaac#267) adds 6 (`test_import_model.py` 55 -> 61): the
-#   package-directory resolver (explicit mapping, own package from the URDF's
-#   location, sibling package, package.xml required, actionable error) and one
-#   expansion test proving `$(find <own package>)` is substituted. Pure --
-#   filesystem existence checks only, no Isaac import. Live count is now 336 --
-#   the enforced floor. The capture-speckle fix (isaac#266) adds 13
+#   the case the bug hid in. Live count is now 330.
+#   The capture-speckle fix (isaac#266) adds 13
 #   (`test/unit/pytest/test_render_settings.py`, new): RTX settings are per
 #   render product -- `omni:rtx:*` attributes on the RenderProduct prim -- so
 #   the `/rtx/*` carb writes the capture drivers used never reached a live
@@ -328,8 +284,8 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
-# isaac#414: test_no_ai_attribution.py adds 16 docs cases (705 -> 721, docs 16 -> 32).
-HOSTED_UNIT_BASELINE = 721
+# isaac#414: test_no_ai_attribution.py adds 16 docs cases (642 -> 658, docs 16 -> 32).
+HOSTED_UNIT_BASELINE = 658
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -352,7 +308,7 @@ HOSTED_UNIT_BASELINE = 721
 #   test_changed_groups.py (38 -> 39), all core: 633 -> 676 (core 641).
 #   Stream smoke path coverage (isaac#459) adds 8 in test_changed_groups.py
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
-HOSTED_UNIT_BASELINE_CORE = 664
+HOSTED_UNIT_BASELINE_CORE = 601
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -362,13 +318,8 @@ HOSTED_UNIT_BASELINE_DOCS = 32
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
 #   not green, but hosted-only green is mergeable here). The full
 #   cross-runner aggregate (HOSTED_UNIT + GPU_INTEGRATION) is asserted at
-#   M2 with #132. #132 adds the example GPU integration test
-#   (test_example_gpu_integration.py: 9 active strong-assertion tests --
-#   L4 boot/exit markers, CUDA+Vulkan init, L1 base_link valid+RigidBody,
-#   L1 link/joint counts, L1 URDF->USD diff=0 via fresh re-import, L3
-#   camera topic/frame_id/message, ros_io non-blocking None, /cmd_vel
-#   round-trip, injected SIGINT -> shutdown -- plus, originally, 1
-#   collected-but-skipped cross-container placeholder deferred to #133).
+#   M2 with #132. Its example GPU tests exercise live robot structure, camera
+#   messages, cmd_vel round-trip and shutdown.
 #   The scaffold (#134) adds the scaffold GPU smoke
 #   (test_scaffold_smoke.py: 3 tests -- scaffold the consumer workspace
 #   via new-workspace.sh --local-docker, boot the SCAFFOLDED driver
@@ -394,8 +345,7 @@ HOSTED_UNIT_BASELINE_DOCS = 32
 #   MR (#149, ADR-0018): bake Isaac Lab 2.3 as the spawn-backend base
 #   tool. Adds the Isaac Lab availability smoke
 #   (test_isaaclab_available.py: 1 in-container test -- AppLauncher
-#   headless boot, import isaaclab.sim, assert the spawner +
-#   UrdfConverter surfaces and the pinned 2.3 version). In-container GPU
+#   headless boot, import isaaclab.sim, check spawner classes and package version). In-container GPU
 #   suite collects 25; aggregate GPU-integration = 25 + 2 (host xc) = 27.
 #
 #   MR (#153, ADR-0018 decision 7): color is a spawn-time material cfg
@@ -403,10 +353,7 @@ HOSTED_UNIT_BASELINE_DOCS = 32
 #   (test_material_setup_integration.py: 2 in-container tests, plus the
 #   _apply_materials_runner.py helper) is REMOVED; spawn-time material
 #   application gets GPU coverage later in the spawn-adapter work
-#   (#152/#154). MR (#150, ADR-0018 decision 6): the model_import GPU
-#   integration (test_model_import.py) is rewritten from the
-#   Asset-Structure-3.0 assertions to the single-USD contract, staying 3
-#   tests. In-container GPU suite collects 25 - 2 = 23; aggregate
+#   (#152/#154). In-container GPU suite collects 25 - 2 = 23; aggregate
 #   GPU-integration = 23 + 2 (host xc) = 25. This is a -2 baseline drop;
 #   it is intentional (the variant-set path no longer exists) and the
 #   removed coverage is reinstated at the spawn-adapter milestone -- an
@@ -423,63 +370,7 @@ HOSTED_UNIT_BASELINE_DOCS = 32
 #   enforced GPU baseline ratchets 25 -> 28 (aggregate GPU-integration =
 #   28 in-container + 2 host xc).
 #
-#   MR (#154, ADR-0018): the example is reworked onto the Isaac Lab
-#   adapter (the MR completion) and the strong assertions are re-proven on
-#   the new backend. Two GPU-collected changes net to -1:
-#     * RETIRED test_l1_urdf_to_usd_diff_zero (-1 in-container, 9 -> 8 in
-#       test_example_gpu_integration.py). It compared a fresh Isaac Lab
-#       URDF re-import against the COMMITTED camera_bot.usd; the committed
-#       asset is a curated legacy-importer USD (a defaultPrim was added in
-#       fb6f580 but it was NOT regenerated by the new instanceable
-#       importer), so the diff is non-zero by construction. The "fresh
-#       import is structurally correct" contract is already covered by
-#       test_model_import.py (#150); regenerating the committed asset is an
-#       out-of-band GPU step. This is an intentional, documented ratchet
-#       EXCEPTION (recorded here and in the PR body).
-#     * STRENGTHENED in place (no collected change):
-#       test_build_scene_adapter.py asserts /World/Robot/base_link resolves
-#       through the adapter reference (folded into the ground/light/robot
-#       test) and the mobility:dynamic object now asserts rigidbody=True --
-#       both unlocked by the fb6f580 defaultPrim. The example GPU test now
-#       boots the example through the same adapter spawn path.
-#   In-container GPU suite collects 25 (the retired diff test is the only
-#   collected delta; the strengthenings are in place); aggregate
-#   GPU-integration = 25 in-container + 2 host xc = 27. The enforced GPU
-#   baseline ratchets 28 -> 27 (the one documented exception above).
-#
-#   Ingestion (#167/#168, ADR-0020 decisions 2/3): the GPU suite gains 4
-#   in-container tests (25 -> 29) that exercise the configurable
-#   collider_type + joint drive against synthetic, license-clean fixtures
-#   (NOT the real forklift):
-#     * test_collider_type_integration.py (2): the concave U-shape fixture
-#       (concave_ushape.urdf -> mesh/ushape.stl) imported via
-#       import_urdf(collider_type=...) BOTH ways -- convex_hull records the
-#       UsdPhysics.MeshCollisionAPI approximation "convexHull" (notch
-#       filled), convex_decomposition records "convexDecomposition" (the
-#       concavity preserved); the contrast is asserted (different token).
-#       The decomposition pieces are cooked at sim time by PhysX, not
-#       authored as USD prims, so the stage-level contrast is the
-#       approximation token, not a prim count. The runner traverses WITH
-#       instance proxies so the collision mesh inside the instanceable
-#       prototype is visited. Subprocess-per-import + [COLLIDER SUMMARY]
-#       marker (one SimulationApp per import).
-#     * test_joint_drive_integration.py (2): the two-link revolute fixture
-#       (two_link_revolute.urdf) driven (a) at import via
-#       import_urdf(joint_drive_stiffness=, joint_drive_damping=) ->
-#       UrdfConverterCfg.joint_drive=JointDriveCfg(PDGainsCfg, force/
-#       position), and (b) at runtime via apply_joint_drive ->
-#       modify_joint_drive_properties (stage-only, no SimulationContext).
-#       Both assert the revolute joint's UsdPhysics.DriveAPI("angular")
-#       carries the configured gains -- stored in per-radian units: Isaac
-#       Lab applies the deterministic *pi/180 per-degree->per-radian
-#       conversion on an angular joint, so stiffness=800 lands as 13.96 on
-#       the DriveAPI (still fully user-controllable; only the unit differs).
-#       STRUCTURAL "drive CONFIGURED" check. The "joint physically reaches a
-#       target" check needs stepped physics (a SimulationContext, DEFERRED
-#       #151) and is NOT attempted. [DRIVE SUMMARY] marker.
-#   In-container GPU suite collects 29; aggregate GPU-integration = 29
-#   in-container + 2 host xc = 31. The enforced GPU baseline ratchets
-#   27 -> 31 (a ratchet UP -- new GPU coverage added, none removed).
+#   #154 and #167/#168 brought the historical GPU baseline to 31.
 #   The spawner orientation-convention fix adds 1 in-container
 #   (`test_build_scene_adapter.py` 3 -> 4): the adapter must reach the stage
 #   with an IDENTITY orient for a scene whose YAML says rpy [0,0,0]. The
@@ -509,15 +400,10 @@ HOSTED_UNIT_BASELINE_DOCS = 32
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-GPU_INTEGRATION_BASELINE = 40
+GPU_INTEGRATION_BASELINE = 34
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
-#   126). Recorded for traceability; after the ingestion work + the owv#55
-#   cross-container compose-project isolation + the isaac#223 producer the
-#   live aggregate is 357 (326 hosted-unit + 31 GPU-integration), well past the
-#   PRD's 126 floor. The aggregate is asserted at M2 where the GPU runner
-#   runs (see assert_pytest_baseline.sh --gpu); a SKIPPED GPU job does not
-#   count toward it.
+#   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
 AGGREGATE_TARGET = 126
 
 # BATS_BASELINE_<GROUP> -- floors for the devel-test bats specs, per group
@@ -528,7 +414,7 @@ AGGREGATE_TARGET = 126
 #   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
-BATS_BASELINE_CORE = 114
+BATS_BASELINE_CORE = 113
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 81
 BATS_BASELINE_HEADLESS = 13
