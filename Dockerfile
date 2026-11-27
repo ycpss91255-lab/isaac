@@ -23,7 +23,7 @@
 #   devel         - Application-specific tools + entrypoint
 #   test-tools-stage - Lint binaries (shellcheck / hadolint / bats) for devel-test
 #   devel-test    - Lint + bats smoke test (ephemeral, discarded after build)
-#   gui           - Isaac Sim desktop GUI (the only stage whose service mounts X11)
+#   gui           - Isaac Sim desktop GUI (X11 via `[stage:gui] gui.mode = "force"` in setup.toml)
 #   headless      - Isaac Sim, no streaming (ISAAC_LIVESTREAM=0; pure inference / batch)
 #   stream        - Isaac Sim + WebRTC streaming (ISAAC_LIVESTREAM=2; devel observation)
 #   producer      - Baked WebRTC stream-source producer (FROM stream; published image)
@@ -421,6 +421,8 @@ ENV BATS_LIB_PATH="/usr/lib/bats"
 COPY .base/dist/test/bats/smoke/shared/ /smoke_test/
 COPY .base/dist/test/bats/smoke/devel-test/ /smoke_test/
 COPY test/bats/smoke/ /smoke_test/
+COPY setup.toml CONTRIBUTING.md /lint/
+COPY .github/pull_request_template.md /lint/.github/
 # [isaac#402] Workflow files baked so workflow_pin_spec.bats cannot pass vacuously
 # on a missing directory (bats runs non-recursively, so this is not a spec).
 COPY .github/workflows/ /smoke_test/workflows/
@@ -508,7 +510,7 @@ CMD ["sleep", "infinity"]
 ############################## gui ##############################
 # [isaac #427] Desktop GUI variant. The image is the same as devel; what
 # makes it the GUI stage is its compose service: `["stage:gui"]` in setup.toml sets
-# `"gui.mode" = "auto"`, which mounts X11 / DISPLAY here and nowhere else.
+# `"gui.mode" = "force"`, which mounts X11 / DISPLAY here and nowhere else.
 #
 # Usage:
 #   just docker run -t gui
