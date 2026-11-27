@@ -375,7 +375,7 @@ out.step(sim_time_seconds)
 
 ## 容器 User
 
-容器以对齐 host UID 的非 root user 跑（`USER_NAME` 从 `.env` 读取，默认 UID 1000）。该 user 被加进 image 的 `isaac-sim` group，可读取 `/isaac-sim/*`（mode `0750`）。通过 `/home/${USER_NAME}/work`（mount 到 host `${WS_PATH}`）写的文件保留 host 端 owner，无需 `chown`。
+容器以对齐 host UID 的非 root user 跑（`USER_NAME` 从 `.env` 读取，默认 UID 1000）。该 user 以数字 gid 加进 base image 官方账号（从其 `USER` 探测，不写死）的 group，可读取 `/isaac-sim/*`（mode `0750`）。通过 `/home/${USER_NAME}/work`（mount 到 host `${WS_PATH}`）写的文件保留 host 端 owner，无需 `chown`。
 
 ## EULA
 

@@ -17,7 +17,8 @@
 #                               +-> devel-test (lint + smoke)
 #
 # Stages:
-#   sys           - User/group, locale, timezone (+ isaac-sim group join)
+#   base          - Probe the base image's configured UID and GID
+#   sys           - Host user/group, base group membership, locale, timezone
 #   devel-base    - Development tools and packages
 #   builder       - Compile/build stage (optional; opt-in for runtime split, keeps source)
 #   devel         - Application-specific tools + entrypoint
@@ -60,6 +61,11 @@
 ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:6.2.0.1"
 ARG TEST_TOOLS_IMAGE="test-tools:local"
 
+############################## base ##############################
+# Probe under the inherited USER. The compose generator skips the base stage.
+FROM ${BASE_IMAGE} AS base
+RUN id -u > /tmp/base-uid && id -g > /tmp/base-gid
+
 ############################## sys ##############################
 # hadolint ignore=DL3006
 FROM ${BASE_IMAGE} AS sys
@@ -72,11 +78,7 @@ ARG TZ="Asia/Taipei"
 ARG APT_MIRROR_UBUNTU="tw.archive.ubuntu.com"
 ARG DEBIAN_FRONTEND=noninteractive
 
-# [isaac] The Isaac Sim 6.x base image ships with a non-root default user
-# (isaac-sim, UID 1234); switch to root so the system-setup steps below
-# (apt, locale-gen, useradd) have permission. devel stage drops back to
-# USER_NAME at the end. DL3002 false-positive is acknowledged upstream
-# (hadolint/hadolint#405); inline ignore is the recommended workaround.
+# System setup needs root. The devel stage switches to the host user.
 # hadolint ignore=DL3002,DL3066
 USER root
 
@@ -100,24 +102,37 @@ ENV LANG="en_US.UTF-8"
 ENV LANGUAGE="en_US:en"
 ENV TZ="${TZ}"
 
-# Create user (handle UID/GID conflicts).
-# [isaac] Also join the isaac-sim group (present in Isaac Sim base image)
-# so the container user can read /isaac-sim/* which is mode 0750.
+COPY --from=base /tmp/base-uid /tmp/base-gid /etc/isaac/
+
+# Rename colliding accounts in place so numeric file ownership stays valid.
+# A base account's home can contain official files. Give it a host-user home
+# without moving that tree. Lab has multiple passwd entries for one UID.
+# If usermod appended the renamed entry behind an alias, put it first for
+# that UID so id -un resolves to USER_NAME. Keep the other aliases intact.
 RUN if getent group "${USER_GID}" >/dev/null; then \
         groupmod -n "${USER_GROUP}" "$(getent group "${USER_GID}" | cut -d: -f1)"; \
     else \
         groupadd -g "${USER_GID}" "${USER_GROUP}"; \
     fi && \
     if getent passwd "${USER_UID}" >/dev/null; then \
-        usermod -l "${USER_NAME}" -d "/home/${USER_NAME}" -m \
-            "$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
+        usermod -l "${USER_NAME}" -d "/home/${USER_NAME}" \
+            "$(getent passwd "${USER_UID}" | cut -d: -f1)" && \
+        install -d -o "${USER_UID}" -g "${USER_GID}" "/home/${USER_NAME}" && \
+        if [ "$(id -nu "${USER_UID}")" != "${USER_NAME}" ]; then \
+            awk -F: -v uid="${USER_UID}" -v entry="$(getent passwd "${USER_NAME}")" \
+                '$3 == uid && !seen++ { print entry } $0 != entry' /etc/passwd > /tmp/host-passwd && \
+            cat /tmp/host-passwd > /etc/passwd && rm /tmp/host-passwd; \
+        fi; \
     else \
         useradd -l -m -s /bin/bash -u "${USER_UID}" -g "${USER_GID}" "${USER_NAME}"; \
     fi && \
-    echo "${USER_NAME} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    if getent group isaac-sim >/dev/null; then \
-        usermod -aG isaac-sim "${USER_NAME}"; \
-    fi
+    official_gid="$(cat /etc/isaac/base-gid)" && \
+    if ! official_group="$(getent group "${official_gid}" | cut -d: -f1)"; then \
+        official_group="base-${official_gid}"; \
+        groupadd -g "${official_gid}" "${official_group}"; \
+    fi && \
+    usermod -g "${USER_GID}" -aG "${official_group}" "${USER_NAME}" && \
+    echo "#${USER_UID} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 ############################## devel-base ##############################
 FROM sys AS devel-base
@@ -297,7 +312,7 @@ RUN mkdir -p /etc/isaac && echo "${ROS_DISTRO}" > /etc/isaac/ros-distro
 # [isaac] Pre-create the extension folders Kit tries to create at boot.
 # The experience file lists ${app}/../extsUser, which the NGC image does
 # not ship, and the non-root container user cannot create it under
-# /isaac-sim (0750, owned by isaac-sim). Kit then keeps that folder as ''
+# /isaac-sim on the Sim base (0750). Kit then keeps that folder as ''
 # and scans the working directory (~/work, the repo root) for extensions,
 # warning "Extensions config 'extension.toml' doesn't exist" once per
 # top-level directory on every launch. kit/exts and kit/extsPhysics are
@@ -330,12 +345,8 @@ COPY --chmod=0755 script/host_yaml.sh /usr/local/lib/host_yaml.sh
 
 USER "${USER}"
 
-# [isaac] HOME is implicit on Linux but Docker's WORKDIR directive
-# interpolates only build-time ARG / ENV (not shell-set HOME). Without
-# this explicit ENV the `WORKDIR "${HOME}/work"` below silently resolves
-# to `/work` and emits a BuildKit `UndefinedVar` warning. Setting HOME
-# explicitly silences the warning and makes the WORKDIR intent — and
-# non-interactive `docker exec` cwd — match the interactive shell.
+# Use the host user's writable home for shell setup, caches and WORKDIR.
+# The Lab base exports HOME=/root.
 ENV HOME="/home/${USER_NAME}"
 
 # Setup shell, terminator, tmux. The bashrc append picks up the

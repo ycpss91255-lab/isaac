@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **容器使用者依 host UID/GID 建立，不再依賴官方 uid（isaac#474）。** 官方帳號（Sim 的 `isaac-sim` uid 1234、Lab 的 `isaaclab` uid 1000）從 base image 的 `USER` 以 `id -u` / `id -g` 探測，不寫死；host `USER_UID` / `USER_GID` 與既有帳號或群組衝突時改名而非失敗；使用者以數字 gid 加入官方群組以讀取 `/isaac-sim`（不 chown 官方目錄，避免整層 20 GB 複製）；sudoers 改用 `#UID`。新增 `script/ci/uid_matrix.sh`（預設建置 `devel-base`，可用 `UID_MATRIX_TARGET=devel` 選擇完整建置；1000 / 1234 / 50000 與 GID 衝突各 build + `id` / `sudo -n` / 群組 / 讀取檢查，預設含 GPU `import isaacsim`，`--no-gpu` 供 CI）與 CI 的遞迴 chown grep 檢查。Hosted baseline 691 -> 699（core 650 -> 658）；bats core 114 -> 118。
 - **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
