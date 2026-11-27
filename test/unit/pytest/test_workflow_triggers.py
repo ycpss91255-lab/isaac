@@ -17,7 +17,7 @@ _WORKFLOWS = Path(__file__).resolve().parents[3] / ".github" / "workflows"
 
 # A schedule is allowed only for a bot that tracks an upstream release; it
 # runs no tests. Anything else on a timer is the nightly run this removed.
-_SCHEDULE_ALLOWED = {"base-version-monitor.yaml"}
+_SCHEDULE_ALLOWED = {"base-version-monitor.yaml", "bot-isaac-sim-version.yaml"}
 
 
 def _load(name):

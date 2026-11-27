@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// cmd_vel publisher node: the app-side driver of the example chassis.
+// cmd_vel publisher node: velocity commands for a mobile robot.
 //
 // Publishes a geometry_msgs/Twist on /cmd_vel at 10 Hz. This is the
 // outbound half of the ROS 2 bidirectional topology (ADR-0017 section 6):
-// the Isaac driver subscribes to /cmd_vel and drives the camera_bot, so
-// commands published here move the robot in the sim. Replace the timer
-// body with your control logic; the velocities are parameters.
+// a mobile robot controller can subscribe to /cmd_vel in the Isaac scene.
+// Replace the timer body with your control logic; the velocities are parameters.
 
 #include <chrono>
 #include <memory>
@@ -29,8 +28,7 @@
 
 namespace
 {
-// The topic the base-repo example subscribes to (example/sim/scene/
-// scene.yaml: ros2_io.subscriptions - topic /cmd_vel).
+// Conventional ROS 2 topic for velocity commands.
 constexpr char kDefaultCmdVelTopic[] = "/cmd_vel";
 }  // namespace
 
