@@ -130,6 +130,16 @@ Kit 每次启动都会打印几种不影响运行的警告：
 - 有一个 image 仍然共用：每次 build 也会 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名称只由 pin 住的 base 版本决定。host 上所有 pin 同一个 base 版本的 checkout 与 repo 都写同一个 tag，所以别的 checkout 可能正在 build 时不要删它。`just docker build --clean-tools` 会替所有人把它删掉。它来自 base 的 `build.sh`，上游追踪在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前启动的 container 还留在共用 project 里。用 `docker compose -p <hub>-isaac ps -a` 列出，按名称停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 会停掉整个共用 project，包含别的 checkout 的 container。
 
+### 运行多个 instance
+
+本 repo 默认每个 checkout 只运行一个 instance，这是有意的设计。原先在同一 checkout 内管理多个 instance 的机制已移除（[ADR-0019](../src/doc/adr/0019-remove-same-repo-multi-instance.md)）。要运行 N 个 instance，请通过 multi_run 用本 repo 的 `compose.yaml` 启动 N 次。设计记录见 [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15)。
+
+- 用 `-p <name>` 为每个 instance 指定不同的 compose project 名称，这样 `just docker stop` 只会停止自己的 instance，启动时也不会接管上次遗留的 instance。
+- 每个 instance 都必须有独立的 `isaac-sim/` 缓存和数据目录树。共享可写的缓存目录会损坏正在运行的 instance 的 Kit 缓存，而且不会出现警告。详见 [Cache 路径](#cache-路径)。
+- 并行运行 headless instance 无需覆盖端口配置。只有串流时才需要覆盖。
+
+实际能运行多少个 instance 取决于可用显存。在一张 32607 MiB 的显卡上实测，每个运行中的 Isaac instance 约占 3.9 GiB，可同时运行 6–7 个。将显卡的可用显存换算成 GiB 再除以 3.9，即可估算数量。多个 instance 共享 GPU 算力，因此每个都运行得更慢。
+
 ## 挂载本地 USD 模型
 
 Isaac 不附带示例模型。请使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的转换输出。
@@ -244,7 +254,7 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 内置 Humble 与 Jazzy 两套 ROS 2 lib（5.1 时放在 `isaacsim.ros2.bridge/`；6.0 把单一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），两者都是 Python 3.12 rclpy，与 kit 内嵌 interpreter 对齐。**本 image 在 build time 把 distro hard-bake 进去** — 透过 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 条目注入（默认 `value = "humble"`，与 CoreSAM 对齐）。
 
-Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 阶段启用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若尚未加载，sensor setup 也会在 runtime 通过 Kit extension manager 启用，所以 boot 阶段启用只是优化，不是必要条件（isaac#248）。driver 路径不需要额外 launch flag。
+Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 阶段启用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若未加载，sensor setup 也会在 runtime 通过 Kit extension manager 启用，所以 boot 阶段启用只是优化，不是必要条件（isaac#248）。driver 路径不需要额外 launch flag。
 
 Env wiring 写在 `setup.toml [environment]`（distro-agnostic）：
 
@@ -345,7 +355,7 @@ just docker stop                           # cleanup
 
 ### Python 输出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。模式由 `ISAAC_OUTPUT_MODE` 决定（默认 `python`；`ros` 尚未接入，见 ADR-0025）。
+`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。`ISAAC_OUTPUT_MODE` 仅支持默认值 `python`。其他值（包括 `ros`）都会引发 `ValueError`。`isaac_ros_io` 通过 `ISAAC_IO_PLUGIN` 提供 ROS 输出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
