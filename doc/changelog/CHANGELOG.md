@@ -13,7 +13,7 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
-- **新增 PhysX 與 Newton 的時間軸 GPU 回歸測試（isaac#447）。** 每個引擎只啟動一次 `IsaacDriver`，供車輪位移、時間軸設定與更新頻率三項測試共用。新增的案例檢查 60 Hz 限速與固定時間步進已啟用、循環播放已關閉，並要求模擬時間單調遞增、每模擬秒更新 60 次（容許 ±15%）、每實際秒更新超過 20 次且少於 69 次。GPU core 由 35 增至 39 項。
+- **新增 PhysX 與 Newton 的時間軸 GPU 回歸測試（isaac#447）。** 每個引擎只啟動一次 `IsaacDriver`，供車輪位移、時間軸設定與更新頻率三項測試共用。新增的案例檢查 60 Hz 限速與固定時間步進已啟用、循環播放已關閉，並要求模擬時間單調遞增、每模擬秒更新 60 次（容許 ±15%）、每實際秒更新少於 69 次（只設上限，因為主機忙碌時實際速率會下降；移除限速時實測約 115 至 123 次）。GPU core 由 35 增至 39 項。
 - **新增 stream smoke 在 GPU 主機忙碌時的診斷測試（isaac#497）。** 九個 Bats 案例涵蓋訊號埠或媒體埠被占用時提早失敗（有 `ss` 時也能偵測 UDP 媒體埠占用）、略過連接埠檢查、啟動與就緒時的主機負載及就緒耗時，以及逾時時回報就緒標記與連接埠占用者。stream 組由 81 增至 90 項。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
