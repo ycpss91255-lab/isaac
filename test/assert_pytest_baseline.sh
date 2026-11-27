@@ -335,7 +335,7 @@ fi
 docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${GROUP}" \
   -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
   set -eu
-  pip install --quiet --user pyyaml pytest pytest-cov xacro numpy
+  pip install --quiet --user pyyaml pytest pytest-cov numpy
   cd framework
   if [ "${GROUP}" = core ]; then
     set -- --junitxml=/tmp/hosted-junit.xml -rA
@@ -367,7 +367,7 @@ counts="$(
   docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES \
     -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
     set -eu
-    pip install --quiet --user pyyaml pytest xacro numpy >/dev/null
+    pip install --quiet --user pyyaml pytest numpy >/dev/null
     total="$(python -m pytest test/unit/pytest/ --collect-only -q -p no:cacheprovider \
       2>/dev/null | grep -c "::" || true)"
     echo "total ${total}"

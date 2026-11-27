@@ -100,18 +100,3 @@ with open("/opt/IsaacLab/pyproject.toml", "rb") as f:
   assert_success
   assert_output ""
 }
-
-# The bundled URDF importer imports newton_usd_schemas at load, while
-# Isaac Lab's experience excludes isaacsim.pip.newton (the prebundle that
-# carries it). The module must therefore come from the Isaac python's own
-# site-packages, where every boot path sees it, rather than from a
-# sys.path shim (isaac#247).
-@test "newton_usd_schemas resolves from the Isaac python site-packages (isaac#247)" {
-  run /isaac-sim/kit/python/bin/python3 -c '
-import importlib.util
-spec = importlib.util.find_spec("newton_usd_schemas")
-print(spec.origin if spec else "NOT FOUND")
-'
-  assert_success
-  assert_output --partial "/isaac-sim/kit/python/lib/python3.12/site-packages/newton_usd_schemas/"
-}

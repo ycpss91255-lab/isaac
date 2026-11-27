@@ -4,7 +4,7 @@
 （ADR-0017）。新手或 agent 拿到的就是它：從零跑到一個 live camera topic，
 再換成自己的機器人，**全程不需要讀 framework 原碼**。
 
-- [`sim/`](sim/) -- Isaac 端：`camera_bot` URDF、三檔 scene、per-sensor 的
+- [`sim/`](sim/) -- Isaac 端：`camera_bot` USD、三檔 scene、per-sensor 的
   `custom.yaml`，以及 `example_driver.py`（發佈 camera stream、用 `/cmd_vel`
   驅動底盤）。
 - [`ros2/`](ros2/) -- 應用端：訂閱 camera 並發佈 `/cmd_vel` 的最小 ROS 2
@@ -35,18 +35,12 @@ docker run --rm --net=host ros:humble bash -c '
 
 第一筆 frame 就是 M1「time-to-first-topic」里程碑。
 
-### 2. 換 URDF（換成自己的機器人）
+### 2. 換成自己的機器人 USD
 
-機器人模型是 [`sim/model/camera_bot.urdf`](sim/model/camera_bot.urdf)
-（兩個 link：`base_link` 底盤 + `camera_link` 掛載點）。要換成另一個最小
-機器人：
+範例載入 [camera_bot.usd](sim/model/usd/robot/camera_bot/camera_bot.usd)。換模型時：
 
-1. 把你的 URDF 放進 `sim/model/<your_robot>.urdf`。保留一個 `base_link`
-   （會隨 `/cmd_vel` 移動的本體）以及一個可掛 camera 的 link。
-2. 把它重新 import 成 USD 一次（importer 跑在自己的 SimulationApp，所以
-   輸出 USD 會 commit）：`just import-model sim/model/<your_robot>.urdf`。
-3. 把 [`sim/scene/robot.yaml`](sim/scene/robot.yaml) 指向新模型：設定
-   `source_urdf` 與 `model` 為你的檔案，`robot.name` 為你的機器人名稱。
+1. 用 [asset_converter](https://github.com/ycpss91255-lab/asset_converter) 產出 USD，連同引用的資產放進 `sim/model/usd/robot/`。
+2. 在 [sim/scene/robot.yaml](sim/scene/robot.yaml) 設定 `robot.model`（相對於 `sim/` 的 USD 路徑）與 `robot.name`。範例 driver 使用 `base_link` 底盤，請把相機的 `link` 設為實際掛載點。
 
 再 `just run` 一次 —— 你的機器人啟動，camera topic 照樣發佈。
 

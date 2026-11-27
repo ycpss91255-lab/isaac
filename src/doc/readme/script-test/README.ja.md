@@ -20,17 +20,6 @@
 前提:
 
 - `just docker run -t stream -d` が成功すること(container が起きていない場合 smoke が自動で起動します)
-- リポジトリには `isaac_ws/src/model/usd/robot/openbase/openbase.usda` が track されており、USD 依存 case はそれを直接使います。もし checkout 不完全や誤削除で当該ファイルが無ければ、repo 内の URDF ソースから再生成してください:
-
-  ```bash
-  cd isaac_ws/src/docker
-  just docker exec -t stream /isaac-sim/python.sh \
-      "${HOME}/work/src/script/import_urdf.py" \
-      "${HOME}/work/src/model/urdf/robot/openbase/openbase_minimal.urdf" \
-      /tmp/openbase_generated.usda
-  ```
-
-  追跡対象の USD を上書きしたい場合は、生成された `openbase_generated.usda` を `model/usd/robot/openbase/openbase.usda` に移動してください。追跡 USD が無いと依存 case は SKIP(`--strict` では FAIL)になります。
 
 ## Cases
 

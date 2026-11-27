@@ -132,11 +132,11 @@ jobs:
         run: python3 script/ci/check_stale_naming.py
       - name: Forbidden names scan
         env:
-          FORBIDDEN_NAMES: ${{ vars.FORBIDDEN_NAMES }}
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
         run: python3 script/ci/check_forbidden_names.py --allow-unset
       - name: Hosted core-group pytest + group floor + coverage gate
         env:
-          FORBIDDEN_NAMES: ${{ vars.FORBIDDEN_NAMES }}
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
         run: ./test/assert_pytest_baseline.sh --group core
 
   stream-unit:

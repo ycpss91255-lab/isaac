@@ -24,23 +24,6 @@ once seen, and reports PASS / FAIL per case.
 Pre-requisites:
 
 - `just docker run -t stream -d` succeeds (smoke auto-runs it if container is down)
-- The curated `isaac_ws/src/model/usd/robot/openbase/openbase.usda` is tracked in
-  the repo; the USD-dependent cases use it directly. If the file is
-  missing (incomplete checkout / accidental delete), regenerate from the
-  in-repo URDF source:
-
-  ```bash
-  cd isaac_ws/src/docker
-  just docker exec -t stream /isaac-sim/python.sh \
-      "${HOME}/work/src/script/import_urdf.py" \
-      "${HOME}/work/src/model/urdf/robot/openbase/openbase_minimal.urdf" \
-      /tmp/openbase_generated.usda
-  ```
-
-  Then move `openbase_generated.usda` to
-  `model/usd/robot/openbase/openbase.usda` if you really need to overwrite the
-  tracked file. Without the tracked USD the dependent cases SKIP (or
-  FAIL under `--strict`).
 
 ## Cases
 

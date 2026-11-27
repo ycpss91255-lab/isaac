@@ -72,6 +72,22 @@ def test_clean_tracked_files_pass_despite_base_and_untracked_hits(checkout):
     assert scan(checkout, "fixture-account").returncode == 0
 
 
+def test_hit_redacts_names_in_filename_and_matched_line(checkout):
+    path = checkout / "Fixture-Owner-notes.txt"
+    matched_line = "Account recorded as FIXTURE-ACCOUNT"
+    path.write_text(matched_line + "\n")
+    subprocess.run(["git", "add", "--", path.name], cwd=checkout, check=True)
+
+    result = scan(checkout, "fixture-owner,fixture-account")
+    assert result.returncode == 1
+    output = (result.stdout + result.stderr).casefold()
+    assert "fixture-owner" not in output
+    assert "fixture-account" not in output
+    assert matched_line.casefold() not in output
+    assert path.name.casefold() not in output
+    assert re.search(r":1 \(pattern 2\)", result.stdout)
+
+
 @pytest.mark.parametrize("names", [None, "", " , , "], ids=["unset", "empty", "empty-items"])
 def test_missing_names_require_explicit_skip(checkout, names):
     strict = scan(checkout, names)
@@ -80,7 +96,16 @@ def test_missing_names_require_explicit_skip(checkout, names):
 
     optional = scan(checkout, names, "--allow-unset")
     assert optional.returncode == 0
-    assert "SKIPPED: FORBIDDEN_NAMES not set" in optional.stdout.splitlines()
+    assert "SKIPPED: FORBIDDEN_NAMES secret not provided" in optional.stdout
+
+
+def test_skip_explains_why_fork_pull_requests_can_miss_the_secret(checkout):
+    result = scan(checkout, None, "--allow-unset")
+    assert result.returncode == 0
+    assert "SKIPPED" in result.stdout
+    assert "secret" in result.stdout
+    assert "fork pull request" in result.stdout
+    assert "name scan not run" in result.stdout
 
 
 def test_git_error_is_reported(tmp_path, monkeypatch):
@@ -95,7 +120,7 @@ def test_checkout_has_no_forbidden_names():
     if not names.strip():
         result = scan(None, None, "--allow-unset")
         assert result.returncode == 0
-        assert "SKIPPED: FORBIDDEN_NAMES not set" in result.stdout.splitlines()
+        assert "SKIPPED: FORBIDDEN_NAMES secret not provided" in result.stdout
         return
 
     result = scan(None, names)
@@ -131,7 +156,7 @@ def test_core_unit_hosted_pytest_receives_forbidden_names():
         step for step in steps
         if step.get("name") == "Hosted core-group pytest + group floor + coverage gate"
     )
-    assert hosted.get("env", {}).get("FORBIDDEN_NAMES") == "${{ vars.FORBIDDEN_NAMES }}"
+    assert hosted.get("env", {}).get("FORBIDDEN_NAMES") == "${{ secrets.FORBIDDEN_NAMES }}"
 
 
 def test_core_unit_runs_forbidden_names_scan_immediately_after_stale_naming():
@@ -141,4 +166,4 @@ def test_core_unit_runs_forbidden_names_scan_immediately_after_stale_naming():
     assert any(step.get("uses", "").startswith("actions/checkout@") for step in steps[:stale])
     guard = steps[stale + 1]
     assert guard.get("run", "").strip() == f"python3 {SCRIPT} --allow-unset"
-    assert guard.get("env", {}).get("FORBIDDEN_NAMES") == "${{ vars.FORBIDDEN_NAMES }}"
+    assert guard.get("env", {}).get("FORBIDDEN_NAMES") == "${{ secrets.FORBIDDEN_NAMES }}"

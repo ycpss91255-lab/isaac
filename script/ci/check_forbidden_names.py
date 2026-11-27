@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check tracked text outside .base for names configured in FORBIDDEN_NAMES."""
+"""Check tracked text outside .base for names configured in the FORBIDDEN_NAMES organization secret."""
 
 import argparse
 import os
@@ -18,7 +18,8 @@ def main():
     names = [item.strip() for item in os.environ.get("FORBIDDEN_NAMES", "").split(",") if item.strip()]
     if not names:
         if args.allow_unset:
-            print("SKIPPED: FORBIDDEN_NAMES not set")
+            print("SKIPPED: FORBIDDEN_NAMES secret not provided "
+                  "(for example a fork pull request); name scan not run")
             return 0
         parser.error("FORBIDDEN_NAMES must contain at least one name")
 
