@@ -83,7 +83,7 @@ _run_case() {
   local script="$1" marker="$2" timeout="$3" needs_usd="$4"
 
   if [[ "$needs_usd" == "yes" && ! -f "$USD_HOST" ]]; then
-    echo "SKIP $script (USD missing at $USD_HOST — run import_urdf.py first)"
+    echo "SKIP $script (USD missing at $USD_HOST)"
     return 0  # SKIP not counted as FAIL unless --strict
   fi
 
