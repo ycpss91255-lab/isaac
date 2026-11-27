@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage 樹：`devel-base` -> `devel`（共用層：isaac 程式與共用設定）-> `gui` / `stream` / `headless`。只有 `gui` service 掛 X11（`.setup.conf` 的 `[stage:gui] gui.mode = auto`；頂層 `[gui]` 為 `off`，所以 `devel` 與其他 stage 都不掛）：`just docker run -t gui`。兩個 stage 透過 [base #215](https://github.com/ycpss91255-lab/base/issues/215) auto-emit 為 profile-gated compose service：`headless`（pure sim，`ISAAC_LIVESTREAM=0`）與 `stream`（sim + WebRTC，`ISAAC_LIVESTREAM=2`）。兩者啟動後都 `CMD ["sleep","infinity"]` idle（沒有 `runheadless.sh -v` ENTRYPOINT）— container 持續存活，由你用 `just docker exec -t <stage> <cmd>` 把 driver 腳本（`/isaac-sim/python.sh <driver.py>`，讀 `ISAAC_LIVESTREAM=2` 開 stream）或一次性 `/usr/local/bin/runheadless-host-config.sh` 送進去；streaming 起來後 web-viewer 連 `:5173`。使用 `just docker run -t <stage> -d` 啟動。
+> Stage 樹：`devel-base` -> `devel`（共用層：isaac 程式與共用設定）-> `gui` / `stream` / `headless`。只有 `gui` service 掛 X11（`setup.toml` 的 `["stage:gui"] "gui.mode" = "auto"`；頂層 `[gui]` 設為 `mode = "off"`，所以 `devel` 與其他 stage 都不掛）：`just docker run -t gui`。兩個 stage 透過 [base #215](https://github.com/ycpss91255-lab/base/issues/215) auto-emit 為 profile-gated compose service：`headless`（pure sim，`ISAAC_LIVESTREAM=0`）與 `stream`（sim + WebRTC，`ISAAC_LIVESTREAM=2`）。兩者啟動後都 `CMD ["sleep","infinity"]` idle（沒有 `runheadless.sh -v` ENTRYPOINT）— container 持續存活，由你用 `just docker exec -t <stage> <cmd>` 把 driver 腳本（`/isaac-sim/python.sh <driver.py>`，讀 `ISAAC_LIVESTREAM=2` 開 stream）或一次性 `/usr/local/bin/runheadless-host-config.sh` 送進去；streaming 起來後 web-viewer 連 `:5173`。使用 `just docker run -t <stage> -d` 啟動。
 
 ### Headless：啟動 Isaac 並跑一個場景
 
@@ -178,8 +178,8 @@ post-run hook 同時也把 `network.public_ip` 當 `SIGNALING_SERVER` env 傳給
 
 - streaming kit app 同時 listen 在 `8011`（NVCF signaling，FastAPI/uvicorn）、`49100`（self-host WebRTC）以及 `8211`（kit API / streaming viewer）。WebRTC Streaming Client 會自己選對的，**不要寫 port**
 - **同時只能一個 client 連**（NVIDIA 限制）。第二個連線會被拒
-- `setup.conf` 已開 `network_mode: host`，容器內 listen 的 port = host 的 port。Host 防火牆要放行 `8011/tcp` 跟 `49100/tcp`（`sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`）
-- `setup.conf [deploy] gpu_capabilities` 必須含 `video` — 沒有的話 nvidia-container-runtime 不 mount NVENC libs（`libnvidia-encode.so` / `libnvcuvid.so`），server 連得上但畫面 encode 不出來 → 黑畫面。當前 `setup.conf` 已加
+- `setup.toml` 的 `[network]` 設為 `mode = "host"`，容器內 listen 的 port = host 的 port。Host 防火牆要放行 `8011/tcp` 跟 `49100/tcp`（`sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`）
+- `setup.toml` 的 `[deploy]` 設有 `gpu_capabilities = "all"`，其中包含 `video` — 沒有的話 nvidia-container-runtime 不 mount NVENC libs（`libnvidia-encode.so` / `libnvcuvid.so`），server 連得上但畫面 encode 不出來 → 黑畫面。
 - Server 端確認 listener：`ss -tln | grep -E ':8011|:49100'` 應看到兩個 `LISTEN`
 
 ### 確定性 stream-source producer（GHCR image，isaac#223）
@@ -231,11 +231,11 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 ## ROS 2 bridge（內建，build-time distro）
 
-Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 同時內建 Humble 與 Jazzy 兩套 ROS 2 libraries（5.1 時放在 `isaacsim.ros2.bridge/`；6.0 把單一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），皆走 Python 3.12 rclpy，與 kit 內嵌 interpreter 一致。**本 image 在 build-time hard-bake distro 選擇** — 透過 `setup.conf [build] arg_N=ROS_DISTRO=<value>`（預設 `humble`，CoreSAM 對齊）。
+Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 同時內建 Humble 與 Jazzy 兩套 ROS 2 libraries（5.1 時放在 `isaacsim.ros2.bridge/`；6.0 把單一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），皆走 Python 3.12 rclpy，與 kit 內嵌 interpreter 一致。**本 image 在 build-time hard-bake distro 選擇** — 透過 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 項目指定（預設 `value = "humble"`，CoreSAM 對齊）。
 
 Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若尚未載入，sensor setup 也會在 runtime 透過 Kit extension manager 啟用，所以 boot 階段啟用只是優化，不是必要條件（isaac#248）。driver 路徑不需要額外 launch flag。
 
-`setup.conf [environment]` 內 distro-agnostic env wiring：
+`setup.toml [environment]` 內 distro-agnostic env wiring：
 
 | 變數 | 值 | 用途 |
 |------|----|------|
@@ -245,7 +245,7 @@ Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 階段啟用（`BOOT_EXTENS
 
 ### Distro 選擇（build-time、hard-baked）
 
-Dockerfile 的 `ARG ROS_DISTRO=humble` 接到 `setup.conf [build]`。Build 時值會被寫進 `/etc/isaac/ros-distro`，且 `script/isaac-ros-env-wrapper.sh` 會 install 到 `/usr/local/bin/`。`headless` 與 `stream` 兩個 stage 把 `ENTRYPOINT` 設成這個 wrapper — 每次 container 啟動時 wrapper 從 baked file 讀取並無條件 re-export `ROS_DISTRO` 與 `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib`，因此 production paths 上的 runtime `-e ROS_DISTRO=...` flag **無效**。
+Dockerfile 的 `ARG ROS_DISTRO=humble` 接到 `setup.toml [[build.args]]`。Build 時值會被寫進 `/etc/isaac/ros-distro`，且 `script/isaac-ros-env-wrapper.sh` 會 install 到 `/usr/local/bin/`。`headless` 與 `stream` 兩個 stage 把 `ENTRYPOINT` 設成這個 wrapper — 每次 container 啟動時 wrapper 從 baked file 讀取並無條件 re-export `ROS_DISTRO` 與 `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib`，因此 production paths 上的 runtime `-e ROS_DISTRO=...` flag **無效**。
 
 `devel` stage 透過 Dockerfile `ENV` soft-bake 同樣兩個值（互動 shell 預設拿到，devs 仍可 `export ROS_DISTRO=...` 實驗）。
 
@@ -331,7 +331,7 @@ container 不回報 health 狀態（`HEALTHCHECK NONE`）。NGC base image 的 h
 
 ## EULA
 
-`ACCEPT_EULA=Y` 與 `PRIVACY_CONSENT=Y` 透過 `setup.conf [environment]` 注入。注意：Isaac Sim 6.x 用 `OMNI_ENV_PRIVACY_CONSENT` 讀取 privacy consent（此名稱自 5.1 起採用，跟 5.1 之前的版本不同）；目前設的 `PRIVACY_CONSENT=Y` 無害但實際沒作用，要 telemetry opt-in 請另設正確的變數。
+`ACCEPT_EULA=Y` 與 `PRIVACY_CONSENT=Y` 透過 `setup.toml [environment]` 注入。注意：Isaac Sim 6.x 用 `OMNI_ENV_PRIVACY_CONSENT` 讀取 privacy consent（此名稱自 5.1 起採用，跟 5.1 之前的版本不同）；目前設的 `PRIVACY_CONSENT=Y` 無害但實際沒作用，要 telemetry opt-in 請另設正確的變數。
 
 ## Smoke Tests
 
@@ -355,7 +355,7 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 系統的 `python3` 無法安裝這些套件（Isaac base image 的 PEP 668 擋 `pip`）— 一律走 `/isaac-sim/python.sh -m pytest ...`，不要用 `pytest ...`。
 
-GPU integration test（需要 Isaac Sim 真的開機，例如 Jetbot 的無頭整合測試）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.conf` 的 `[stage:devel-test]` override（`deploy.gpu_mode = force`，base #493）：
+GPU integration test（需要 Isaac Sim 真的開機，例如 Jetbot 的無頭整合測試）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \

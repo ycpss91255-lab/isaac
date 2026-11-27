@@ -7,7 +7,7 @@ Kit can exit directly in app.close(), so the tests read the runner's stdout
 markers. The fixture allows one logged retry within the GPU CI policy.
 
 Run inside the GPU-enabled test container (requires the
-``[stage:devel-test] deploy.gpu_mode = force`` setup.conf override)::
+``["stage:devel-test"] "deploy.gpu_mode" = "force"`` setup.toml override)::
 
     ./script/run.sh -t test -- /isaac-sim/python.sh -m pytest \
         <repo>/test/integration/pytest/test_example_gpu_integration.py -s
