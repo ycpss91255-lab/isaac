@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
-イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。NVIDIA Isaac Lab 3.0（`v3.0.0`）も scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）として image に baked。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
+イメージには Isaac Sim 本体と、scene-spawn backend（`sim_utils` spawner；ADR-0018）として使う NVIDIA Isaac Lab 3.0（`v3.0.0`）が含まれます。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
 本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 
@@ -130,6 +130,16 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 - 1 つの image はまだ共有される：毎回の build で lint/bats 用ツール image `test-tools:<base バージョン>`（現在は `test-tools:v0.42.0`）も build され、その名前は pin した base バージョンだけで決まる。同じ base バージョンを pin する host 上のすべての checkout と repo が同じ tag を書き込むため、別の checkout が build 中かもしれないときは削除しないこと。`just docker build --clean-tools` は全員の分をまとめて削除する。これは base の `build.sh` に由来し、上流では [base#1551](https://github.com/ycpss91255-lab/base/issues/1551) で追跡している。
 - isolate 前に起動した container は共有 project に残る。`docker compose -p <hub>-isaac ps -a` で一覧し、自分のものを名前で停止する。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` は共有 project 全体（別の checkout の container を含む）を停止する。
 
+### 複数 instance の並列実行
+
+この repo は checkout ごとに 1 つの instance を起動する設計を採用し、同じ checkout で複数の instance を管理する独自の仕組みを削除した（[ADR-0019](../src/doc/adr/0019-remove-same-repo-multi-instance.md)）。N 個の instance を実行するには、multi_run からこの repo の `compose.yaml` を使って N 回起動する。設計の詳細は [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15) を参照。
+
+- `-p <name>` で instance ごとに異なる compose project 名を指定する。これで `just docker stop` が停止するのは対象の instance だけになり、起動時に前回の instance を誤って引き継ぐことも防げる。
+- 各 instance にはキャッシュとデータを格納する専用の `isaac-sim/` ディレクトリツリーが必要になる。書き込み可能なキャッシュディレクトリを共有すると、実行中の instance の Kit キャッシュが警告なしに破損する。[Cache レイアウト](#cache-レイアウト)を参照。
+- headless で並列実行する場合、ポートの上書きは不要。ポートの上書きが必要なのはストリーミング時のみ。
+
+実用上の同時実行数は GPU の空きメモリで決まる。32607 MiB の GPU で実測したところ、実行中の Isaac instance は 1 つあたり約 3.9 GiB を使用し、6～7 個を同時に実行できる。手元の GPU の空きメモリを GiB に換算し、3.9 で割ると目安がわかる。GPU の演算資源は共有するため、各 instance の実行速度は低下する。
+
 ## ローカルの USD モデルをマウントする
 
 Isaac にはサンプルモデルが同梱されていません。`sim_asset` の USD モデル、または `asset_converter` で変換した USD モデルを使ってください。
@@ -195,7 +205,7 @@ post-run hook はさらに `network.public_ip` を `SIGNALING_SERVER` env とし
 
 ### 決定論的 stream-source producer（GHCR image、isaac#223）
 
-CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)、Tier B browser-frames smoke isaac#173 が消費）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
+CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
 
 - **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin した immutable tag — `:latest` ではない）。`producer` Dockerfile stage から build。
 - **Driver**：`src/script/stream_source_producer.py`、`/opt/isaac-producer/stream_source_producer.py` に bake され、image `CMD` が起動。
@@ -240,40 +250,13 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 必須：NVENC フレームエンコード用の NVIDIA GPU runtime（`--gpus all`）、`--network=host`、非 localhost client には `PUBLIC_IP`。`ISAAC_SIGNAL_PORT` は任意（デフォルト `49100`）。driver は `--public-ip` / `--port` / `--run-seconds N`（`N>0` で smoke run を区切る；デフォルトは永久実行）も受け付ける。
 
-## ROS 2 bridge（内蔵、build-time distro）
+## ROS I/O
 
-Isaac Sim 6.2.0 は Humble と Jazzy 両方の内部 ROS 2 ライブラリを `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` に同梱しており（5.1 では `isaacsim.ros2.bridge/` に配置。6.0 で単一の bridge ext が `isaacsim.ros2.core` + `isaacsim.ros2.nodes` などに分割された）、両方とも kit 内蔵インタプリタと一致する Python 3.12 rclpy。**本イメージは build-time に distro を hard-bake する** — `setup.toml` の `[[build.args]]` で `key = "ROS_DISTRO"` の項目を指定（デフォルトは `value = "humble"`、CoreSAM 整合）。
-
-bridge extension は base `IsaacDriver` が Kit BOOT 時に有効化する（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）。未ロードの場合は sensor setup が runtime に Kit extension manager 経由で有効化するため、BOOT 時の有効化は最適化であり必須ではない（isaac#248）。driver パスでは追加の launch flag は不要。
-
-`setup.toml [environment]` で配線済みの env（distro-agnostic）：
-
-| 変数 | 値 | 理由 |
-|------|-----|------|
-| `ROS_DOMAIN_ID` | `0` | 小規模チームのデフォルト；同一 host を複数ユーザーで共有する場合は変更 |
-| `RMW_IMPLEMENTATION` | `rmw_fastrtps_cpp` | 明示的に FastDDS 指定、host から継承しない |
-| `FASTRTPS_DEFAULT_PROFILES_FILE` | `/isaac-sim/fastdds.xml` | UDPv4 のみの profile（コンテナ間 DDS が信頼可能、SHM の不安定さなし）|
-
-### Distro 選択（build-time, hard-baked）
-
-Dockerfile の `ARG ROS_DISTRO=humble` は `setup.toml [[build.args]]` と配線されている。build 時にこの値が `/etc/isaac/ros-distro` に書き込まれ、`script/isaac-ros-env-wrapper.sh` が `/usr/local/bin/` に install される。`headless` / `stream` stage は `ENTRYPOINT` をその wrapper に設定し、コンテナ起動毎に baked file から `ROS_DISTRO` と `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib` を**無条件**で re-export する — そのため runtime の `-e ROS_DISTRO=...` flag は production path では無効。
-
-`devel` stage は同じ値を Dockerfile `ENV` 経由で soft-bake する（interactive shell ではデフォルトで取得；開発者は `export ROS_DISTRO=...` で実験可能）。
-
-jazzy に切り替えるには：
-
-```bash
-just docker setup remove build.arg "ROS_DISTRO=humble"
-just docker setup add build.arg "ROS_DISTRO=jazzy"
-just docker build           # 新しい ARG で rebuild（影響 layer のみ、~10 秒）
-just docker run -t headless -d
-```
-
-jazzy パスは Isaac の 24.04 自動デフォルト（2029 年まで LTS）に揃う — 既知の caveat：jazzy on noble は Python 3.11/3.12 mix と Nav2 paths まわりが NVIDIA forum で追跡中。本 repo では jazzy パスを Isaac Sim 6.2.0 で再検証していない；検証済みのデフォルトは humble。
+このイメージでは、外部プラグインが ROS 連携を提供します。`ISAAC_IO_PLUGIN` にプラグインの `module:function` を指定すると、ROS I/O が有効になります。
 
 ### コンテナ間 DDS の検証
 
-`just docker run -t headless -d`（humble override env 付き）後、WebRTC client で接続し、Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（container 内に mount された repo の `src/script/`）→ Run。スクリプトは Play を自動押下し（publisher は timeline が再生中のみ発火）、`/isaac/test` に `std_msgs/String "hello N"` を publish 開始。
+`just docker run -t stream -d`後、WebRTC client で接続し、Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（container 内に mount された repo の `src/script/`）→ Run。スクリプトは Play を自動押下し（publisher は timeline が再生中のみ発火）、`/isaac/test` に `std_msgs/String "hello N"` を publish 開始。
 
 同一 host の別 terminal で：
 
@@ -345,7 +328,7 @@ just docker stop                           # cleanup
 
 ### Python 出力 API（isaac#365）
 
-`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。モードは `ISAAC_OUTPUT_MODE`（既定 `python`、`ros` は未接続、ADR-0025 参照）で決まります。
+`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。`ISAAC_OUTPUT_MODE` がサポートする値は既定値の `python` のみです。`ros` を含む他の値を指定すると `ValueError` が発生します。ROS 出力は `isaac_ros_io` が `ISAAC_IO_PLUGIN` を通じて提供します（ADR-0025 は新しい決定に置き換えられました）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
@@ -397,6 +380,8 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 詳細は [doc/test/TEST.md](test/TEST.md) を参照。
 
 すべてのテストはちょうど 1 つの範囲グループ（`core`、`gui`、`stream`、`headless`、`docs`）に属します。pytest モジュールは `pytestmark = pytest.mark.<グループ>`（1 グループだけ実行するには `pytest -m <グループ>`）、bats spec は `# bats file_tags=<グループ>` を書きます。グループのないテストは収集時に失敗します。`test/pytest-baseline.txt` にはグループごとの下限があります。件数は TEST.md のグループ表を参照。
+
+stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージを起動し、赤いテスト用キューブが映ったフレームを Chromium が継続して受信できることを確認します。
 
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 

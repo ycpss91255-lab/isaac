@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 开发环境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身为 `ycpss91255-lab/template`）为基础构建。
 
-Image scope 涵盖 Isaac Sim 本体，加上让其内建 ROS 2 bridge 跨容器通讯所需的 env wiring。NVIDIA Isaac Lab 3.0（`v3.0.0`）也一并 baked 进 image，作为 scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
+镜像包含 Isaac Sim 本体和 NVIDIA Isaac Lab 3.0（`v3.0.0`），后者用作 scene-spawn backend（`sim_utils` spawner；ADR-0018）。`IsaacDriver` 通过 `isaacsim.SimulationApp` 启动 Kit。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
 
 本 repo 同时收纳 Isaac Sim workspace 内容（driver script、ADR、USD 模型）于 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是运行该 workspace 的开发环境。两者原本分属 `ycpss91255-lab/isaac` 与 `ycpss91255-lab/isaac`（research wraps docker via submodule），按 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合并至此。
 
@@ -130,6 +130,16 @@ Kit 每次启动都会打印几种不影响运行的警告：
 - 有一个 image 仍然共用：每次 build 也会 build lint/bats 工具 image `test-tools:<base 版本>`（目前是 `test-tools:v0.42.0`），名称只由 pin 住的 base 版本决定。host 上所有 pin 同一个 base 版本的 checkout 与 repo 都写同一个 tag，所以别的 checkout 可能正在 build 时不要删它。`just docker build --clean-tools` 会替所有人把它删掉。它来自 base 的 `build.sh`，上游追踪在 [base#1551](https://github.com/ycpss91255-lab/base/issues/1551)。
 - isolate 之前启动的 container 还留在共用 project 里。用 `docker compose -p <hub>-isaac ps -a` 列出，按名称停掉自己的。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` 会停掉整个共用 project，包含别的 checkout 的 container。
 
+### 运行多个 instance
+
+本 repo 默认每个 checkout 只运行一个 instance，这是有意的设计。原先在同一 checkout 内管理多个 instance 的机制已移除（[ADR-0019](../src/doc/adr/0019-remove-same-repo-multi-instance.md)）。要运行 N 个 instance，请通过 multi_run 用本 repo 的 `compose.yaml` 启动 N 次。设计记录见 [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15)。
+
+- 用 `-p <name>` 为每个 instance 指定不同的 compose project 名称，这样 `just docker stop` 只会停止自己的 instance，启动时也不会接管上次遗留的 instance。
+- 每个 instance 都必须有独立的 `isaac-sim/` 缓存和数据目录树。共享可写的缓存目录会损坏正在运行的 instance 的 Kit 缓存，而且不会出现警告。详见 [Cache 路径](#cache-路径)。
+- 并行运行 headless instance 无需覆盖端口配置。只有串流时才需要覆盖。
+
+实际能运行多少个 instance 取决于可用显存。在一张 32607 MiB 的显卡上实测，每个运行中的 Isaac instance 约占 3.9 GiB，可同时运行 6–7 个。将显卡的可用显存换算成 GiB 再除以 3.9，即可估算数量。多个 instance 共享 GPU 算力，因此每个都运行得更慢。
+
 ## 挂载本地 USD 模型
 
 Isaac 不附带示例模型。请使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的转换输出。
@@ -195,7 +205,7 @@ post-run hook 同时也把 `network.public_ip` 当 `SIGNALING_SERVER` env 传给
 
 ### 确定性 stream-source producer（GHCR image，isaac#223）
 
-给 CI 与浏览器版视觉 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)，由 Tier B browser-frames smoke isaac#173 消费）用的一个可 pull、pin 版号的 producer image，不需要开一个桌面 Isaac session 就能提供*保证非全黑*的 WebRTC 来源。开机时它渲染一个确定性的空但打光的场景 — dome + distant key light 打在 12×12 棋盘格地板上，相机取景在 `eye=[15,-15,11]` — 并永久 livestream，所以浏览器随时连上都看到可重现的画面。整个场景以程序化方式生成（无外部 asset），image 自给自足。
+给 CI 与浏览器版视觉 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)）用的一个可 pull、pin 版号的 producer image，不需要开一个桌面 Isaac session 就能提供*保证非全黑*的 WebRTC 来源。开机时它渲染一个确定性的空但打光的场景 — dome + distant key light 打在 12×12 棋盘格地板上，相机取景在 `eye=[15,-15,11]` — 并永久 livestream，所以浏览器随时连上都看到可重现的画面。整个场景以程序化方式生成（无外部 asset），image 自给自足。
 
 - **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin 的 immutable tag — 非 `:latest`）。由 `producer` Dockerfile stage build。
 - **Driver**：`src/script/stream_source_producer.py`，baked 在 `/opt/isaac-producer/stream_source_producer.py`，由 image `CMD` 启动。
@@ -240,40 +250,13 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 必要条件：NVIDIA GPU runtime（`--gpus all`）做 NVENC 编码、`--network=host`、非 localhost client 需要 `PUBLIC_IP`。`ISAAC_SIGNAL_PORT` 可选（默认 `49100`）。driver 也接受 `--public-ip` / `--port` / `--run-seconds N`（`N>0` 界定 smoke run；默认永久运行）。
 
-## ROS 2 bridge（内置，build-time distro）
+## ROS I/O
 
-Isaac Sim 6.2.0 在 `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` 内置 Humble 与 Jazzy 两套 ROS 2 lib（5.1 时放在 `isaacsim.ros2.bridge/`；6.0 把单一 bridge ext 拆成 `isaacsim.ros2.core` + `isaacsim.ros2.nodes` 等），两者都是 Python 3.12 rclpy，与 kit 内嵌 interpreter 对齐。**本 image 在 build time 把 distro hard-bake 进去** — 透过 `setup.toml` 中 `key = "ROS_DISTRO"` 的 `[[build.args]]` 条目注入（默认 `value = "humble"`，与 CoreSAM 对齐）。
-
-Bridge extension 由 base `IsaacDriver` 在 Kit BOOT 阶段启用（`BOOT_EXTENSIONS` -> `--enable isaacsim.ros2.bridge` kit args）；若尚未加载，sensor setup 也会在 runtime 通过 Kit extension manager 启用，所以 boot 阶段启用只是优化，不是必要条件（isaac#248）。driver 路径不需要额外 launch flag。
-
-Env wiring 写在 `setup.toml [environment]`（distro-agnostic）：
-
-| 变量 | 值 | 原因 |
-|-----|-------|-----|
-| `ROS_DOMAIN_ID` | `0` | small-team default; bump if multiple users share the host |
-| `RMW_IMPLEMENTATION` | `rmw_fastrtps_cpp` | explicit FastDDS, no inherit from host |
-| `FASTRTPS_DEFAULT_PROFILES_FILE` | `/isaac-sim/fastdds.xml` | UDPv4-only profile (cross-container DDS reliable, no SHM flakiness) |
-
-### Distro 选择（build-time、hard-baked）
-
-Dockerfile 内 `ARG ROS_DISTRO=humble`，由 `setup.toml [[build.args]]` 串进来。Build time 时该值写入 `/etc/isaac/ros-distro`，并把 `script/isaac-ros-env-wrapper.sh` 装到 `/usr/local/bin/`。`headless` / `stream` stage 把 `ENTRYPOINT` 设成该 wrapper，每次 container 起来都从 baked file 无条件 re-export `ROS_DISTRO` 与 `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib` — 因此 production path 上 runtime 的 `-e ROS_DISTRO=...` flag 不会生效。
-
-`devel` stage 透过 Dockerfile `ENV` 做 soft-bake（互动 shell 默认带这两个值；developer 可 `export ROS_DISTRO=...` 临时实验）。
-
-切到 jazzy：
-
-```bash
-just docker setup remove build.arg "ROS_DISTRO=humble"
-just docker setup add build.arg "ROS_DISTRO=jazzy"
-just docker build           # 用新 ARG 重 build（只重 build 受影响 layer，~10s）
-just docker run -t headless -d
-```
-
-jazzy path 与 Isaac 在 24.04 上的 auto-default 对齐（LTS until 2029）— 已知坑：jazzy on noble 有 Python 3.11/3.12 混用与 Nav2 path 粗糙问题，仍在 NVIDIA 论坛追踪中。本 repo 尚未在 Isaac Sim 6.2.0 上重新验证 jazzy path；humble 是已验证的默认值。
+镜像本身不提供 ROS 集成。将 `ISAAC_IO_PLUGIN` 设为外部插件的 `module:function` 即可启用 ROS I/O。
 
 ### 验证 cross-container DDS
 
-跑 `just docker run -t headless -d`（已带 humble override env）并用 WebRTC client 连上后，开 Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（即 repo 的 `src/script/`，mount 在容器内的位置）→ Run。脚本会自动按 Play（publisher 只在 timeline 播放时触发），开始在 `/isaac/test` 发布 `std_msgs/String "hello N"`。
+跑 `just docker run -t stream -d`并用 WebRTC client 连上后，开 Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（即 repo 的 `src/script/`，mount 在容器内的位置）→ Run。脚本会自动按 Play（publisher 只在 timeline 播放时触发），开始在 `/isaac/test` 发布 `std_msgs/String "hello N"`。
 
 在同一 host 另一个 terminal：
 
@@ -345,7 +328,7 @@ just docker stop                           # cleanup
 
 ### Python 输出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。模式由 `ISAAC_OUTPUT_MODE` 决定（默认 `python`；`ros` 尚未接入，见 ADR-0025）。
+`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。`ISAAC_OUTPUT_MODE` 仅支持默认值 `python`。其他值（包括 `ros`）都会引发 `ValueError`。`isaac_ros_io` 通过 `ISAAC_IO_PLUGIN` 提供 ROS 输出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
@@ -397,6 +380,8 @@ out.step(sim_time_seconds)
 详见 [doc/test/TEST.md](test/TEST.md)。
 
 每个测试只属于一个范围组别（`core`、`gui`、`stream`、`headless`、`docs`）：pytest 模块设置 `pytestmark = pytest.mark.<组别>`（用 `pytest -m <组别>` 只跑一组），bats spec 写 `# bats file_tags=<组别>`。没有组别的测试会让收集失败。`test/pytest-baseline.txt` 每组各有一个下限。各组数量见 TEST.md 的组别表。
+
+stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromium 持续收到能看到红色测试方块的视频帧。
 
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 

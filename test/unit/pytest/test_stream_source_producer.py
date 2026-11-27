@@ -40,6 +40,8 @@ from unittest.mock import Mock
 
 import pytest
 
+from gpu_pin import GPU_REUSABLE
+
 pytestmark = pytest.mark.stream
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -235,11 +237,6 @@ def test_dockerfile_does_not_copy_custom_kits():
 
 _PUBLISH_WF = _REPO_ROOT / ".github" / "workflows" / "publish-stream-source.yaml"
 _PUBLISH_SCRIPT = _REPO_ROOT / "script" / "ci" / "publish_stream_source.sh"
-# Every self-hosted job in the org goes through this one reusable workflow
-# (the runner group is locked to it); it targets the self-hosted GPU pool.
-_GPU_REUSABLE = (
-    "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0"
-)
 
 
 def _publish_workflow():
@@ -259,7 +256,7 @@ def _publish_commands():
 
 def test_publish_runs_where_kit_can_boot():
     job = _publish_job()
-    assert job.get("uses") == _GPU_REUSABLE, (
+    assert job.get("uses") == GPU_REUSABLE, (
         "the publish job must run where Kit can actually boot -- the org GPU "
         "reusable workflow; on a hosted runner nothing can prove the image "
         "streams (isaac#252)"

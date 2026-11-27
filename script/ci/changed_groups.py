@@ -75,6 +75,8 @@ _DOCS = (
 _PATH_RULES = (
     ("stream", (
         "script/ci/stream_smoke*",
+        "script/ci/stream_visual_e2e*.sh",
+        "script/ci/visual_e2e/*",
         "script/ci/producer_smoke.sh",
         "script/ci/publish_stream_source.sh",
         "script/ci/sync_producer_versions.py",
