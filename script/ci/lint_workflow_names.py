@@ -75,7 +75,7 @@ def workflow_files(root):
 
 
 def _title(feature):
-    return " ".join(word.capitalize() for word in feature.split("-"))
+    return " ".join(("E2E" if word == "e2e" else word.capitalize()) for word in feature.split("-"))
 
 
 def _is_ci(filename):

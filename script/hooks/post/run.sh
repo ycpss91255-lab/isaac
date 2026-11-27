@@ -45,6 +45,8 @@ done
 
 [ "${target}" = "stream" ] || exit 0
 [ "${detach}" -eq 1 ] || exit 0
+# The visual job supplies its own Kit configuration and stream-only viewer.
+[ "${ISAAC_SKIP_STREAM_POST_RUN:-0}" = 1 ] && exit 0
 
 repo_root="${FILE_PATH:-$(pwd -P)}"
 

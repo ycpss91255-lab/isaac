@@ -31,7 +31,7 @@ This follows the org's existing habit: base names its files by function
    `ci-<group>-<what>.yaml`, e.g. `ci-stream-smoke.yaml`. CI path rules rely on
    that: a change to `ci-stream-*` selects the stream group.
 2. **Display name** (`name:`): `<Category>: <Feature Words>`, the feature words
-   of the file name in Title Case. `ci-stream-smoke.yaml` is `CI: Stream Smoke`.
+   of the file name in Title Case. Write the acronym `E2E` in uppercase. `ci-stream-smoke.yaml` is `CI: Stream Smoke`.
    Categories are written `CI`, `Release`, `Bot`, `Tool`. No parenthesised
    notes.
 3. **Job id**: lowercase kebab-case. No `call-` prefix (the id says what the job
