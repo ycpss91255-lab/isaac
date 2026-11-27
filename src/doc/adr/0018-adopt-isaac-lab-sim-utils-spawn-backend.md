@@ -1,5 +1,7 @@
 # Adopt Isaac Lab `sim_utils` as the Scene-Spawn Backend
 
+Status: Superseded by ADR-0026 (2026-11-27)
+
 The M2 MVP (#146) shipped the `isaac_devkit` scene layer built on **raw `pxr.Usd`**:
 `scene.build_scene` spawns ground / lights / robot / object prims with `stage.DefinePrim` +
 `GetReferences().AddReference` + variant selection, and `model_import.import_urdf` wraps the
