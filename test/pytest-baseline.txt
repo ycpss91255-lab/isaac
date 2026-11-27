@@ -400,7 +400,9 @@ HOSTED_UNIT_BASELINE_DOCS = 44
 #   The OutputHub GPU delivery test (#365 part 2) adds 4 in-container
 #   (test_output_hub_gpu.py: RGB uint8 (H,W,3), depth float32 (H,W), joint
 #   state, IMU w,x,y,z, all from one runner boot). +4 on top of main (32 -> 36, a ratchet UP).
-#   NOT executed locally; first proof is the CI gpu-integration job.
+#   Executed on a real GPU (isaac#384, Isaac Sim 6.2.0.1, devel-test image):
+#   4 passed / 0 skipped, so the 4 count as passed, not skipped; the GPU
+#   baseline equals the collected count (no raise needed).
 # isaac#326 unit 1: test_scaffold_smoke.py (3 tests) removed with the scaffold
 #   -- intentional ratchet DOWN 35 -> 32.
 # isaac#422: test_kit_extra_args_integration.py (2 tests) -- ratchet UP 36 -> 38.
