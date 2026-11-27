@@ -8,7 +8,7 @@ Run inside the headless container:
 
     cd isaac_ws/src/docker
     just docker exec -t headless /isaac-sim/python.sh \
-        /home/yunchien/work/src/script/standalone_livestream_smoke.py
+        /home/<user>/work/src/script/standalone_livestream_smoke.py
 
 While the script is running, browse to:
 
