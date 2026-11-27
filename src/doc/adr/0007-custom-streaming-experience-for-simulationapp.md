@@ -22,19 +22,19 @@ The camera-bot example driver (and every future driver in this repo) is `Simulat
 
 ## Considered Options
 
-- **(a) Pass `experience="/isaac-sim/apps/isaacsim.exp.full.streaming.kit"` to `SimulationApp(...)`** — reuse what `runheadless.sh` uses. Tested live: WebRTC server *does* start (`Streaming server started.` in stdout), then the Kit native code segfaults shortly after, no Python traceback (`PythonTracebackStatus = ''`). Reproducible across both the default non-root user and `docker exec -u 0` runs, with and without `WARP_CACHE_PATH` / `--portable-root` overrides. The full streaming experience is built around the `kit` binary's direct-launch path (note its `execFile = "isaac-sim.streaming"` and `--no-window` arg in `isaac-sim.streaming.sh`); something in the full bundle is incompatible with the `SimulationApp` Python launcher's stdin / process / signal model.
+- **(a) Pass `experience="/isaac-sim/apps/isaacsim.exp.full.streaming.kit"` to `SimulationApp(...)`** — reuse what `runheadless.sh` uses. The May 2026 record for Isaac Sim 5.1.0 (Kit 107) quotes `Streaming server started.` and reports a subsequent segfault in a non-root run. No crash log was kept. The root run was reported as exit status 139; the cause was not confirmed in this repo (no log kept). On 2026-11-27, 3/3 non-root runs (UID 1234) on Isaac Sim 6.2.0.1 started the server and exited cleanly. Kit logged `Started primary stream server on signal port 49521`. Client connection and default port 49100 were untested (#473, #485).
 - **(b) Custom experience `isaacsim.exp.base.python.streaming.kit`** (**chosen**) — file is `isaacsim.exp.base.python.kit`'s structure (depends on `isaacsim.exp.base`, Python-friendly settings.app.* block, fast boot) with two added dependencies (`omni.kit.livestream.core`, `omni.kit.livestream.webrtc`) and a `[settings.app.livestream]` block lifted from `full.streaming.kit`. Shipped by `ycpss91255-docker/isaac` under `/isaac-sim/apps/`, COPY'd in the `devel` stage so all derived targets (headless, gui, standalone) see it.
 - **(c) Env-var wrapper** — e.g. set `LIVESTREAM=2 + PUBLIC_IP=127.0.0.1` before `python.sh` (the pattern IsaacLab discussion #4361 mentions). Tested: the env vars are honored by experiences that already load the livestream extensions, but they do not *add* extensions to a Python base experience that doesn't have them. So this is orthogonal — would need to be combined with (a) or (b) to be useful, and on its own doesn't bridge the gap.
 - **(d) Skip livestream entirely** — verify drivers via ROS 2 topics, give up the Streaming Client view. This was the actual state of the system from PR-A / PR-B of ADR-0005 onward, until live verification (Update section of ADR-0005) surfaced that the visual end-to-end never worked. Demoting the Streaming Client to "nice to have" loses the LLM-friendly view-on-demand premise of ADR-0005.
 
 ## Why (b)
 
-Each rejected option fails on a different axis:
+The comparison below records the May 2026 decision on Isaac Sim 5.1.0. For the 6.2.0.1 startup result, see option (a) above.
 
 | Constraint | (a) full | (b) custom (chosen) | (c) env-only | (d) skip livestream |
 |---|---|---|---|---|
-| `SimulationApp` doesn't native-crash | **no** | yes | yes (but useless alone) | yes |
-| Streaming Client sees driver's scene | n/a (crashes) | yes | no (no streaming exts) | no |
+| `SimulationApp` doesn't native-crash | **no** (on 5.1.0, per the May 2026 record) | yes | yes (but useless alone) | yes |
+| Streaming Client sees driver's scene | n/a (crashed on 5.1.0, per the May 2026 record) | yes | no (no streaming exts) | no |
 | Boot cost (extensions loaded) | ~200 | ~32 | base default | base default |
 | Maintenance surface (custom file to keep in sync with NVIDIA) | 0 | 1 file (~50 lines) | 0 | 0 |
 | Survives NVIDIA bumping ext / experience minor versions | yes | yes (extension names are stable) | yes | yes |
