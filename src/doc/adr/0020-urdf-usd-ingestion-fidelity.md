@@ -1,5 +1,8 @@
 # URDF -> USD Ingestion Fidelity and Pipeline Policy
 
+> [ADR-0026](0026-drop-isaac-lab-dependency.md) moved responsibility for URDF
+> import to `asset_converter`. `isaac` only consumes the converted USD.
+
 ADR-0018 decision 6 re-based `model_import` onto Isaac Lab `UrdfConverterCfg`. That settled the
 *engine*; it did not settle the *ingestion policy* for a real, CAD-originated robot. The base
 repo's `v1.0.0` promise is that a user can take their own robot through the full

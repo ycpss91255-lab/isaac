@@ -4,9 +4,9 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
-イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。NVIDIA Isaac Lab 3.0（`v3.0.0`）も scene-spawn backend（`sim_utils` spawner、`UrdfConverter`、`AppLauncher`；ADR-0018）として image に baked。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
+イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。NVIDIA Isaac Lab 3.0（`v3.0.0`）も scene-spawn backend（`sim_utils` spawner、`AppLauncher`；ADR-0018）として image に baked。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
-本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD / URDF モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
+本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 
 ## 前提条件
 
@@ -113,19 +113,20 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 - `./script/checkout_identity.sh isolate` が `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) を gitignore 済みの `setup.local.toml` に書き込む。image tag・compose project・container 名はすべてこれに従う。`./script/checkout_identity.sh show` でこの checkout の解決結果を表示できる。
 - pre build / run / stop hook は共有名のままでは実行を拒否する。`ISAAC_ALLOW_SHARED_IDENTITY=1` で上書きできる（CI の build ステップが使用）。
 - `just docker run` は既存の image を再 build しない（base#1552）。変更を pull したら `just docker run -t <stage>` の前に `just docker build -t <stage>` を実行する。
-- ディスク使用量：build する checkout または worktree ごとに独自の image セット（`<hub>/isaac-<dir>-<hash>:<stage>`）を持ち、stage tag 1 つあたり名目上約 31 GB。共有されず、checkout ディレクトリを削除しても Docker daemon からは消えない。
-- 削除済み checkout の後始末：`./script/checkout_identity.sh show`（ディレクトリ削除前に実行。`.env.generated` が必要）または `docker images` から `isaac-<dir>-<hash>` の名前を得て、先に一覧表示してから削除する：
+- ディスク使用量：build する checkout または worktree ごとに独自の image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）を持つ。`docker images` に表示される stage tag あたり約 31 GB は名目上のサイズ。共有レイヤーがあるため、tag を削除して実際に回収できる容量はそれより少ない。checkout ディレクトリを削除しても image は Docker daemon に残る。
+- 削除済み checkout の後始末：`./script/checkout_identity.sh show`（ディレクトリ削除前に実行。`.env.generated` が必要）または `docker images` から `isaac-<dir>-<hash>` の名前を確認する。`PROJECT_NAME` を独自に設定すると `<hub>-<slug>` と異なる場合がある。ラベルの出力から削除済み checkout の image を探し、その行の project 名をコピーする。
 
   ```bash
-  SLUG=isaac-<dir>-<hash>   # 正確な名前。例: "image: <hub>/<SLUG>:<stage>" から
-  HUB=<hub>                 # その image 名の <hub> 部分
-  docker ps -a --filter "label=com.docker.compose.project=${HUB}-${SLUG}" --format '{{.Names}}'
-  docker ps -aq --filter "label=com.docker.compose.project=${HUB}-${SLUG}" | xargs -r docker rm -f
+  SLUG='isaac-<dir>-<hash>'   # 正確な名前。例: "image: <hub>/<SLUG>:<stage>" から
+  docker ps -a --format '{{.Label "com.docker.compose.project"}}  {{.Image}}  {{.Names}}'
+  PROJECT='<project>'
+  docker ps -a --filter "label=com.docker.compose.project=${PROJECT}" --format '{{.Names}}'
+  docker ps -aq --filter "label=com.docker.compose.project=${PROJECT}" | xargs -r docker rm -f  # 実行中のコンテナを強制終了するため、checkout がもう存在しない場合のみ実行する。現存する checkout には使わないこと
   docker images --filter "reference=*/${SLUG}:*"
-  docker images -q --filter "reference=*/${SLUG}:*" | xargs -r docker rmi
+  docker images --filter "reference=*/${SLUG}:*" --format '{{.Repository}}:{{.Tag}}' | xargs -r docker rmi
   ```
 
-  filter は slug の完全一致のみ。`isaac*` に広げたり `docker image prune -a` を実行したりしない：共有の `test-tools:<base バージョン>` image（次の項目）はこの手順で削除してはならない。
+  filter は project と image の slug をそれぞれ完全一致で指定する。`docker rmi` で tag を外しても、別の checkout が使う共有レイヤーの容量は、それを参照する最後の tag がなくなるまで解放されない。`isaac*` に広げたり `docker image prune -a` を実行したりしない：共有の `test-tools:<base バージョン>` image（次の項目）はこの手順で削除してはならない。
 - 1 つの image はまだ共有される：毎回の build で lint/bats 用ツール image `test-tools:<base バージョン>`（現在は `test-tools:v0.42.0`）も build され、その名前は pin した base バージョンだけで決まる。同じ base バージョンを pin する host 上のすべての checkout と repo が同じ tag を書き込むため、別の checkout が build 中かもしれないときは削除しないこと。`just docker build --clean-tools` は全員の分をまとめて削除する。これは base の `build.sh` に由来し、上流では [base#1551](https://github.com/ycpss91255-lab/base/issues/1551) で追跡している。
 - isolate 前に起動した container は共有 project に残る。`docker compose -p <hub>-isaac ps -a` で一覧し、自分のものを名前で停止する。`ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` は共有 project 全体（別の checkout の container を含む）を停止する。
 
@@ -294,7 +295,7 @@ kit terminal に `[ros2_test_sub] /host/test <- 'hello-from-host'` と出力さ�
 
 #### 追加の Kit 引数（`ISAAC_KIT_EXTRA_ARGS`）
 
-`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`example_driver.py`、`model_import`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -305,7 +306,7 @@ ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver
 
 #### 起動プラグイン（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`example_driver.py`、`model_import`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
