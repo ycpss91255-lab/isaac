@@ -205,7 +205,7 @@ post-run hook はさらに `network.public_ip` を `SIGNALING_SERVER` env とし
 
 ### 決定論的 stream-source producer（GHCR image、isaac#223）
 
-CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)、Tier B browser-frames smoke isaac#173 が消費）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
+CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
 
 - **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin した immutable tag — `:latest` ではない）。`producer` Dockerfile stage から build。
 - **Driver**：`src/script/stream_source_producer.py`、`/opt/isaac-producer/stream_source_producer.py` に bake され、image `CMD` が起動。
@@ -380,6 +380,8 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 詳細は [doc/test/TEST.md](test/TEST.md) を参照。
 
 すべてのテストはちょうど 1 つの範囲グループ（`core`、`gui`、`stream`、`headless`、`docs`）に属します。pytest モジュールは `pytestmark = pytest.mark.<グループ>`（1 グループだけ実行するには `pytest -m <グループ>`）、bats spec は `# bats file_tags=<グループ>` を書きます。グループのないテストは収集時に失敗します。`test/pytest-baseline.txt` にはグループごとの下限があります。件数は TEST.md のグループ表を参照。
+
+stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージを起動し、赤いテスト用キューブが映ったフレームを Chromium が継続して受信できることを確認します。
 
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 
