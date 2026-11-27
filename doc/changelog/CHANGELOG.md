@@ -6,7 +6,7 @@
 
 - **移除 `isaac_devkit` 內建的 ROS 2 I/O（isaac#276）。** `IsaacDriver` 預設只啟用 `isaacsim.core.nodes`。ROS I/O 由 `ISAAC_IO_PLUGIN` 載入外部插件，所需的 Kit 擴充套件可透過 `ISAAC_KIT_EXTRA_ARGS` 啟用。感測器仍接受並驗證 YAML 的 `ros:` 欄位，建立後回傳 USD prim 或掛載路徑。camera_bot 範例改為建立相機並執行模擬迴圈。
   - `isaac_ros_io` 移植時可從本次移除前的 `origin/main` 提取訂閱與感測器發布的 OmniGraph 實作。兩個檔案均保存在提交 `170de8c`。[ros_io.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/ros_io.py) · [sensor_ros.py](https://github.com/ycpss91255-lab/isaac/blob/170de8c/framework/isaac_devkit/sensor_ros.py)
-  - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 30 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 606 例（core 565），Bats 共 203 例（core 109）。
+  - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 30 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 676 例（core 583），Bats 共 209 例（core 115）。
 
 ### Fixed
 - **修正四種語言 README 中已刪除 checkout 的清理步驟（isaac#381）。** 從容器標籤確認 compose project，並在強制移除容器的指令旁註明僅限 checkout 已不存在時使用。補充每個 stage tag 的名義大小，以及共用層對實際回收空間的影響。

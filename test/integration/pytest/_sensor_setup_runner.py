@@ -70,9 +70,9 @@ def _do_setup(args, app) -> int:
         # the printed marker line.
         print(f"[RAISED] {type(exc).__name__}: {exc}", flush=True)
         return 1
-    # IsaacSensorCreateImuSensor returns (False, None) on Isaac Sim 6.2
-    # and creates no prim. The IMU issue is tracked separately.
-    if get_category(cfg) in ("camera", "lidar") and not stage.GetPrimAtPath(result).IsValid():
+    # IsaacSensorCreateImuSensor returns (False, None) and creates no prim on
+    # Isaac Sim 6.2. See https://github.com/ycpss91255-lab/isaac/issues/520
+    if get_category(cfg) != "imu" and not stage.GetPrimAtPath(result).IsValid():
         raise AssertionError(f"setup_sensor returned a missing prim: {result}")
     for graph_root in ("/World/CameraGraphs", "/World/SensorGraphs"):
         if stage.GetPrimAtPath(graph_root).IsValid():

@@ -14,6 +14,20 @@ _PACKAGE_DIR = (
     Path(__file__).resolve().parents[3] / "framework" / "isaac_devkit"
 )
 
+_ROS_IMPORT_GUARD = textwrap.dedent("""\
+    import sys
+    from importlib.abc import MetaPathFinder
+
+    class RosImportGuard(MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if (fullname.partition(".")[0] == "rclpy" or
+                    fullname.startswith(("isaacsim.ros2", "rosidl_"))):
+                raise ImportError(f"Blocked ROS import: {fullname}")
+            return None
+
+    sys.meta_path.insert(0, RosImportGuard())
+""")
+
 
 def _is_banned(name):
     root = name.partition(".")[0]
@@ -76,10 +90,9 @@ def test_detector_ignores_unrelated_imports():
 
 
 def test_importing_entire_devkit_leaves_process_ros_free():
-    probe = textwrap.dedent("""\
+    probe = _ROS_IMPORT_GUARD + textwrap.dedent("""\
         import importlib
         import pkgutil
-        import sys
 
         def check_modules(after):
             leaked = sorted(name for name in sys.modules if
@@ -100,6 +113,19 @@ def test_importing_entire_devkit_leaves_process_ros_free():
         capture_output=True, text=True, timeout=30,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_import_guard_blocks_ros_dependency(tmp_path):
+    package = tmp_path / "ros_dependent"
+    package.mkdir()
+    (package / "__init__.py").write_text("import rclpy\n", encoding="utf-8")
+    probe = _ROS_IMPORT_GUARD + "import ros_dependent\n"
+    result = subprocess.run(
+        [sys.executable, "-c", probe], cwd=tmp_path,
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode != 0
+    assert "ImportError: Blocked ROS import: rclpy" in result.stderr, result.stderr
 
 
 def test_default_boot_extensions_do_not_request_ros(monkeypatch):

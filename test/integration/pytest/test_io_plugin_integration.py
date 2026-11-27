@@ -1,9 +1,9 @@
 """ISAAC_IO_PLUGIN reaches the stage through IsaacDriver.run (isaac#423).
 
-With the variable set, a fake plugin defines a marker prim on the official
-Jetbot stage and the prim exists once the timeline is playing. Without it,
-no ``rclpy`` / ``isaacsim.ros2*`` module is imported. Asserted via stdout
-markers (Kit's ``app.close`` calls ``_exit(0)``).
+With the default boot extensions, the marker prim appears on the Jetbot
+stage only when the fake plugin is configured. Both runs check that no
+``rclpy`` or ``isaacsim.ros2*`` modules are loaded. The runner reports via
+stdout because Kit's ``app.close`` calls ``_exit(0)``.
 """
 
 import os
@@ -29,6 +29,7 @@ SUBPROC_TIMEOUT_SEC = 240
 
 def _run(plugin):
     env = {k: v for k, v in os.environ.items() if k != "ISAAC_IO_PLUGIN"}
+    env.setdefault("ISAAC_LIVESTREAM", "0")
     env["PYTHONPATH"] = os.pathsep.join(
         [str(HERE)] + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else [])
     )
@@ -45,9 +46,11 @@ def _run(plugin):
 def test_plugin_marker_prim_exists_after_play():
     out = _run("_io_plugin_marker:make_marker")
     assert "[MARKER_PRIM] True" in out, out[-1000:]
+    assert "[ROS_MODULES] []" in out, out[-1000:]
 
 
 def test_no_plugin_imports_no_ros_modules():
     out = _run(None)
+    assert "[BOOT_EXT] ('isaacsim.core.nodes',)" in out, out[-1000:]
     assert "[MARKER_PRIM] False" in out, out[-1000:]
     assert "[ROS_MODULES] []" in out, out[-1000:]

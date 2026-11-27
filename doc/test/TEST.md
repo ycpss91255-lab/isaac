@@ -1,6 +1,6 @@
 # TEST.md
 
-**209 tests** total (bats). Hosted pytest collects **675 tests**.
+**209 tests** total (bats). Hosted pytest collects **676 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 115 | 582 | 30 | 727 |
+| core | 115 | 583 | 30 | 728 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
@@ -364,7 +364,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **675 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **676 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -377,7 +377,7 @@ The hosted suite collects **675 tests** on a host without Isaac Sim. CI runs `te
 | `test_output.py` | 8 | `isaac_devkit.output.setup_output` (isaac#365 / #366): spec defaults, python mode builds readers (monkeypatched), unset -> python, invalid mode raises, `step` / `unregister`, `ros` raises `NotImplementedError`, `OutputModeError` hierarchy. |
 | `test_stamp.py` | 4 | `isaac_devkit.stamp.split_stamp` (isaac#365, Bug 1 regression): `1.0 - 1e-10 -> (1, 0)` nanosecond carry, exact values, strictly increasing `(sec, nanosec)` pairs across second boundaries, `0 <= nanosec < 1e9` for seeded random times. |
 | `test_buffers.py` | 7 | `isaac_devkit.buffers.to_u8_buffer` (isaac#365, Bug 2 regression): a float32 depth image is 4 bytes per pixel and equals `tobytes()`, uint8 RGB round-trips, returns `array.array('B')`, accepts stdlib buffers, and the non-contiguous contract (strided / Fortran-ordered input raises `ValueError`, `np.ascontiguousarray` input passes). Needs `numpy` (installed by `assert_pytest_baseline.sh`). |
-| `test_no_ros_import_in_devkit.py` | 30 | 逐檔檢查原始碼（含註解與 docstring）沒有 `rclpy` 或 `isaacsim.ros2`。在新的 Python 程序中匯入整個套件及所有子模組，逐次確認未載入 ROS 模組。另檢查預設 Kit 擴充套件、已移除的兩個模組及三個公開名稱。 |
+| `test_no_ros_import_in_devkit.py` | 31 | 逐檔檢查原始碼（含註解與 docstring）沒有 `rclpy` 或 `isaacsim.ros2`。在新的 Python 程序中匯入整個套件及所有子模組，逐次確認未載入 ROS 模組。另檢查預設 Kit 擴充套件、已移除的兩個模組及三個公開名稱。 |
 | `test_default_driver.py` | 8 | `isaac_devkit.default_driver.DefaultSceneDriver` (isaac#336 part 3): the driver a scene launch uses with no user driver. Pins that it is an `IsaacDriver` adding no `setup` / `main` / `shutdown` override, requires a scene path, `_open_stage` order (load scene -> new stage -> `build_scene`), the `run()` order with fake Kit (open stage, defaults, play timeline, tick `app.update()`, close), and Kit-free import. |
 | `test_camera_setup.py` | 27 | Camera surface of `isaac_devkit.sensors` (former `camera_setup.py`): `validate_camera`, unified `load_config`, role -> Camera Helper type, FOV -> aperture math. |
 | `test_sensor_setup.py` | 26 | `isaac_devkit.sensors` (former `sensor_setup.py`): YAML load, shared validation, category dispatch, per-category validation (lidar profile, IMU rigid-body rule), plus `_enable_extensions` through the `omni.kit.app` extension manager with `isaacsim.core.utils` unimportable and a static no-`isaacsim.core.utils`-import scan (isaac#248). |
