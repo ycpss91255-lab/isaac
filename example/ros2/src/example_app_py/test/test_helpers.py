@@ -26,7 +26,7 @@ from sensor_msgs.msg import Image
 
 
 def test_default_topics_match_the_example() -> None:
-    """The defaults match the topics example/sim publishes / subscribes."""
+    """The nodes default to the camera image and velocity command topics."""
     assert DEFAULT_CAMERA_TOPIC == "/camera_bot/camera/color/image_raw"
     assert DEFAULT_CMD_VEL_TOPIC == "/cmd_vel"
 

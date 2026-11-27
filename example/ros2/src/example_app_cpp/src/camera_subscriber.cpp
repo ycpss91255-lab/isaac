@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Camera subscriber node: the app-side consumer of the example camera.
+// Camera subscriber node: the app-side consumer of a simulated camera.
 //
-// Subscribes to the camera topic the base-repo Isaac example publishes
-// (/camera_bot/camera/color/image_raw, sensor_msgs/Image) and logs a
-// one-line summary per frame. This is the inbound half of the ROS 2
+// Subscribes to sensor_msgs/Image on the configured camera topic and logs
+// one line per frame. This is the inbound half of the ROS 2
 // bidirectional topology (ADR-0017 section 6). Replace the callback body
 // with your perception logic; the topic is a parameter so you can point
 // it at a different stream without editing the node.
@@ -29,8 +28,7 @@
 
 namespace
 {
-// The topic the base-repo example publishes (example/sim/config/sensor/
-// custom.yaml: topic_prefix /camera_bot/camera + /color/image_raw).
+// Default image topic for a camera in the /camera_bot namespace.
 constexpr char kDefaultCameraTopic[] =
   "/camera_bot/camera/color/image_raw";
 }  // namespace

@@ -15,10 +15,10 @@
 #   (test/unit/pytest/, no Isaac Sim installed) must collect at least this
 #   many tests and pass them all. M1 gate floor per the DoD is 115; the
 #   count at extraction (#130) was 171 (121 ported + 50 greenfield). The
-#   example sim (#131) adds 14 hosted unit tests (test_example_driver.py:
+#   example sim (#131) added 14 hosted unit tests (removed in #327):
 #   three-file scene merge, expected base_link prim path, cmd_vel
 #   controller mapping, SCENE attr shape, run() lifecycle-order + SIGINT
-#   spy, import-safety). Live count was then 185. The scaffold (#134)
+#   spy, import-safety. Live count was then 185. The scaffold (#134)
 #   adds 23 hosted structure-check tests
 #   (test/unit/pytest/test_new_workspace_scaffold.py: run new-workspace.sh
 #   into a tmp dir and assert the A5 consumer layout -- 16 emitted-file
@@ -147,7 +147,7 @@
 #   repo-relative OpenBase USD path, a wall-clock PeriodicTimer that does
 #   not burst after a stall, run_and_exit turning an exception into exit
 #   code 1) and, for each of the four README-listed standalone scripts, no
-#   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
+#   removed omni.isaac.dynamic_control, no hard-coded /home/<user>, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
 #   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
@@ -285,7 +285,9 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
+# isaac#327: retire 14 bundled-driver tests and add 1 core removal guard (651 -> 638, core 602 -> 589).
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
+# isaac#430 (this PR) removes ROS settings and adds 5 core tests net of retirements: 647 -> 652.
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
 # isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
@@ -296,18 +298,30 @@
 # isaac#479: test_isaac_driver.py 48 -> 57 (SimulationApp launch, streaming-mode
 #   equivalence, 6 _play_timeline cases); live 725.
 # isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
-HOSTED_UNIT_BASELINE = 740
+# isaac#487: +14 name-scan and CI cases, +1 standalone smoke path check,
+#   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
+# isaac#376: the module docstring length check adds one core test (756 -> 757, core 648 -> 649).
+# isaac#359: test_standalone_smoke_matrix.py adds 7 core cases (757 -> 764, core 649 -> 656).
+# isaac#430 re-merge: 764 -> 769 (core 656 -> 661).
+# isaac#173: 新增 32 個 stream 畫面驗證案例與 1 個 core 工作流程案例（769 -> 802）。
+# isaac#173: 新增 1 個 stream 容器清理範圍案例（802 -> 803）。
+# isaac#491 adds 19 core cases (hosted 803 -> 822, core 662 -> 681).
+# isaac#327 (re-merge 2): -14 +1 core (822 -> 809, core 681 -> 668).
+# isaac#442: 65 tracker and bot workflow cases, all core:
+#   809 -> 874, core 668 -> 733.
+HOSTED_UNIT_BASELINE = 874
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
 #   hosted unit test belongs to exactly one group (pytestmark at module level,
 #   enforced at collection by test/group_markers.py and statically by
-#   script/ci/scope_groups.py), so the six floors below sum to
+#   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
+#   以下五組的測試數量下限合計為 809。
 #   collects each group with `-m <group>` and checks it against its own floor.
-#   A group with no tests yet (gui / headless) has floor 0.
+#   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
-#   stream   -- test_stream_source_producer.py
+#   stream   -- test_stream_source_producer.py and test_stream_visual_*.py
 #   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py,
 #               test_stage_names_docs.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
@@ -322,13 +336,23 @@ HOSTED_UNIT_BASELINE = 740
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
+#   isaac#430 adds 5 core cases (core 602 -> 607).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
+#   isaac#414 adds 20 docs cases (docs 24 -> 44).
 #   isaac#338 adds 16 core cases (core 602 -> 618).
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#479: +9 core (test_isaac_driver.py 48 -> 57): core 623 -> 632.
-HOSTED_UNIT_BASELINE_CORE = 632
+#   isaac#487 adds 16 core cases (core 632 -> 648).
+#   isaac#376 adds 1 core case (core 648 -> 649).
+#   isaac#359 adds 7 core cases (core 649 -> 656).
+#   isaac#173 新增串流畫面驗證（hosted 769 -> 802、core 661 -> 662、stream 19 -> 51）。
+#   isaac#173 新增容器清理範圍測試（stream 51 -> 52）。
+#   isaac#491 adds 19 core cases (core 662 -> 681).
+#   isaac#327: -14 +1 core (core 681 -> 668).
+#   isaac#442 adds 65 core cases (core 668 -> 733).
+HOSTED_UNIT_BASELINE_CORE = 733
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 19
+HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
 HOSTED_UNIT_BASELINE_DOCS = 83
@@ -426,6 +450,8 @@ GPU_INTEGRATION_BASELINE = 39
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
+#   isaac#173 的兩組下限原合計 836（802 hosted-unit + 35 GPU-integration），
+#   加入容器清理範圍測試後為 837（803 hosted-unit + 35 GPU-integration）；isaac#327 移除範例後為 844（809 + 35）。
 AGGREGATE_TARGET = 126
 
 # BATS_BASELINE_<GROUP> -- floors for the devel-test bats specs, per group
@@ -433,13 +459,15 @@ AGGREGATE_TARGET = 126
 #   are counted statically from the spec files (test_test_groups.py), so a
 #   spec deleted from one group cannot be hidden by another group's growth.
 #   stream = host_yaml, runheadless_host_config, post_run_hook, post_stop_hook,
-#   stream_smoke_isolation, stream_smoke_lib; every other spec is core. PR2 adds
+#   stream_smoke_isolation, stream_smoke_lib; headless and core cover the remaining specs. PR2 adds
 #   run_bats_spec (8), assert_pytest_baseline_group_spec (7) and one merge_train
 #   test, all core: 90 -> 106.
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
-BATS_BASELINE_CORE = 119
+#   The detached stream post-run skip test raises the stream floor from 81 to 82.
+#   isaac#430 removes 11 core bats tests (119 -> 108).
+BATS_BASELINE_CORE = 108
 BATS_BASELINE_GUI = 0
-BATS_BASELINE_STREAM = 90
+BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13
 BATS_BASELINE_DOCS = 0

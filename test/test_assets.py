@@ -30,8 +30,7 @@ from pathlib import Path
 # Each entry pins: url, filename, sha256 hex digest.
 # The Jetbot is a ~32 MB self-contained USD (chassis + camera prim),
 # hosted on the public Omniverse content S3 bucket.  The 4.2 path is the
-# same binary as 4.5 (identical ETag).  It covers what camera_bot covers
-# today: a robot with a camera prim, loadable headless.
+# same binary as 4.5 (identical ETag). The GPU tests load it headless.
 #
 # Source: NVIDIA Isaac Sim built-in assets
 # License: NVIDIA Omniverse License Agreement (asset redistribution

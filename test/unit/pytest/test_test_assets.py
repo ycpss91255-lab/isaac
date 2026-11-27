@@ -78,7 +78,7 @@ class TestAdapterGpuTestUsesHelper:
         for name in ("test_build_scene_adapter.py", "_build_scene_runner.py"):
             text = (self._PYTEST_DIR / name).read_text()
             assert "example_driver" not in text, name
-            assert "example/sim" not in text, name
+            assert (Path("example") / "sim").as_posix() not in text, name
             assert '"example"' not in text, name
         test_text = (self._PYTEST_DIR / "test_build_scene_adapter.py").read_text()
         assert "fetch_test_asset" in test_text
