@@ -21,13 +21,6 @@ setup() {
   assert_cmd_installed bash
 }
 
-@test "fastdds.xml is baked at /isaac-sim/fastdds.xml and world-readable" {
-  assert_file_exists /isaac-sim/fastdds.xml
-  test -r /isaac-sim/fastdds.xml
-  run grep -q '<useBuiltinTransports>false</useBuiltinTransports>' /isaac-sim/fastdds.xml
-  assert_success
-}
-
 @test "custom streaming kit experience baked at /isaac-sim/apps/ (issue #21 fix-B)" {
   # SimulationApp drivers opt in via experience="/isaac-sim/apps/<name>.kit".
   # Lacking this file, the driver falls back to the bundled

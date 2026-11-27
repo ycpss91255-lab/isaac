@@ -73,20 +73,45 @@ def test_dispatch_rejects_an_unknown_group(cg):
 # -- paths --------------------------------------------------------------------
 
 
-def test_docs_only_pr_touches_only_docs(cg):
-    got = _pr(
-        cg,
-        "README.md",
-        "doc/test/TEST.md",
+@pytest.mark.parametrize(
+    "path",
+    [
         "doc/changelog/CHANGELOG.md",
-        "doc/README.ja.md",
+        "doc/test/TEST.md",
         "src/doc/adr/0011-ci-architecture-with-self-hosted-gpu-runner.md",
-    )
-    assert got == ["docs"]
+        "README.md",
+        "README.zh-TW.md",
+        "doc/README.zh-TW.md",
+        "doc/README.ja.md",
+        "doc/arch/overview.html",
+        "src/doc/adr/figure.png",
+    ],
+)
+def test_docs_only_pr_touches_only_docs(cg, path):
+    groups = _pr(cg, path)
+    assert groups == ["docs"]
+    out = cg.outputs(groups)
+    for flag in ("core", "stream", "headless", "gui", "build"):
+        assert out[flag] == "false", flag
 
 
-def test_framework_change_is_core_only(cg):
-    assert _pr(cg, "framework/isaac_devkit/driver.py") == ["core", "docs"]
+@pytest.mark.parametrize(
+    "path, expected",
+    [
+        ("Dockerfile", ALL),
+        ("framework/isaac_devkit/driver.py", ["core", "docs"]),
+        ("script/ci/stream_smoke.sh", ["stream", "docs"]),
+        ("script/ci/headless_smoke.sh", ["headless", "docs"]),
+        ("script/ci/gui_smoke.sh", ["gui", "docs"]),
+    ],
+)
+def test_image_and_runtime_changes_enable_the_selected_jobs(cg, path, expected):
+    groups = _pr(cg, path)
+    assert groups == expected
+    out = cg.outputs(groups)
+    assert out["build"] == "true"
+    for flag in ("core", "stream", "headless", "gui"):
+        assert out[flag] == ("true" if flag in expected else "false"), flag
 
 
 def test_stream_script_change_is_stream(cg):
