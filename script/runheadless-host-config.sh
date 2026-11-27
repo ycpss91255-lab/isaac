@@ -19,7 +19,7 @@
 #                  fires and Kit is launched later by a separate `exec`,
 #                  so the ports arrive as a file rather than container env.
 #                  Reading it here rather than in each caller (#234) keeps
-#                  CI, the documented `make exec -- -t stream
+#                  CI, the documented `just docker exec -t stream
 #                  /usr/local/bin/runheadless-host-config.sh` path, and any
 #                  future launcher identical, with one owner of the port
 #                  resolution. Caller env wins, so an explicit `-e` still

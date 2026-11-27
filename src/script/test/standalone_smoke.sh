@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test for isaac_ws/src/script/*_standalone.py
 #
-# For each standalone script: launch via ./exec.sh -t standalone, watch
+# For each standalone script: launch via just docker exec -t standalone, watch
 # stdout for the script's "ready marker" phrase, kill once seen. If the
 # marker doesn't appear within TIMEOUT, the case fails.
 #
@@ -70,7 +70,7 @@ fi
 if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
   echo "[smoke] starting standalone container..."
   "$DOCKER_DIR/run.sh" -t standalone -d >/dev/null 2>&1 || {
-    echo "FAIL: ./run.sh -t standalone -d failed" >&2
+    echo "FAIL: just docker run -t standalone -d failed" >&2
     exit 2
   }
   sleep 3

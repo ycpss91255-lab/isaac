@@ -18,7 +18,7 @@ by the runner via ``[KIT LOG]`` (boot-time graphics/compute init lines
 are logged at Info level, which does not reach stdout).
 
 Run inside the GPU-enabled test container (requires the
-``[stage:devel-test] deploy.gpu_mode = force`` setup.conf override):
+``["stage:devel-test"] "deploy.gpu_mode" = "force"`` setup.toml override):
 
     ./script/run.sh -t test -- /isaac-sim/python.sh -m pytest \
         <repo>/test/integration/pytest/test_camera_ros2_headless.py -s
