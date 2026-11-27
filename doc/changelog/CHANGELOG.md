@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
+- **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
 - **調整 `test_sim_version.py` 的 docstring 換行（isaac#376）。** 模組與 `_find_hardcoded_variants` 的 docstring 每行最多 79 個字元。新增一項 core 測試檢查模組 docstring 的行長，hosted 測試基準 756 -> 757，core 648 -> 649。
 - **移除 `.base/` 以外受 Git 追蹤檔案中的個人帳號名稱（isaac#487）。** 可在組織 secret `FORBIDDEN_NAMES` 設定要掃描的名稱，以逗號分隔。獨立掃描步驟與 hosted core 測試都會讀取這份清單，若無法取得 secret（例如來自 fork 的 PR），掃描程式會輸出 `SKIPPED` 並說明略過原因。Core 組改用內含 Git 的 `python:3.12` 映像檔，pytest 只要有一項測試被跳過，CI 就會失敗。Core 組的 pytest 使用 `-rA`，在 CI 日誌中逐行列出每項測試的名稱與結果。新增 16 個 core 測試案例，hosted 測試總數由 740 增至 756，core 由 632 增至 648。
 - **修正 GPU 共用工作流程的版本檢查（isaac#405、#406）。** pytest 統一從 `gpu_pin.py` 的 `GPU_REUSABLE_TAG` 讀取版本，並確認 Dependabot 註解標示目前的 `v0.4.0`。呼叫端清單不符時，錯誤訊息會列出缺少或多出的工作流程，並提示更新清單與文件。版本與呼叫端結構以 pytest 的檢查為準，Bats 的版本檢查改為從 `gpu_pin.py` 讀取同一個 `GPU_REUSABLE_TAG`，並涵蓋全部 4 個呼叫端（含 `ci-headless-smoke.yaml`）。devel-test 映像把 `gpu_pin.py` 一併放進 `/smoke_test/`。升級 tag 需改 4 個工作流程檔、`gpu_pin.py` 與 Dependabot 註解，沒有其他副本。
