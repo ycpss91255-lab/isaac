@@ -9,7 +9,7 @@ the image itself (``/isaac-sim/VERSION``), and the last test stops a literal
 from coming back.
 """
 
-import re
+import ast
 import sys
 from pathlib import Path
 
@@ -56,7 +56,29 @@ def test_default_reads_the_image_install():
     assert sim_version.DEFAULT_VERSION_FILE == Path("/isaac-sim/VERSION")
 
 
-_VARIANT_LITERAL = re.compile(r"""["']isaac_variant["']\s*:\s*["']""")
+def _is_variant_key(node):
+    return isinstance(node, ast.Constant) and node.value == "isaac_variant"
+
+
+def _is_string_literal(node):
+    return isinstance(node, ast.Constant) and isinstance(node.value, str)
+
+
+def _hardcodes_variant(node):
+    if isinstance(node, ast.Dict):
+        return any(
+            _is_variant_key(key) and _is_string_literal(value)
+            for key, value in zip(node.keys, node.values)
+        )
+    if isinstance(node, ast.keyword):
+        return node.arg == "isaac_variant" and _is_string_literal(node.value)
+    if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        return _is_string_literal(node.value) and any(
+            isinstance(target, ast.Subscript) and _is_variant_key(target.slice)
+            for target in targets
+        )
+    return False
 
 
 def _find_hardcoded_variants(root: Path) -> list[str]:
@@ -69,11 +91,12 @@ def _find_hardcoded_variants(root: Path) -> list[str]:
         matched = sorted((root / base).glob(pattern))
         assert matched, f"scan glob matched nothing: {base}/{pattern}"
         scripts += matched
-    return [
-        str(path.relative_to(root))
-        for path in scripts
-        if _VARIANT_LITERAL.search(path.read_text(encoding="utf-8"))
-    ]
+    offenders = []
+    for path in scripts:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        if any(_hardcodes_variant(node) for node in ast.walk(tree)):
+            offenders.append(str(path.relative_to(root)))
+    return offenders
 
 
 def test_no_driver_hardcodes_the_isaac_variant():
@@ -113,3 +136,21 @@ def test_scan_reports_a_planted_variant_literal(tmp_path):
     _plant(tmp_path, "src/script/clean.py")
     _plant(tmp_path, "src/script/bad.py", '{"isaac_variant": "6.0.1"}\n')
     assert _find_hardcoded_variants(tmp_path) == ["src/script/bad.py"]
+
+
+@pytest.mark.parametrize(
+    ("source", "should_report"),
+    [
+        pytest.param('d = {"isaac_variant": ("x")}', True, id="dict-display"),
+        pytest.param('d = dict(isaac_variant="x")', True, id="dict-keyword"),
+        pytest.param('f(isaac_variant="x")', True, id="function-keyword"),
+        pytest.param('d["isaac_variant"] = "x"', True, id="subscript-store"),
+        pytest.param('d = {"isaac_variant": isaac_sim_version()}', False, id="call-value"),
+        pytest.param('v = "x"\nd = {"isaac_variant": v}', False, id="variable-value"),
+    ],
+)
+def test_scan_recognizes_direct_variant_literals(tmp_path, source, should_report):
+    _plant(tmp_path, "src/script/clean.py")
+    script = "src/script/driver.py"
+    _plant(tmp_path, script, source + "\n")
+    assert _find_hardcoded_variants(tmp_path) == ([script] if should_report else [])
