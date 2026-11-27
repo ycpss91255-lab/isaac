@@ -421,7 +421,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#479: replace the availability smoke (1) with PhysX and Newton wheel
 #   motion (2): 34 -> 35.
-GPU_INTEGRATION_BASELINE = 35
+# isaac#447: timeline settings and clock checks on both engines add 4 core cases.
+GPU_INTEGRATION_BASELINE = 39
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
