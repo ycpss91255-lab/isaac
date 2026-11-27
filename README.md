@@ -129,6 +129,16 @@ Every checkout of this repo on a host used to resolve the same image tag (`<hub>
 - One image stays shared: every build also builds the lint/bats tool image `test-tools:<base version>` (now `test-tools:v0.42.0`), named by the pinned base version only. Every checkout and every repo on the host that pins the same base version writes the same tag, so do not delete it while another checkout may be building. `just docker build --clean-tools` removes it for all of them. It comes from base's `build.sh` and is tracked upstream on [base#1551](https://github.com/ycpss91255-lab/base/issues/1551).
 - Containers started before isolating stay in the shared project. List them with `docker compose -p <hub>-isaac ps -a` and stop yours by name. `ISAAC_ALLOW_SHARED_IDENTITY=1 just docker stop` stops the whole shared project, other checkouts' containers included.
 
+### Running multiple instances
+
+One instance per checkout is the deliberate default. This repo removed its built-in support for running several instances from one checkout ([ADR-0019](src/doc/adr/0019-remove-same-repo-multi-instance.md)). To run N instances, use multi_run to launch this repo's `compose.yaml` N times. The design is recorded in [multi_run#15](https://github.com/ycpss91255-lab/multi_run/issues/15).
+
+- Give each instance a unique compose project name with `-p <name>`. This keeps `just docker stop` scoped to its own instance and prevents a new run from adopting a stale instance.
+- Each instance needs its own isolated `isaac-sim/` cache and data tree. Sharing writable cache directories silently corrupts the Kit cache of an already running instance. See [Cache layout](#cache-layout).
+- Parallel headless runs need no port overrides. Override ports only for streaming.
+
+Available GPU memory sets the practical instance count. On a 32607 MiB card, each running Isaac instance used about 3.9 GiB, enough for 6–7 instances. Divide your card's available memory in GiB by 3.9 for an estimate. The instances share GPU compute, so each runs more slowly.
+
 ## Connecting to the WebRTC livestream
 
 Isaac Sim 6.2.0 uses the NVCF (`omni.services.livestream.nvcf`) livestream protocol. Connect with the desktop client or a browser-based viewer:
