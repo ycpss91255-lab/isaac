@@ -39,22 +39,43 @@ gpu_job_build() {
   gpu_job_endgroup
 }
 
-# The compose bind-mounts ${WS_PATH}/isaac-sim/* (kit / ov / nvidia shader +
-# compute caches). With WS_PATH pinned to the checkout root these sources do
-# not pre-exist, so the docker daemon (root) would auto-create them
-# root-owned, unwritable by the non-root container user. The symptom is
-# silent: the RTX Hydra engine + shader cache fail to initialize, no camera
-# frames are rendered, and camera assertions fail with no obvious cause.
-# Creating the leaf dirs as the runner user makes the mounts writable. They
-# are gitignored and wiped by checkout's clean step, so the cache is cold
-# each run.
+# Pre-create writable bind mounts for the non-root container user. The shader
+# and compute caches persist outside the workspace, keyed by Isaac Sim version
+# by default. Checkout cleans the workspace links without touching the cache
+# contents. The remaining state lives in the workspace and starts cold.
 gpu_job_cache_dirs() {
+  local LC_ALL=C
+  local cache_root="${ISAAC_CI_CACHE_ROOT:-${HOME}/isaac-ci-cache}"
+  local key="${ISAAC_CI_CACHE_KEY:-}"
+  local dockerfile="${GITHUB_WORKSPACE:?}/Dockerfile" image
+
   gpu_job_group "Pre-create Isaac Sim cache mount dirs (writable)"
+  if [[ -z "${key}" && -f "${dockerfile}" ]]; then
+    image="$(awk '$1 == "ARG" && sub(/^BASE_IMAGE=/, "", $2) {
+      gsub(/["\047]/, "", $2)
+      print $2
+      exit
+    }' "${dockerfile}")"
+    image="${image%%@*}"
+    if [[ "${image##*/}" == *:* ]]; then
+      key="${image##*:}"
+    fi
+  fi
+  key="${key//[^a-zA-Z0-9._-]/_}"
+  case "${key}" in
+    ''|.|..) key=default ;;
+  esac
+  local cache_dir="${cache_root}/${key}"
+  mkdir -p "${cache_dir}/kit-cache" "${cache_dir}/computecache"
+  chmod a+rwX "${cache_dir}/kit-cache" "${cache_dir}/computecache"
+
   mkdir -p \
-    isaac-sim/kit/cache isaac-sim/kit/data isaac-sim/kit/logs \
+    isaac-sim/kit/data isaac-sim/kit/logs \
     isaac-sim/ov/cache isaac-sim/ov/data isaac-sim/ov/logs \
-    isaac-sim/pip isaac-sim/nvidia/glcache \
-    isaac-sim/nvidia/computecache isaac-sim/documents
+    isaac-sim/pip isaac-sim/nvidia/glcache isaac-sim/documents
+  rm -rf isaac-sim/kit/cache isaac-sim/nvidia/computecache
+  ln -sr -- "${cache_dir}/kit-cache" isaac-sim/kit/cache
+  ln -sr -- "${cache_dir}/computecache" isaac-sim/nvidia/computecache
 
   # Rootless Docker: the container's non-root user maps to a subuid on the
   # host, so files owned by the runner are not writable inside the container.

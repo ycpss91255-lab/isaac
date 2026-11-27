@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 114 -> 118。
+
 ### Fixed
 - **修正 Dockerfile 與 ADR-0005、ADR-0007 對串流啟動的描述（isaac#473、#485）。** 透過 `SimulationApp` 載入 `full.streaming.kit` 後發生 segfault 是 Isaac Sim 5.1.0 的觀察。在 6.2.0.1 上，3/3 次非 root 測試皆成功啟動伺服器並正常結束，Kit 記錄 `Started primary stream server on signal port 49521`。未測試用戶端連線或預設連接埠 49100。
 - **四種語言的 README、操作文件與註解統一使用 rc7 命名（isaac#458）。** 設定範例對齊 `setup.toml` 的表格與欄位，本機覆寫檔為 `setup.local.toml`。建置、啟動、執行與停止容器的範例改用 `just docker` 指令。`core-unit` CI 在 checkout 後執行命名檢查，掃描 Git 追蹤的文字檔。
