@@ -287,14 +287,12 @@ OpenBase 應該掉到 GroundPlane 上停住。沒有任何 cmd_vel 進來時 bas
 
 #### Step 10.4 — 從 host 推 `/cmd_vel`
 
-以下指令使用此 checkout 的 Fast DDS 設定檔。跨子網路 DDS 與 ROS I/O 的維護位置見 [ADR-0015](adr/0015-cross-subnet-ros2-viewing-tcp-dds.md)。
+跨子網路 DDS 與 ROS I/O 的維護位置見 [ADR-0015](adr/0015-cross-subnet-ros2-viewing-tcp-dds.md)。
 
 另開 terminal：
 
 ```bash
 docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
-    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
-    -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'source /opt/ros/humble/setup.bash && \
         ros2 topic pub /cmd_vel geometry_msgs/Twist "{linear: {x: 0.5}}" -r 10'
 ```
@@ -309,8 +307,6 @@ WebRTC viewport 內 OpenBase 應該開始沿 +x 方向移動，速度約 0.5 m/s
 
 ```bash
 docker run --rm -it --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
-    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
-    -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'apt update && apt install -y ros-humble-teleop-twist-keyboard && \
         source /opt/ros/humble/setup.bash && \
         ros2 run teleop_twist_keyboard teleop_twist_keyboard'
