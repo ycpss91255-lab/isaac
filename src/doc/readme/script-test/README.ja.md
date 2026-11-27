@@ -12,9 +12,6 @@
 
 # 単一 case(スクリプト編集時の高速イテレーション)
 ./isaac_ws/src/script/test/standalone_smoke.sh --only ros2_test_pub
-
-# CI / strict モード: SKIP は FAIL 扱い
-./isaac_ws/src/script/test/standalone_smoke.sh --strict
 ```
 
 前提:
@@ -23,10 +20,10 @@
 
 ## Cases
 
-| Script | Marker phrase | Timeout | USD? |
-|--------|---------------|--------:|:----:|
-| `ros2_test_pub_standalone.py` | `standalone publishing` | 150s | no |
-| `ros2_test_sub_standalone.py` | `standalone subscribed to` | 150s | no |
+| Script | Marker phrase | Timeout |
+|--------|---------------|--------:|
+| `ros2_test_pub_standalone.py` | `standalone publishing` | 150s |
+| `ros2_test_sub_standalone.py` | `standalone subscribed to` | 150s |
 
 Marker は受け取った stdout+stderr ストリームに対する regex マッチ。各 standalone スクリプトはコア setup 完了(rclpy subscriber 起動、または最初の `[tick]`)時にタグ付き行を 1 回だけ出力します。
 
@@ -34,22 +31,20 @@ Marker は受け取った stdout+stderr ストリームに対する regex マッ
 
 | Code | 意味 |
 |-----:|------|
-| 0 | 全 case PASS(SKIP は許容、`--strict` を除く)|
+| 0 | 選択した全 case が PASS |
 | 1 | 1 件以上 FAIL |
-| 2 | Pre-flight 失敗(docker dir が無い / standalone container 起動不可)|
+| 2 | 不明なオプション、または Pre-flight 失敗(docker dir が無い / standalone container 起動不可)|
 
 ## 失敗デバッグ
 
 FAIL 時、runner は当該スクリプトの stdout+stderr 末尾 20 行を stderr に出力します。よくあるパターン:
 
 - `ModuleNotFoundError: No module named 'rclpy'` — `enable_extension("isaacsim.ros2.bridge")` 呼び出し漏れ、または `import rclpy` の後に呼び出している
-- `AttributeError: 'NoneType' object has no attribute 'GetPrimAtPath'` — `ctx.open_stage()` は戻ったが、OPENED-spin loop が stage 充填を待っていない
-- `Failed to open: <USD path>` — USD が無い / 読めない。host 側のパスを確認
 - タイムアウトまで marker を一度も検出せず — kit は起動したがスクリプトのメインループが print に到達していない。marker 行より前に exception が出ていないか確認
 
 ## なぜ integration、unit ではないのか
 
-Standalone scripts は kit + livestream + rclpy subscriber を起動します。純粋な Python unit test は「スクリプトが実際に ROS subscriber loop に到達し、USD がロードされ、bridge が生きている」ことを置き換えられません。Marker 文字列が契約 — スクリプトがそれを print できる、即ち SimulationApp init、ROS 2 bridge extension load、rclpy import、ノード生成、USD load + OPENED 遷移がすべて成立しています。
+Standalone scripts は kit + livestream + rclpy subscriber を起動します。純粋な Python unit test は「スクリプトが実際に ROS subscriber loop に到達し、bridge が生きている」ことを置き換えられません。Marker 文字列が契約 — スクリプトがそれを print できる、即ち SimulationApp init、ROS 2 bridge extension load、rclpy import、ノード生成がすべて成立しています。
 
 ## なぜこのディレクトリ、`isaac_ws/src/docker/test/` ではないのか
 

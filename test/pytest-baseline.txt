@@ -147,7 +147,7 @@
 #   repo-relative OpenBase USD path, a wall-clock PeriodicTimer that does
 #   not burst after a stall, run_and_exit turning an exception into exit
 #   code 1) and, for each of the four README-listed standalone scripts, no
-#   removed omni.isaac.dynamic_control, no hard-coded /home/yunchien, no
+#   removed omni.isaac.dynamic_control, no hard-coded /home/<user>, no
 #   module-top Isaac import or SimulationApp, and a run_and_exit __main__;
 #   plus the 1 Hz publisher timer and the base_link gravity fix.
 #   isaac#358 replaced the OpenBase path test with a check that the helper exposes no OpenBase API.
@@ -296,16 +296,20 @@
 # isaac#479: test_isaac_driver.py 48 -> 57 (SimulationApp launch, streaming-mode
 #   equivalence, 6 _play_timeline cases); live 725.
 # isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
-# isaac#173: 新增 32 個 stream 畫面驗證案例與 1 個 core 工作流程案例（740 -> 773）。
-# isaac#173: 新增 1 個 stream 容器清理範圍案例（773 -> 774）。
-HOSTED_UNIT_BASELINE = 774
+# isaac#487: +14 name-scan and CI cases, +1 standalone smoke path check,
+#   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
+# isaac#376: the module docstring length check adds one core test (756 -> 757, core 648 -> 649).
+# isaac#359: test_standalone_smoke_matrix.py adds 7 core cases (757 -> 764, core 649 -> 656).
+# isaac#173: 新增 32 個 stream 畫面驗證案例與 1 個 core 工作流程案例（764 -> 797）。
+# isaac#173: 新增 1 個 stream 容器清理範圍案例（797 -> 798）。
+HOSTED_UNIT_BASELINE = 798
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
 #   hosted unit test belongs to exactly one group (pytestmark at module level,
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py).
-#   以下五組的測試數量下限合計為 774。
+#   以下五組的測試數量下限合計為 798。
 #   test_test_groups.py checks that sum against HOSTED_UNIT_BASELINE. assert_pytest_baseline.sh
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
@@ -326,12 +330,16 @@ HOSTED_UNIT_BASELINE = 774
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
 #   isaac#381 adds 4 docs cases (docs 20 -> 24).
+#   isaac#414 adds 20 docs cases (docs 24 -> 44).
 #   isaac#338 adds 16 core cases (core 602 -> 618).
 #   isaac#453 adds 4 core cases (core 618 -> 622).
 #   isaac#479: +9 core (test_isaac_driver.py 48 -> 57): core 623 -> 632.
-#   isaac#173 新增串流畫面驗證（hosted 740 -> 773、core 632 -> 633、stream 19 -> 51）。
+#   isaac#487 adds 16 core cases (core 632 -> 648).
+#   isaac#376 adds 1 core case (core 648 -> 649).
+#   isaac#359 adds 7 core cases (core 649 -> 656).
+#   isaac#173 新增串流畫面驗證（hosted 764 -> 797、core 656 -> 657、stream 19 -> 51）。
 #   isaac#173 新增容器清理範圍測試（stream 51 -> 52）。
-HOSTED_UNIT_BASELINE_CORE = 633
+HOSTED_UNIT_BASELINE_CORE = 657
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -430,8 +438,8 @@ GPU_INTEGRATION_BASELINE = 35
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
-#   isaac#173 的兩組下限原合計 808（773 hosted-unit + 35 GPU-integration），
-#   加入容器清理範圍測試後為 809（774 hosted-unit + 35 GPU-integration）。
+#   isaac#173 的兩組下限原合計 832（797 hosted-unit + 35 GPU-integration），
+#   加入容器清理範圍測試後為 833（798 hosted-unit + 35 GPU-integration）。
 AGGREGATE_TARGET = 126
 
 # BATS_BASELINE_<GROUP> -- floors for the devel-test bats specs, per group
