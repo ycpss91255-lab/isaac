@@ -8,9 +8,11 @@ Usage:
 Checked per commit: the message, author name/email, committer name/email.
 All checks are case-insensitive. A Co-authored-by trailer matches an address
 at anthropic.com, the exact name "Claude", or a name starting with "Claude"
-followed by Opus, Sonnet, Haiku, Code, or a numeric version. Other checks
-match "Generated with Claude Code", a Claude-Session trailer, or an author /
-committer address at anthropic.com.
+followed by Opus, Sonnet, Haiku, Code, or a numeric version. The model name
+or version can follow "Claude" directly or after spaces, tabs, or hyphens.
+A version can also immediately follow the model name (e.g. "Claude Sonnet4.5").
+Other checks match "Generated with Claude Code", a Claude-Session trailer,
+or an author / committer address at anthropic.com.
 
 Commits already on the base branch are outside the range and are not
 examined.
@@ -29,7 +31,7 @@ _MESSAGE_PATTERNS = (
     ("Co-authored-by trailer naming Claude or anthropic.com",
      re.compile(r"^[ \t]*co-authored-by:(?:.*@anthropic\.com(?=[>\s]|$)|"
                 r"[ \t]*claude(?:[ \t]*(?:<|\r?$)|"
-                r"[ \t]+(?:opus|sonnet|haiku|code|\d+(?:\.\d+)*)\b))", re.I | re.M)),
+                r"[ \t-]*(?:(?:opus|sonnet|haiku|code)(?![a-z])|\d+(?:\.\d+)*\b)))", re.I | re.M)),
     ("Generated with Claude Code",
      re.compile(r"generated with \[?claude code", re.I)),
     ("Claude-Session trailer",

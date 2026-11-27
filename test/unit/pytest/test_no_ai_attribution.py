@@ -73,6 +73,7 @@ def test_co_authored_by_claude_name_with_other_email_fails():
 @pytest.mark.parametrize("identity", [
     "Jean Claude <jc@example.com>",
     "Claude Monet <cm@example.org>",
+    "Claude Sonnette <a@b.c>",
 ])
 def test_human_co_author_with_claude_in_name_passes(identity):
     result = _run(_record("a" * 40, f"x\n\nCo-authored-by: {identity}\n"))
@@ -83,6 +84,9 @@ def test_human_co_author_with_claude_in_name_passes(identity):
     "Claude <noreply@anthropic.com>",
     "Claude Opus 4.8 <x@y.z>",
     "Claude Sonnet 4.5 <x@y.z>",
+    "Claude Sonnet4.5 <a@b.c>",
+    "Claude Opus4 <a@b.c>",
+    "Claude-3 <a@b.c>",
     "Claude 3.5 Sonnet <x@y.z>",
     "Claude 4 <x@y.z>",
     "Claude Haiku <x@y.z>",
