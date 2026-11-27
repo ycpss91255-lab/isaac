@@ -12,7 +12,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 20 | 0 | 20 |
+| docs | 0 | 24 | 0 | 24 |
 
 The `**207 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
