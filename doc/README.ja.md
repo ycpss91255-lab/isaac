@@ -375,7 +375,7 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 
 ## コンテナ User
 
-コンテナは host UID と整合した非 root ユーザーで実行（`USER_NAME` は `.env` から読み取り、デフォルト UID 1000）。このユーザーは base イメージの公式アカウント（`USER` から検出、固定値なし）の group に数値 gid で追加され、`/isaac-sim/*`（mode `0750`）が読み取り可能。`/home/${USER_NAME}/work`（host 側 `${WS_PATH}` に mount）経由で書いたファイルは host 側 owner を保持、`chown` 不要。
+コンテナは host UID と整合した非 root ユーザーで実行（`USER_NAME` は `.env` から読み取り、デフォルト UID 1000）。このユーザーは base イメージの公式アカウント（`USER` から検出、固定値なし）の group に数値 gid で追加され、`/isaac-sim/*`（mode `0750`）が読み取り可能。MJCF インポーターとその UI の `data` ディレクトリ、およびインポーターの `data/mjcf` にはこのグループの書き込み権限があり、UI は入力 XML と同じ場所に USD を出力できる。`/home/${USER_NAME}/work`（host 側 `${WS_PATH}` に mount）経由で書いたファイルは host 側 owner を保持、`chown` 不要。
 
 ## EULA
 

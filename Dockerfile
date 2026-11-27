@@ -104,6 +104,16 @@ ENV TZ="${TZ}"
 
 COPY --from=base /tmp/base-uid /tmp/base-gid /etc/isaac/
 
+# The MJCF UI exports beside its input XML in data/mjcf. Lab ships the
+# same Sim assets under a different group from its configured user.
+RUN official_gid="$(cat /etc/isaac/base-gid)"; \
+    for dir in /isaac-sim/exts/isaacsim.asset.importer.mjcf{,.ui}/data \
+               /isaac-sim/exts/isaacsim.asset.importer.mjcf/data/mjcf; do \
+        [[ -d "${dir}" ]] || continue; \
+        chgrp "${official_gid}" "${dir}"; \
+        chmod g+w "${dir}"; \
+    done
+
 # Rename colliding accounts in place so numeric file ownership stays valid.
 # A base account's home can contain official files. Give it a host-user home
 # without moving that tree. Lab has multiple passwd entries for one UID.

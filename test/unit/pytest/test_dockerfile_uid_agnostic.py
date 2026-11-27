@@ -1,7 +1,9 @@
-"""Host identity and no-GPU CI contracts for the two Isaac base images (#474)."""
+"""Host identity, importer permissions, and CI contracts for the Isaac bases (#474)."""
 
 import re
 import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -83,25 +85,60 @@ def test_host_user_joins_the_group_resolved_from_the_official_gid():
     pytest.fail("expected a supplementary group derived from the base GID for USER_NAME")
 
 
-def _ci_steps(workflow="main.yaml"):
-    workflows = _ROOT / ".github" / "workflows"
-    for job in yaml.safe_load((workflows / workflow).read_text())["jobs"].values():
-        for step in job.get("steps", []):
-            if "run" in step and not step.get("continue-on-error"):
-                yield "\n".join(line for line in step["run"].splitlines()
-                                if not line.lstrip().startswith("#")).replace("\\\n", " ")
-        reusable = job.get("uses", "")
-        if reusable.startswith("./.github/workflows/"):
-            yield from _ci_steps(Path(reusable).name)
+def test_mjcf_group_write_rule_is_nonrecursive_and_inherited_by_both_targets():
+    stages = [body for header, body in _STAGES if header.split()[-1] in {"sys", "devel-base"}]
+    runs = [cmd for stage in stages for cmd in re.findall(r"(?im)^RUN\s+(.+)$", stage)
+            if "isaacsim.asset.importer.mjcf" in cmd and "/data" in cmd]
+    write_rules = []
+    for cmd in runs:
+        for args in re.findall(r"\bchmod\s+([^;&|]+)", cmd):
+            words = shlex.split(args)
+            assert not any(w == "--recursive" or re.fullmatch(r"-[A-Za-z]*R[A-Za-z]*", w)
+                           for w in words), args
+            operands = [word for word in words if not word.startswith("-")]
+            mode, *targets = operands
+            assert all(t.rstrip("/") not in {"/isaac-sim", "/isaac-sim/exts", "/isaac-sim/exts/*"}
+                       for t in targets), args
+            if re.fullmatch(r"[0-7]{3,4}", mode):
+                group_write = (int(mode, 8) & 0o022) == 0o020
+            else:
+                group_write = re.fullmatch(r"g[+=][rwxX]*w[rwxX]*", mode)
+            if group_write:
+                write_rules.append(cmd)
+    assert write_rules, "both matrix targets must inherit group write on the MJCF data directories"
+    assert any(re.search(r"isaacsim\.asset\.importer\.mjcf(?:\.ui|\*|\{[^}]*\.ui)", rule)
+               for rule in write_rules), "include the UI extension's data directory"
+    # The default import writes next to nv_ant.xml, one directory below data.
+    assert any("/mjcf" in rule for rule in write_rules), "include the existing data/mjcf directory"
 
 
-def test_ci_runs_uid_matrix_without_a_gpu():
-    for step in _ci_steps():
-        for command in step.splitlines():
-            if re.search(r"(?:^\s*|&&\s*)(?:BASE_IMAGE=\S+\s+)?"
-                         r"(?:bash\s+)?(?:\./)?script/ci/uid_matrix\.sh\s",
-                         command):
-                args = shlex.split(command, comments=True)
-                if "--no-gpu" in args and "--dry-run" not in args:
-                    return
-    pytest.fail("expected a CI run step invoking script/ci/uid_matrix.sh --no-gpu")
+def test_uid_setup_preserves_the_official_tree_ownership():
+    subprocess.run([sys.executable, _ROOT / "script/ci/check_no_recursive_chown.py",
+                    _ROOT / "Dockerfile"], check=True)
+
+
+_JOBS = yaml.safe_load((_ROOT / ".github/workflows/main.yaml").read_text())["jobs"]
+
+
+def _matrix_args(script):
+    for line in script.replace("\\\n", " ").splitlines():
+        match = re.match(r'\s*(?:\w+=\S+\s+)*(?:bash\s+)?"?(?:\./|\$\{?repo_root\}?/)?'
+                         r'script/ci/uid_matrix\.sh"?'
+                         r"(?=\s|$)(.*)", line)
+        if match:
+            yield shlex.split(match[1], comments=True)
+
+
+def test_core_unit_runs_uid_matrix_without_a_gpu():
+    assert any("--no-gpu" in args and "--dry-run" not in args
+               for step in _JOBS["core-unit"]["steps"] if not step.get("continue-on-error")
+               for args in _matrix_args(step.get("run", "")))
+
+
+def test_core_gpu_runs_uid_matrix_with_a_gpu():
+    job = _JOBS["core-gpu"]
+    assert "/gpu-self-hosted.yml@" in job["uses"]
+    script = _ROOT / job["with"]["run-script"]
+    assert any(not args for args in _matrix_args(script.read_text())), (
+        f"{script.name} must invoke the GPU UID matrix"
+    )

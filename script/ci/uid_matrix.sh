@@ -43,6 +43,13 @@ probe='
   grep -qw "$(cat /etc/isaac/base-gid)" <<< "$(id -G)"
   [[ "$HOME" == "/home/$1" && -w "$HOME" ]]
   ls /isaac-sim >/dev/null
+  for dir in /isaac-sim/exts/isaacsim.asset.importer.mjcf{,.ui}/data \
+             /isaac-sim/exts/isaacsim.asset.importer.mjcf/data/mjcf; do
+    [[ -d "${dir}" ]] || continue
+    test -w "${dir}"
+    touch "${dir}/.uid-matrix-$$"
+    rm "${dir}/.uid-matrix-$$"
+  done
   if [[ -n "${ISAACLAB_PATH:-}" ]]; then ls "$ISAACLAB_PATH" >/dev/null; fi'
 
 gpu_args=(--env NVIDIA_VISIBLE_DEVICES=void)

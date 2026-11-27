@@ -78,6 +78,10 @@ check_plan() {
     fi
     if [[ "${2:-}" == --no-gpu ]]; then
       [[ "${probe}" != *"--gpus"* && "${probe}" != *"--runtime=nvidia"* ]]
+      [[ "${probe}" != *"import isaacsim"* ]]
+    else
+      [[ "${probe}" == *"--gpus"* ]]
+      [[ "${probe#*" ${tag} "}" == *"import isaacsim"* ]]
     fi
     # Inspect the command after the image tag. Build arguments and the
     # outer docker run flags cannot satisfy the in-container assertions.
@@ -113,4 +117,81 @@ check_plan() {
   [ "${status}" -eq 0 ]
   [ ! -e "${DOCKER_LOG}" ]
   check_plan devel --no-gpu
+}
+
+@test "uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory" {
+  # Replay the actual CPU probe against a fixture with the official image layout.
+  # Only account lookups and paths specific to the image need substituting.
+  export FIXTURE="${BATS_TEST_TMPDIR}/image"
+  local ext="${FIXTURE}/isaac-sim/exts/isaacsim.asset.importer.mjcf"
+  mkdir -p "${ext}/data/mjcf" "${ext}.ui/data" "${FIXTURE}/home/uidcheck"
+  echo 1234 > "${FIXTURE}/base-gid"
+  cat > "${BATS_TEST_TMPDIR}/docker" <<'STUB'
+#!/usr/bin/env bash
+set -eu
+[[ "$1" == run ]] || exit 0
+while [[ "$1" != -c ]]; do shift; done
+shift
+probe="${1//\/home\//${FIXTURE}\/home\/}"
+probe="${probe//\/etc\/isaac\/base-gid/${FIXTURE}\/base-gid}"
+probe="${probe//\/isaac-sim/${FIXTURE}\/isaac-sim}"
+shift
+export HOME="${FIXTURE}/home/$2" CASE_UID="$3" CASE_GID="$4"
+id() {
+  case "$1" in
+    -un) echo uidcheck ;;
+    -u) echo "${CASE_UID}" ;;
+    -g) echo "${CASE_GID}" ;;
+    -G) echo "${CASE_GID} 1234" ;;
+    *) return 1 ;;
+  esac
+}
+sudo() { [[ "$*" == "-n true" ]]; }
+export -f id sudo
+bash -euxo pipefail -c "${probe}" "$@" 2>"${FIXTURE}/trace-${CASE_UID}-${CASE_GID}"
+STUB
+  unset ISAACLAB_PATH
+  export BASE_IMAGE=nvcr.io/nvidia/isaac-sim:6.2.0.1 UID_MATRIX_TARGET=devel
+  run bash "${SCRIPT}" --no-gpu
+  [ "${status}" -eq 0 ]
+  local pair dir trace
+  for pair in 1000-1000 1234-1234 50000-50000 50000-1234; do
+    trace="${FIXTURE}/trace-${pair}"
+    for dir in "${ext}/data" "${ext}/data/mjcf" "${ext}.ui/data"; do
+      # Bash xtrace expands loop variables, so checks for HOME or a sibling
+      # directory cannot satisfy the assertion for this write parent.
+      awk -v dir="${dir}" '
+        { for (i = 2; i <= NF; i++) {
+            if ($(i-1) == "-w" && $i == dir) writable = 1
+            if (index($i, dir "/") == 1 && substr($i, length(dir)+2) !~ /\//) {
+              if ($2 == "touch") created[$i] = 1
+              if ($2 == "rm" && created[$i]) removed = 1
+            }
+        } }
+        END { exit !(writable && removed) }
+      ' "${trace}" || { echo "Missing MJCF write probe for ${pair} in ${dir}"; return 1; }
+    done
+  done
+  [ -z "$(find "${ext}/data" "${ext}.ui/data" -type f -print -quit)" ]
+}
+
+@test "core-gpu: a failing GPU UID matrix fails the integration job" {
+  local src fake
+  src="$(dirname "${SCRIPT}")"
+  fake="${BATS_TEST_TMPDIR}/repo"
+  mkdir -p "${fake}/script/ci" "${fake}/test"
+  cp "${src}/gpu_job_lib.sh" "${src}/gpu_integration_job.sh" "${fake}/script/ci/"
+  printf '#!/bin/sh\necho WS_PATH=/tmp > .env.generated\n' > "${fake}/script/setup.sh"
+  printf '#!/bin/sh\nexit 0\n' > "${fake}/script/build.sh"
+  cp "${fake}/script/build.sh" "${fake}/test/assert_pytest_baseline.sh"
+  cat > "${fake}/script/ci/uid_matrix.sh" <<'STUB'
+#!/bin/sh
+echo "matrix argc=$#"
+exit 17
+STUB
+  chmod +x "${fake}"/script/*.sh "${fake}"/script/ci/*.sh "${fake}"/test/*.sh
+  GITHUB_WORKSPACE="${fake}" GITHUB_RUN_ID=1234 GITHUB_RUN_ATTEMPT=1 \
+    run bash "${fake}/script/ci/gpu_integration_job.sh"
+  [[ "${output}" == *"matrix argc=0"* ]]
+  [ "${status}" -ne 0 ]
 }

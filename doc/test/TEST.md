@@ -1,6 +1,6 @@
 # TEST.md
 
-**212 tests** total.
+**214 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 118 | 697 | 40 | 855 |
+| core | 120 | 700 | 40 | 860 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**212 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The `**214 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -368,9 +368,9 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 | `assert_pytest_baseline --group stream: a group below its own floor fails` | A count under the floor exits 1 with `ratchet violation`. |
 | `assert_pytest_baseline --group stream: only that group is counted` | The other groups' floors are not consulted. |
 
-## test/bats/smoke/uid_matrix_spec.bats (4)
+## test/bats/smoke/uid_matrix_spec.bats (6)
 
-`script/ci/uid_matrix.sh` (isaac#474): builds `devel-base` (default; `UID_MATRIX_TARGET=devel` selects the full `devel` build) for several host UID/GID pairs and checks the runtime user. Dry-run only, no Docker.
+`script/ci/uid_matrix.sh` (isaac#474): builds `devel-base` (default; `UID_MATRIX_TARGET=devel` selects the full `devel` build) for several host UID/GID pairs and checks the runtime user. The spec uses a Docker stub. Hosted CI runs the Sim matrix with `--no-gpu`, and the `core-gpu` job imports `isaacsim` as each user. To run the same GPU checks on the Lab base, use `BASE_IMAGE=nvcr.io/nvidia/isaac-lab:3.0.0 script/ci/uid_matrix.sh`.
 
 | Test | Description |
 |------|-------------|
@@ -378,6 +378,8 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 | `uid_matrix: an unknown option fails before any Docker call` | Nonzero exit, no docker call. |
 | `uid_matrix: dry-run plans each host identity on the Sim base` | One plan per UID/GID case including the GID-conflict case. |
 | `uid_matrix: --no-gpu dry-run honors the Lab base and devel target overrides` | `BASE_IMAGE` and `UID_MATRIX_TARGET` overrides are passed through; no GPU flags. |
+| `uid_matrix: every devel identity checks, creates and removes a file in each MJCF data directory` | Replays the CPU probe for all four identities and checks each write and removal. |
+| `core-gpu: a failing GPU UID matrix fails the integration job` | A matrix failure propagates to the job. |
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
@@ -409,7 +411,7 @@ Host-runnable unit tests for the `isaac_devkit` framework pure surface (no Isaac
 | `test_prim_summary.py` | 11 | Greenfield `PrimSummary` surface: `parse_urdf_expected` (pure URDF-XML expectation, fixed-joint merge), `_summarize_prim_records` (pure stage-record fold), the L1 diff-zero agreement on matching inputs. |
 | `test_ros_io.py` | 23 | Greenfield `isaac_devkit.ros_io` pure surface: `parse_ros2_io_config`, `expected_attr_paths`, `_build_graph_topology`, `RosIo.latest` non-blocking fresh-once bookkeeping against an injected reader. |
 | `test_example_driver.py` | 14 | `example/sim/example_driver.py` pure surface (#131): three-file scene merge (`load_three_file_scene`), expected robot/`base_link` prim-path strings, `cmd_vel_to_planar_velocity` controller mapping, `SCENE` attr shape, the `run()` SCENE-driven lifecycle-order spy + injected-SIGINT shutdown, and example import-safety. |
-| `test_dockerfile_uid_agnostic.py` | 6 | Dockerfile host-user setup (isaac#474): no literal official uid or `isaac-sim` group name, official ids probed from the base USER, sudoers by `#UID`, group joined by numeric gid, CI runs the UID matrix (`--no-gpu`). |
+| `test_dockerfile_uid_agnostic.py` | 9 | Dockerfile host-user setup (isaac#474): no literal official uid or `isaac-sim` group name, official ids probed from the base USER, sudoers by `#UID`, group joined by numeric gid, MJCF group write inherited by both targets, recursive ownership guard, and hosted CPU and self-hosted GPU matrix wiring. |
 | `test_check_no_recursive_chown.py` | 27 | `core`. `script/ci/check_no_recursive_chown.py` (isaac#474): flags recursive chown outside `${HOME}/` in any option order, variable targets, `/`, `/opt`, `find -exec chown`, `xargs chown`, continuation lines; accepts safe forms and the real Dockerfile; CLI exit codes; `core-unit` runs the script. |
 | `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "auto"` (stream / headless / devel-test stay `off`). No docker/GPU. |
 | `test_test_groups.py` | 25 | Test-group contract (isaac#434), `core`: every pytest module has exactly one `pytestmark` group (static AST check over `test/unit/pytest` and `test/integration/pytest`, with unmarked / two-group / unknown-group / function-level-marker detector self-tests on temp trees); every bats spec has exactly one `# bats file_tags=<group>` (non-group tags allowed, `test_tags` may not name a group) plus per-group bats counts; the collection-time plugin `test/group_markers.py` aborts a subprocess pytest run for an ungrouped or two-group test, accepts a grouped one, and `-m <other group>` collects nothing without an unknown-marker warning; the plugin and `script/ci/scope_groups.py` agree on the five groups; `test/pytest-baseline.txt` has a floor per group that sums to the total, the bats counts meet the `BATS_BASELINE_*` floors, and the 'Tests by group' table above matches the specs and the baseline. |
