@@ -20,7 +20,7 @@ pytestmark = pytest.mark.stream
 
 _ROOT = Path(__file__).resolve().parents[3]
 _JOB = Path("script/ci/stream_visual_e2e_job.sh")
-_VIEWER = "ghcr.io/ycpss91255-docker/omniverse_web_viewer:0.3.0"
+_VIEWER = "ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0"
 _BROWSER = "mcr.microsoft.com/playwright:v1.62.1-noble"
 _ARTIFACTS = Path("artifacts/stream-visual-e2e")
 
@@ -263,6 +263,17 @@ def test_port_preflight_handles_both_protocols_on_the_same_candidate():
             if kind == socket.SOCK_STREAM:
                 sock.listen()
             assert not available(sock.getsockname()[1])
+
+
+def test_visual_and_smoke_drivers_share_viewer_image_default():
+    def viewer_default(script):
+        source = (_ROOT / "script/ci" / script).read_text()
+        assert "ycpss91255-docker/" not in source, script
+        match = re.search(r'^viewer_image="\$\{SMOKE_VIEWER_IMAGE:-([^}\s]+)\}"$', source, re.MULTILINE)
+        assert match, f"missing viewer image default in {script}"
+        return match[1]
+
+    assert viewer_default("stream_visual_e2e.sh") == viewer_default("stream_smoke.sh")
 
 
 def test_visual_driver_shares_one_playwright_version():

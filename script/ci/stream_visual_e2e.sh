@@ -10,6 +10,7 @@ out="${PWD}/artifacts/stream-visual-e2e"
 log_name="${project}.log"
 kit_log="${PWD}/isaac-sim/kit/logs/${log_name}"
 viewer="${project}-viewer"
+viewer_image="${SMOKE_VIEWER_IMAGE:-ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0}"
 browser="${project}-browser"
 playwright_version=1.62.1
 
@@ -61,7 +62,7 @@ url="http://127.0.0.1:${serve}"
 docker run -d --rm --name "${viewer}" --network host \
   -e VIEWER_UI_MODE=stream-only -e SIGNALING_SERVER=127.0.0.1 \
   -e "SIGNALING_PORT=${signal}" -e "MEDIA_PORT=${media}" -e "SERVE_PORT=${serve}" \
-  ghcr.io/ycpss91255-docker/omniverse_web_viewer:0.3.0
+  "${viewer_image}"
 deadline=$((SECONDS + 60))
 until curl -fsS --max-time 2 "${url}" >/dev/null; do
   (( SECONDS < deadline )) || { echo "Viewer timed out" >&2; exit 1; }
