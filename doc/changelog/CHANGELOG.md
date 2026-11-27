@@ -4,6 +4,8 @@
 
 ### Fixed
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。
+- **移除 standalone smoke 測試矩陣中多餘的 USD 檢查（isaac#359）。** ROS 2 發布與訂閱案例都只需腳本名稱、就緒訊息與逾時秒數。執行摘要只統計 PASS 與 FAIL，並移除僅用於處理 SKIP 的 `--strict` 選項。空案例矩陣視為合法。
+- **調整 `test_sim_version.py` 的 docstring 換行（isaac#376）。** 模組與 `_find_hardcoded_variants` 的 docstring 每行最多 79 個字元。新增一項 core 測試檢查模組 docstring 的行長，hosted 測試基準 756 -> 757，core 648 -> 649。
 - **移除 `.base/` 以外受 Git 追蹤檔案中的個人帳號名稱（isaac#487）。** 可在組織 secret `FORBIDDEN_NAMES` 設定要掃描的名稱，以逗號分隔。獨立掃描步驟與 hosted core 測試都會讀取這份清單，若無法取得 secret（例如來自 fork 的 PR），掃描程式會輸出 `SKIPPED` 並說明略過原因。Core 組改用內含 Git 的 `python:3.12` 映像檔，pytest 只要有一項測試被跳過，CI 就會失敗。Core 組的 pytest 使用 `-rA`，在 CI 日誌中逐行列出每項測試的名稱與結果。新增 16 個 core 測試案例，hosted 測試總數由 740 增至 756，core 由 632 增至 648。
 - **修正 GPU 共用工作流程的版本檢查（isaac#405、#406）。** pytest 統一從 `gpu_pin.py` 的 `GPU_REUSABLE_TAG` 讀取版本，並確認 Dependabot 註解標示目前的 `v0.4.0`。呼叫端清單不符時，錯誤訊息會列出缺少或多出的工作流程，並提示更新清單與文件。版本與呼叫端結構以 pytest 的檢查為準，Bats 的版本檢查改為從 `gpu_pin.py` 讀取同一個 `GPU_REUSABLE_TAG`，並涵蓋全部 4 個呼叫端（含 `ci-headless-smoke.yaml`）。devel-test 映像把 `gpu_pin.py` 一併放進 `/smoke_test/`。升級 tag 需改 4 個工作流程檔、`gpu_pin.py` 與 Dependabot 註解，沒有其他副本。
 - **合併佇列能取得必要的 `gate` 檢查結果（isaac#453）。** `main.yaml` 收到 `merge_group` 的 `checks_requested` 事件時會執行所有測試組別，再由 `gate` 回報結果。
@@ -16,6 +18,7 @@
 
 ### Added
 - **GUI stage 設定與 PR 人工驗證規則（isaac#428）。** `setup.toml` 明確關閉 `producer` stage 的 GUI。在 `["stage:producer"]` 新增 `"gui.mode" = "off"` 後，產生的 `compose.yaml` 將 `producer` 從 `extends: {service: devel}` 改為完整列出 `args`、`env_file`、`privileged`、`cap_add`、`volumes`、`devices` 與 GPU `deploy` 設定，僅 `target`、`image`、`profiles`、`restart`、`tty` 與 `devel` 不同，其餘設定等價，功能不變，`headless` 與 `stream` 區塊不變，`gui` 則新增 `DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`、`group_add` 與 `/tmp/.X11-unix` 掛載。PR 範本新增截圖勾選項，`CONTRIBUTING.md` 說明合併前的人工驗證規則、機器標示與 Xvfb 實測結果。靜態測試核對各 service 的 GUI 宣告及兩份文件。Bats core 從 119 增至 126。
+- **新增 GPU 串流畫面端對端測試（isaac#173）。** `stream-visual-e2e` 沿用 stream 組的觸發條件並納入 `gate`。每次執行獨立選取並檢查 TCP、UDP 連接埠，等待紅色方塊場景穩定後，以 Chromium 驗證 WebRTC 視訊軌、影格持續更新、亮度與紅色像素比例。失敗時上傳該次 Kit log 及已產生的瀏覽器截圖、trace 與判定結果。清理篩選器的回歸測試涵蓋執行編號與嘗試次數共用數字前綴的情況。Hosted 測試下限從 769 增至 803（stream 19 -> 52、core 618 -> 619），Bats 的 stream 組從 90 增至 91。
 - **新增 stream smoke 在 GPU 主機忙碌時的診斷測試（isaac#497）。** 九個 Bats 案例涵蓋訊號埠或媒體埠被占用時提早失敗（有 `ss` 時也能偵測 UDP 媒體埠占用）、略過連接埠檢查、啟動與就緒時的主機負載及就緒耗時，以及逾時時回報就緒標記與連接埠占用者。stream 組由 81 增至 90 項。
 - **四種語言的 README 新增多個 instance 的執行說明（isaac#289）。** 說明如何透過 multi_run 隔離 compose project 與快取目錄、何時需覆寫串流連接埠，以及如何用可用顯示記憶體估算同時執行的數量。新增 24 個 docs 測試，涵蓋四種語言版本。
 - **新增本機 USD 模型掛載範例（isaac#338）。** `setup.isaac_sample.toml` 保留 `setup.toml` 的所有掛載，將 `sim_asset` 唯讀掛載到固定的容器內路徑，並設定 `MODEL_PATH`。四種語言的 README 說明如何複製及調整範例。範例註解不再提到尚不存在的 `just run scene`。Hosted baseline 671 -> 687（core 602 -> 618，docs 44）。
@@ -32,6 +35,7 @@
 - **縮小 `Co-authored-by` 的比對範圍（isaac#414）。** 共同作者的姓名僅含 Claude 時不再誤判，也能辨識版本號緊接模型名稱或以連字號相連的寫法，例如 `Claude Sonnet4.5`、`Claude Opus4` 和 `Claude-3`。
 - **Workflow / job 命名規則與 lint（isaac#443，#434 PR4）。** 規則寫在 `doc/workflow-naming.md`：檔名 `<category>-<feature>.yaml`（category 為 ci / release / bot / tool）、顯示名稱 `<Category>: <Feature Words>`、job id 小寫 kebab-case、不加 job 層 `name:`、CI job id 為 `changes` / `gate` / `release` 或以組別開頭（`core-` `gui-` `stream-` `headless-` `docs-`）。`script/ci/lint_workflow_names.py` 檢查 `.github/workflows/*.yaml`，並掃文件有沒有殘留已改掉的名稱；它在 `docs-unit` job 執行，也由 `test_workflow_naming.py` 固定。改名：`stream-smoke.yaml` -> `ci-stream-smoke.yaml`、顯示名稱 `Stream Smoke (GPU)` -> `CI: Stream Smoke`（`main.yaml` 的 `uses:`、路徑規則 `ci-stream-*`、文件與測試同步）。**Required check 不受影響**：required 只有 `gate`，job 名稱變動不碰 branch protection。**例外（精確檔名）**：`main.yaml`（org 通用入口、base 的 `init.sh` 建立）；`base-version-monitor.yaml`（`init.sh` 的 `_sync_base_monitor_workflow` 在該路徑不存在時產生，改檔名會在下次 base 升級時於旁邊重新產生一份；`init.sh` 只建立不覆蓋，所以內容不會被蓋回去，但檔名會，故保留原名與內容，原因寫在文件裡）；`publish-stream-source.yaml`（isaac#432 會刪，不改）。Hosted baseline 633 -> 676（core 641）。
 ### Removed
+- **移除映像檔的 ROS 設定（isaac#430）。** Dockerfile 不再指定 ROS 發行版、設定 ROS 函式庫路徑或安裝入口包裝腳本，互動式 shell 也不再載入 ROS。ROS I/O 改由 `ISAAC_IO_PLUGIN` 指定的外部插件提供。Fast DDS 設定檔移至跨容器整合測試的 fixture。`setup.toml` 的 `ROS_DISTRO` 建置參數與 `ROS_DOMAIN_ID` / `RMW_IMPLEMENTATION` / `FASTRTPS_DEFAULT_PROFILES_FILE` 環境變數一併移除，容器內 `env` 不再出現 ROS 相關變數；其餘 ROS 腳本留待 #429 處理。
 - **移除 `standalone_common.py` 中的 OpenBase 專用函式與常數（isaac#358）。** 移除 USD 路徑查詢、場景設定函式，以及車輪關節與底盤連桿常數。原本的 USD 路徑測試改為確認這四個名稱均已移除，測試總數不變。Hosted baseline 維持 642（core 601）。
 - **移除 URDF 匯入功能（isaac#477）。** Isaac 現在直接載入 USD；需要轉檔時，請用 [asset_converter](https://github.com/ycpss91255-lab/asset_converter) 產出模型，再設定 `robot.model`。
 - **移除 `ros` 輸出模式（isaac#514）。** `ISAAC_OUTPUT_MODE=ros` 現在和其他不合法值一樣丟 `ValueError`（只允許 `python`），`setup_output` 也不再有 `ros` 的 `NotImplementedError` 分支。ADR-0025 依 owner 2026-11-27 的決定（#388）標為 Superseded：isaac 不碰 ROS，ROS 輸出由 `isaac_ros_io` 透過 `ISAAC_IO_PLUGIN` 提供。測試數量不變。
