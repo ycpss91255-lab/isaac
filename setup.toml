@@ -132,6 +132,9 @@ target = "/home/${USER_NAME}/Documents"
 ["stage:stream"]
 "gui.mode" = "off"
 
+["stage:producer"]
+"gui.mode" = "off"
+
 ["stage:test-tools-stage"]
 "deploy.gpu_mode" = "off"
 "gui.mode" = "off"

@@ -1,6 +1,6 @@
 # TEST.md
 
-**208 tests** total.
+**214 tests** total.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 114 | 650 | 40 | 804 |
+| core | 120 | 650 | 40 | 810 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 81 | 19 | 0 | 100 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 16 | 0 | 16 |
 
-The `**208 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -327,6 +327,26 @@ Behavioral guard for `script/git/merge-train.sh` (#368). Hermetic: stub `gh` (ca
 | `merge-train: merge method falls back to a merge commit when squash is off` | `allow_squash_merge=false` leads to `--merge`, never the squash flag. |
 | `merge-train: the script source never hard-codes the squash flag` | `grep -n -e "--squash" script/git/merge-train.sh` prints nothing. |
 | `merge-train: the one required check is the summary job gate (isaac#434)` | `REQUIRED_CHECKS` is exactly `gate`; the two pre-#434 required-check names are gone. |
+
+## test/bats/smoke/gui_stage_static_spec.bats (2)
+
+These checks read the committed inputs to setup. In the current `.base`, a stage set to `auto` inherits the resolved top-level GUI flag. With the committed default of `off`, the Compose emitter omits both `DISPLAY` and the X11 socket mount even for `gui`.
+
+| Test | Description |
+|------|-------------|
+| `setup.toml sets GUI off by default and auto only for stage:gui` | Parses the actual TOML and checks the default and every declared stage override. |
+| `every auto-emitted Dockerfile service stage has a setup.toml override` | Uses setup’s stage parser to catch missing sections when services are added. The default covers the template-managed `devel` service. |
+
+## test/bats/smoke/pr_template_gui_spec.bats (4)
+
+Both #428 specs read files from the checkout when run locally. In the devel-test image they expect the same inputs under `/lint`. The image already contains the Dockerfile and the stage parser. It still needs `setup.toml`, `.github/pull_request_template.md`, and `CONTRIBUTING.md` at those relative paths for the checks to pass there.
+
+| Test | Description |
+|------|-------------|
+| `PR template has an unchecked GUI screenshot item` | Checks that one unchecked Markdown item in the PR template mentions both GUI and a screenshot. |
+| `contributor guide requires visual evidence for GUI PRs` | Checks the merge rule and looks for the execution command, Isaac Sim, and the scene in the guide. |
+| `contributor guide records the Xvfb Kit screenshot experiment` | Checks for Xvfb, `--no-window`, menu readiness, the screenshot API, and CI status. |
+| `contributor guide uses a generic machine label and omits personal identifiers` | Requires an approved label and checks for the prohibited username, email addresses, and home paths. |
 
 ## test/bats/smoke/workflow_pin_spec.bats (4)
 

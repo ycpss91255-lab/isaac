@@ -472,6 +472,8 @@ ENV BATS_LIB_PATH="/usr/lib/bats"
 COPY .base/dist/test/bats/smoke/shared/ /smoke_test/
 COPY .base/dist/test/bats/smoke/devel-test/ /smoke_test/
 COPY test/bats/smoke/ /smoke_test/
+COPY setup.toml CONTRIBUTING.md /lint/
+COPY .github/pull_request_template.md /lint/.github/
 # [isaac#402] Workflow files baked so workflow_pin_spec.bats cannot pass vacuously
 # on a missing directory (bats runs non-recursively, so this is not a spec).
 COPY .github/workflows/ /smoke_test/workflows/
