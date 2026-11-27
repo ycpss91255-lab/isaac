@@ -59,14 +59,14 @@ This produces a built extension under `./exts/`. On Windows, use `./build.bat` i
 
 #### c. Mount the extension into the Isaac container
 
-`ycpss91255-lab/isaac` runs Isaac Sim 5.1 inside a container. The Stereolabs extension lives outside it, so we mount the built `exts/` directory in. Edit the docker compose / `.env` for the headless stage to add a bind:
+`ycpss91255-lab/isaac` runs Isaac Sim 5.1 inside a container. The Stereolabs extension lives outside it, so we mount the built `exts/` directory in. Edit the docker compose / `.env` for the stream stage to add a bind:
 
 ```
 host:  <your-clone-path>/zed-isaac-sim/exts
 in container:  /isaac-sim/extra_exts/zed
 ```
 
-Then restart the headless container:
+Then restart the stream container:
 
 ```bash
 cd isaac_ws/src/docker

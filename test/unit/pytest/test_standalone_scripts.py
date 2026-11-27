@@ -85,11 +85,15 @@ def test_kit_config_follows_isaac_livestream():
         helper.kit_config("9")
 
 
-def test_openbase_usd_path_raises_when_models_are_absent():
-    """openbase_usd_path raises FileNotFoundError pointing to sim_asset repo."""
+def test_helper_has_no_openbase_attributes():
     helper = _load_helper()
-    with pytest.raises(FileNotFoundError, match="sim_asset"):
-        helper.openbase_usd_path()
+    names = (
+        "openbase_usd_path",
+        "setup_openbase_stage",
+        "OPENBASE_WHEELS",
+        "OPENBASE_BASE_LINK",
+    )
+    assert [name for name in names if hasattr(helper, name)] == []
 
 
 def test_periodic_timer_fires_once_per_period_regardless_of_tick_rate():
