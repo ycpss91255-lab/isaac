@@ -295,7 +295,8 @@
 # isaac#405: +1 hosted core test for the Dependabot comment guard: 715 -> 716 (core 622 -> 623).
 # isaac#479: test_isaac_driver.py 48 -> 57 (SimulationApp launch, streaming-mode
 #   equivalence, 6 _play_timeline cases); live 725.
-HOSTED_UNIT_BASELINE = 736
+# isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
+HOSTED_UNIT_BASELINE = 740
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -307,7 +308,8 @@ HOSTED_UNIT_BASELINE = 736
 #   A group with no tests yet (gui / headless) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py
-#   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py
+#   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py,
+#               test_stage_names_docs.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
 #   (9) and test_main_workflow_scope.py (15), all core: 565 -> 627 (core 592).
@@ -328,7 +330,8 @@ HOSTED_UNIT_BASELINE_CORE = 632
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 79
+#   isaac#86 adds 4 docs cases (docs 79 -> 83).
+HOSTED_UNIT_BASELINE_DOCS = 83
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
