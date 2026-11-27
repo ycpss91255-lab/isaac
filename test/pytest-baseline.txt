@@ -285,8 +285,9 @@
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
-# isaac#289: test_readme_multi_instance.py adds 24 docs cases (647 -> 671, docs 20 -> 44).
-HOSTED_UNIT_BASELINE = 671
+# isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
+# isaac#289: test_readme_multi_instance.py adds 24 docs cases (651 -> 675, docs 24 -> 48).
+HOSTED_UNIT_BASELINE = 675
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -311,11 +312,12 @@ HOSTED_UNIT_BASELINE = 671
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
 #   ADR-0026 (isaac#476) adds 4 docs tests (docs 16 -> 20).
 #   isaac#411 adds 1 core case (core 601 -> 602).
+#   isaac#381 adds 4 docs cases (docs 20 -> 24).
 HOSTED_UNIT_BASELINE_CORE = 602
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 19
 HOSTED_UNIT_BASELINE_HEADLESS = 6
-HOSTED_UNIT_BASELINE_DOCS = 44
+HOSTED_UNIT_BASELINE_DOCS = 48
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
