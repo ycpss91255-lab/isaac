@@ -47,4 +47,4 @@ def test_livestream_sop_starts_idle_container_then_uses_exec():
     guide = _REPO_ROOT / "src/doc/standalone_livestream_workflow.md"
     content = guide.read_text(encoding="utf-8")
     assert "run -t stream -d" in content
-    assert "exec -t stream" in content
+    assert "exec -t stream /isaac-sim/runheadless.sh" in content
