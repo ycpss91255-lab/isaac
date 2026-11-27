@@ -325,7 +325,9 @@
 #   ISAAC_KIT_EXTRA_ARGS (isaac#422): +7 hosted (test_isaac_driver.py); live 526.
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
-HOSTED_UNIT_BASELINE = 693
+# isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
+# isaac#484: +2 net in the stream group (691 -> 693 on the old base): 705 -> 707.
+HOSTED_UNIT_BASELINE = 707
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -350,7 +352,7 @@ HOSTED_UNIT_BASELINE = 693
 #   (39 -> 47), all core: 683 -> 691 (core 642 -> 650).
 #   isaac#484 replaces two custom experience checks with four checks for the
 #   official experience and removal of the custom file (stream 19 -> 21).
-HOSTED_UNIT_BASELINE_CORE = 650
+HOSTED_UNIT_BASELINE_CORE = 664
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 21
 HOSTED_UNIT_BASELINE_HEADLESS = 6
