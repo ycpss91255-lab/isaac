@@ -287,7 +287,7 @@ Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration
 | `gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag` | `isaac-sim/kit/cache` and `isaac-sim/nvidia/computecache` become symlinks into `<ISAAC_CI_CACHE_ROOT>/<BASE_IMAGE tag>/{kit-cache,computecache}`, outside the workspace; old workspace contents are dropped (isaac#260). |
 | `gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag` | An explicit `ISAAC_CI_CACHE_KEY` selects the persistent cache directory instead of the Dockerfile tag. |
 | `gpu integration job: both caches survive workspace cleanup between runs` | Files in the persistent cache dirs remain after the workspace `isaac-sim/` is wiped and the job runs again. |
-| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | Mounts are writable when the baseline stub runs; state dirs (`kit/data`, `ov/*`, ...) stay real workspace dirs, not links, so state starts cold.
+| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | Mounts are writable when the baseline stub runs; state dirs (`kit/data`, `ov/*`, ...) stay real workspace dirs, not links, so state starts cold. |
 
 ## test/bats/smoke/cleanup_merged_worktree_spec.bats (9)
 
