@@ -22,12 +22,12 @@ REMOVED_MODULES = (
 @pytest.mark.parametrize(
     "path",
     [
-        "src/script/ros2_test_pub.py",
-        "src/script/ros2_test_pub_standalone.py",
-        "src/script/ros2_test_sub.py",
-        "src/script/ros2_test_sub_standalone.py",
-        "src/script/view_isaac_bag.sh",
-        "src/script/view_isaac_camera.sh",
+        "src/script/ros2_" + "test_pub.py",
+        "src/script/ros2_" + "test_pub_standalone.py",
+        "src/script/ros2_" + "test_sub.py",
+        "src/script/ros2_" + "test_sub_standalone.py",
+        "src/script/view_isaac_" + "bag.sh",
+        "src/script/view_isaac_" + "camera.sh",
         "src/doc/ros2_pubsub_smoke.md",
         "src/doc/cmd_vel_inkit_teleop.md",
         "src/config/ros2/fastdds_tcp_client.xml",
@@ -61,13 +61,12 @@ def _repo_files():
 
 
 def test_no_removed_script_references():
-    pattern = re.compile(rb"ros2_test_|view_isaac_(bag|camera)")
+    pattern = re.compile(rb"ros2_" + rb"test_|view_isaac_" + rb"(bag|camera)")
     changelog = REPO_ROOT / "doc/changelog"
-    this_test = Path(__file__).resolve()
     matches = [
         path.relative_to(REPO_ROOT)
         for path in _repo_files()
-        if path != this_test and changelog not in path.parents
+        if changelog not in path.parents
         and path.is_file() and pattern.search(path.read_bytes())
     ]
     assert matches == []
