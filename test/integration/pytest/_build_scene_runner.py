@@ -14,6 +14,7 @@ Marker lines (the pytest layer asserts on these)::
 
     [ADAPTER PRIM] path=<p> valid=<bool>     ground / light / robot root
     [ADAPTER OBJECT] path=<p> valid=<bool> rigidbody=<bool>
+    [ADAPTER MATERIAL] path=<p> bound_on_object=<bool> diffuse=<rgb>
     [ADAPTER CHASSIS] valid=<bool>           Jetbot articulation body
     [ADAPTER OK] ground=<bool> light=<bool> robot=<bool> objects=<N>
     [EXIT CLEAN]
@@ -57,7 +58,7 @@ def _main() -> None:
     exit_code = 1
     try:
         import omni.usd
-        from pxr import UsdPhysics
+        from pxr import UsdPhysics, UsdShade
 
         from isaac_devkit.scene import build_scene
 
@@ -74,6 +75,7 @@ def _main() -> None:
                     "model": object_usd,
                     "pose": {"xyz": [1.0, 0.0, 0.5], "rpy": [0.0, 0.0, 0.0]},
                     "mobility": "dynamic",
+                    "spawn_overrides": {"visual_material_diffuse": (0.2, 0.4, 0.6)},
                 }
             ],
         }
@@ -131,6 +133,20 @@ def _main() -> None:
             has_rb = bool(prim.HasAPI(UsdPhysics.RigidBodyAPI))
             print(
                 f"[ADAPTER OBJECT] path={p} valid=True rigidbody={has_rb}",
+                flush=True,
+            )
+            material, binding = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()
+            bound_on_object = bool(material and binding and binding.GetPrim() == prim)
+            diffuse = None
+            if material:
+                shader, _, _ = material.ComputeSurfaceSource()
+                if shader:
+                    color = shader.GetInput("diffuseColor").Get()
+                    if color is not None:
+                        diffuse = tuple(color)
+            print(
+                f"[ADAPTER MATERIAL] path={p} bound_on_object={bound_on_object} "
+                f"diffuse={diffuse}",
                 flush=True,
             )
 

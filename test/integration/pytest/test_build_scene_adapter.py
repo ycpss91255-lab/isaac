@@ -115,6 +115,19 @@ def test_adapter_spawns_mobility_dynamic_object(adapter_run):
     )
 
 
+def test_adapter_binds_spawn_override_diffuse_color(adapter_run):
+    """The cube's own binding resolves to a surface shader with the override color."""
+    m = re.search(
+        r"\[ADAPTER MATERIAL\] path=(\S+) bound_on_object=(\w+) diffuse=(.*)",
+        adapter_run.stdout,
+    )
+    assert m, f"no [ADAPTER MATERIAL] marker:\n{adapter_run.stdout}"
+    assert m.group(2) == "True", f"no material binding on {m.group(1)}"
+    assert m.group(3) != "None", f"bound surface shader has no diffuseColor on {m.group(1)}"
+    color = tuple(float(v) for v in m.group(3).strip("()").split(","))
+    assert color == pytest.approx((0.2, 0.4, 0.6))
+
+
 def test_adapter_spawns_with_identity_orientation(adapter_run):
     """rpy [0,0,0] in the scene must reach the stage as an identity orient.
 
