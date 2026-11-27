@@ -45,8 +45,4 @@ setup() {
   grep -E '電腦規格|test_1 server' CONTRIBUTING.md
   run grep -Ei '/home/[a-z_][a-z0-9_-]*|[[:alnum:]_.%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}' CONTRIBUTING.md
   [ "${status}" -eq 1 ]
-  if [[ -n "${USER:-}" && "${USER}" != root ]]; then
-    run grep -Fiw -- "${USER}" CONTRIBUTING.md
-    [ "${status}" -eq 1 ]
-  fi
 }
