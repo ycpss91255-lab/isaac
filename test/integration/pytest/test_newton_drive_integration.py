@@ -4,6 +4,7 @@ Boots ``IsaacDriver`` (Isaac Lab ``AppLauncher``) with the official Jetbot
 (``test/test_assets.py``), drives both wheels at a constant velocity and
 checks, per engine (PhysX is the control):
 
+* the captured output contains no Kit exception or Python traceback;
 * the live settings enable the 60 Hz rate limit and fixed time stepping,
   and the timeline reports looping disabled;
 * the wheel joint positions advance past a threshold (Newton used to
@@ -63,6 +64,13 @@ def _run(engine):
 @pytest.fixture(scope="module", params=["physx", "newton"])
 def run_output(request):
     return request.param, _run(request.param)
+
+
+@requires_isaac
+def test_run_has_no_kit_exception(run_output):
+    _, out = run_output
+    assert "[RAISED]" not in out, out[-2000:]
+    assert "Traceback (most recent call last)" not in out, out[-2000:]
 
 
 @requires_isaac

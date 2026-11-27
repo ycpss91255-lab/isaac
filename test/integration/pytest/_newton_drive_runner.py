@@ -19,6 +19,7 @@ Usage (inside the GPU container)::
 import argparse
 import sys
 import time
+from pathlib import Path
 
 WHEEL_JOINTS = ["left_wheel_joint", "right_wheel_joint"]
 COMMAND_RAD_S = 10.0
@@ -31,6 +32,8 @@ def _main() -> None:
     parser.add_argument("--robot-usd", required=True)
     parser.add_argument("--engine", choices=["physx", "newton"], required=True)
     args = parser.parse_args()
+    if not Path(args.robot_usd).is_file():
+        sys.exit(f"--robot-usd must point to an existing file, got {args.robot_usd!r}")
     sys.path.insert(0, args.script_dir)
 
     from isaac_devkit.driver import IsaacDriver  # noqa: E402

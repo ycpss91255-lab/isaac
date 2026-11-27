@@ -508,13 +508,13 @@ HOSTED_UNIT_BASELINE_DOCS = 16
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-# isaac#447: test_newton_drive_integration.py (4 tests x physx/newton = 8) -- ratchet UP 40 -> 48.
+# isaac#447: test_newton_drive_integration.py (5 tests x physx/newton = 10) -- ratchet UP 40 -> 50.
 #   NOT executed locally; first proof is the CI core-gpu job.
-GPU_INTEGRATION_BASELINE = 48
+GPU_INTEGRATION_BASELINE = 50
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Recorded for traceability; the isaac#447 floors sum to
-#   733 (685 hosted-unit + 48 GPU-integration), well past the
+#   737 (687 hosted-unit + 50 GPU-integration), well past the
 #   PRD's 126 floor. The aggregate is asserted at M2 where the GPU runner
 #   runs (see assert_pytest_baseline.sh --gpu); a SKIPPED GPU job does not
 #   count toward it.
