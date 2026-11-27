@@ -156,7 +156,7 @@ if [[ "${MODE}" == "gpu" ]]; then
   # container is `<project>-test-run-<hash>` -- project-scoped, no name to
   # handle.) Pin via a surgical sed of the PROJECT_NAME= line (the same
   # post-apply sed the CI WS_PATH pin uses) rather than `setup.sh apply` with
-  # a .setup.conf.local override -- a second apply here would re-run detection
+  # a setup.local.toml override -- a second apply here would re-run detection
   # and clobber the CI WS_PATH pin the prior apply step wrote. Default a
   # dedicated <derived>-baseline; overridable via BASELINE_PROJECT so CI can
   # pass a per-run-unique value (e.g. the GitHub run id) for concurrency

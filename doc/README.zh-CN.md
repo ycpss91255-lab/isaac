@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage 树：`devel-base` -> `devel`（共用层：isaac 程序与共用设置）-> `gui` / `stream` / `headless`。只有 `gui` service 挂载 X11（`.setup.conf` 的 `[stage:gui] gui.mode = auto`；顶层 `[gui]` 为 `off`，所以 `devel` 与其他 stage 都不挂载）：`just docker run -t gui`。两个 stage 透过 [base #215](https://github.com/ycpss91255-lab/base/issues/215) auto-emit 为 profile-gated compose service：`headless`（pure sim，`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC，`ISAAC_LIVESTREAM=2`）。两者启动后都 `CMD ["sleep","infinity"]` idle（没有 `runheadless.sh -v` ENTRYPOINT）— container 持续存活，由你用 `just docker exec -t <stage> <cmd>` 把 driver 脚本（`/isaac-sim/python.sh <driver.py>`，读 `ISAAC_LIVESTREAM=2` 开 stream）或一次性 `/usr/local/bin/runheadless-host-config.sh` 送进去；streaming 起来后 web-viewer 连 `:5173`。使用 `just docker run -t <stage> -d` 启动。
+> Stage 树：`devel-base` -> `devel`（共用层：isaac 程序与共用设置）-> `gui` / `stream` / `headless`。只有 `gui` service 挂载 X11（`setup.toml` 的 `["stage:gui"] "gui.mode" = "auto"`；顶层 `[gui]` 设为 `mode = "off"`，所以 `devel` 与其他 stage 都不挂载）：`just docker run -t gui`。两个 stage 透过 [base #215](https://github.com/ycpss91255-lab/base/issues/215) auto-emit 为 profile-gated compose service：`headless`（pure sim，`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC，`ISAAC_LIVESTREAM=2`）。两者启动后都 `CMD ["sleep","infinity"]` idle（没有 `runheadless.sh -v` ENTRYPOINT）— container 持续存活，由你用 `just docker exec -t <stage> <cmd>` 把 driver 脚本（`/isaac-sim/python.sh <driver.py>`，读 `ISAAC_LIVESTREAM=2` 开 stream）或一次性 `/usr/local/bin/runheadless-host-config.sh` 送进去；streaming 起来后 web-viewer 连 `:5173`。使用 `just docker run -t <stage> -d` 启动。
 
 ### Headless：启动 Isaac 并跑一个场景
 
@@ -178,8 +178,8 @@ post-run hook 同时也把 `network.public_ip` 当 `SIGNALING_SERVER` env 传给
 
 - streaming kit app 同时 listen 在 `8011`（NVCF signaling，FastAPI/uvicorn）、`49100`（self-host WebRTC）与 `8211`（kit API / streaming viewer）。WebRTC Streaming Client 会自己选对的，**不要写 port**
 - **同时只能一个 client 连**（NVIDIA 限制）。第二个连接会被拒绝
-- `setup.conf` 已开 `network_mode: host`，容器内 listen 的 port = host 的 port。Host 防火墙要放行 `8011/tcp` 跟 `49100/tcp`（`sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`）
-- `setup.conf [deploy] gpu_capabilities` 必须含 `video` — 否则 nvidia-container-runtime 不 mount NVENC libs（`libnvidia-encode.so` / `libnvcuvid.so`），server 连得上但画面 encode 不出来 → 黑画面。当前 `setup.conf` 已加
+- `setup.toml` 的 `[network]` 设为 `mode = "host"`，容器内 listen 的 port = host 的 port。Host 防火墙要放行 `8011/tcp` 跟 `49100/tcp`（`sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`）
+- `setup.toml` 的 `[deploy]` 设有 `gpu_capabilities = "all"`，其中包含 `video` — 否则 nvidia-container-runtime 不 mount NVENC libs（`libnvidia-encode.so` / `libnvcuvid.so`），server 连得上但画面 encode 不出来 → 黑画面。
 - Server 端确认 listener：`ss -tln | grep -E ':8011|:49100'` 应看到两个 `LISTEN`
 
 ### 确定性 stream-source producer（GHCR image，isaac#223）
@@ -352,7 +352,7 @@ out.step(sim_time_seconds)
 
 ## EULA
 
-`ACCEPT_EULA=Y` 与 `PRIVACY_CONSENT=Y` 通过 `setup.conf [environment]` 注入。注意：Isaac Sim 6.x 用 `OMNI_ENV_PRIVACY_CONSENT` 读取 privacy consent（此名称自 5.1 起采用，跟 5.1 之前的版本不同）；目前设的 `PRIVACY_CONSENT=Y` 无害但实际无作用，要 telemetry opt-in 请另设正确的变量。
+`ACCEPT_EULA=Y` 与 `PRIVACY_CONSENT=Y` 通过 `setup.toml [environment]` 注入。注意：Isaac Sim 6.x 用 `OMNI_ENV_PRIVACY_CONSENT` 读取 privacy consent（此名称自 5.1 起采用，跟 5.1 之前的版本不同）；目前设的 `PRIVACY_CONSENT=Y` 无害但实际无作用，要 telemetry opt-in 请另设正确的变量。
 
 ## Smoke Tests
 
@@ -376,7 +376,7 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 系统的 `python3` 无法安装这些套件（Isaac base image 的 PEP 668 拦截 `pip`）— 一律走 `/isaac-sim/python.sh -m pytest ...`，不要用 `pytest ...`。
 
-GPU integration test（需要 Isaac Sim 真正启动，例如 camera → ROS 2 headless smoke，#127）走 `test` compose service；该 service 的 NVIDIA GPU reservation 来自 `setup.conf` 的 `[stage:devel-test]` override（`deploy.gpu_mode = force`，base #493）：
+GPU integration test（需要 Isaac Sim 真正启动，例如 camera → ROS 2 headless smoke，#127）走 `test` compose service；该 service 的 NVIDIA GPU reservation 来自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \

@@ -46,7 +46,7 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage tree: `devel-base` -> `devel` (shared layer: isaac code + common config) -> `gui` / `stream` / `headless`. Only the `gui` service mounts X11 (`[stage:gui] gui.mode = auto` in `.setup.conf`; top-level `[gui]` is `off`, so `devel` and the other stages mount none): `just docker run -t gui`. Two stages auto-emitted as profile-gated compose services per [base #215](https://github.com/ycpss91255-lab/base/issues/215): `headless` (pure sim, `ISAAC_LIVESTREAM=0`) and `stream` (sim + WebRTC, `ISAAC_LIVESTREAM=2`). Both idle on startup — the container stays up and you exec driver scripts in via `just docker exec -t <stage> <cmd>`. Use `just docker run -t <stage> -d` to launch.
+> Stage tree: `devel-base` -> `devel` (shared layer: isaac code + common config) -> `gui` / `stream` / `headless`. Only the `gui` service mounts X11 (`["stage:gui"] "gui.mode" = "auto"` in `setup.toml`; top-level `[gui]` sets `mode = "off"`, so `devel` and the other stages mount none): `just docker run -t gui`. Two stages auto-emitted as profile-gated compose services per [base #215](https://github.com/ycpss91255-lab/base/issues/215): `headless` (pure sim, `ISAAC_LIVESTREAM=0`) and `stream` (sim + WebRTC, `ISAAC_LIVESTREAM=2`). Both idle on startup — the container stays up and you exec driver scripts in via `just docker exec -t <stage> <cmd>`. Use `just docker run -t <stage> -d` to launch.
 
 ### Headless: bring Isaac up and run a scene
 
@@ -178,8 +178,8 @@ Notes:
 
 - The streaming kit app simultaneously listens on `8011` (NVCF signaling, FastAPI/uvicorn), `49100` (self-host WebRTC), and `8211` (kit API / streaming viewer). The WebRTC Streaming Client picks the right one — leave the port off.
 - **Only one client can connect at a time** (NVIDIA limitation). A second connection attempt is rejected.
-- `network_mode: host` is set in `setup.conf`, so the container's listen port = host's listen port. Make sure the host firewall allows `8011/tcp` and `49100/tcp` (e.g. `sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`).
-- `gpu_capabilities` in `setup.conf [deploy]` must include `video` — without it, nvidia-container-runtime does not mount NVENC libs (`libnvidia-encode.so`, `libnvcuvid.so`), so the server connects but cannot encode frames → black screen. The current `setup.conf` already includes `video`.
+- `[network]` sets `mode = "host"` in `setup.toml`, so the container's listen port = host's listen port. Make sure the host firewall allows `8011/tcp` and `49100/tcp` (e.g. `sudo ufw allow 8011/tcp && sudo ufw allow 49100/tcp`).
+- In `setup.toml`, `[deploy]` sets `gpu_capabilities = "all"`, which includes `video` — without it, nvidia-container-runtime does not mount NVENC libs (`libnvidia-encode.so`, `libnvcuvid.so`), so the server connects but cannot encode frames → black screen.
 - Verify the listeners from the server: `ss -tln | grep -E ':8011|:49100'` should show both `LISTEN ... :8011` and `LISTEN ... :49100`.
 
 ### Deterministic stream-source producer (GHCR image, isaac#223)
@@ -352,7 +352,7 @@ The container runs as a host-UID-aligned non-root user (`USER_NAME` from `.env`,
 
 ## EULA
 
-`ACCEPT_EULA=Y` and `PRIVACY_CONSENT=Y` are injected via `setup.conf [environment]`. Note: Isaac Sim 6.x reads privacy consent from `OMNI_ENV_PRIVACY_CONSENT` (the name adopted in 5.1, different from pre-5.1 versions); the `PRIVACY_CONSENT=Y` we currently set is harmless but has no effect — set explicitly if you want telemetry opt-in.
+`ACCEPT_EULA=Y` and `PRIVACY_CONSENT=Y` are injected via `setup.toml [environment]`. Note: Isaac Sim 6.x reads privacy consent from `OMNI_ENV_PRIVACY_CONSENT` (the name adopted in 5.1, different from pre-5.1 versions); the `PRIVACY_CONSENT=Y` we currently set is harmless but has no effect — set explicitly if you want telemetry opt-in.
 
 ## Smoke Tests
 
@@ -376,7 +376,7 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 System `python3` cannot install these packages (PEP 668 blocks `pip` on the Isaac base image) — always invoke `/isaac-sim/python.sh -m pytest ...` instead of `pytest ...`.
 
-GPU integration tests (Isaac Sim must boot, e.g. the camera → ROS 2 headless smoke, #127) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `[stage:devel-test]` override in `setup.conf` (`deploy.gpu_mode = force`, base #493):
+GPU integration tests (Isaac Sim must boot, e.g. the camera → ROS 2 headless smoke, #127) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `["stage:devel-test"]` override in `setup.toml` (`"deploy.gpu_mode" = "force"`, base #493):
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \

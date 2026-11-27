@@ -45,7 +45,7 @@ GPU CI policy (PRD Testing & Acceptance): headless; timeout = boot budget
 x 1.5; retry <= 1, logged. A skipped GPU job does NOT count as green.
 
 Run inside the GPU-enabled test container (requires the
-``[stage:devel-test] deploy.gpu_mode = force`` setup.conf override)::
+``["stage:devel-test"] "deploy.gpu_mode" = "force"`` setup.toml override)::
 
     ./script/run.sh -t test -- /isaac-sim/python.sh -m pytest \
         <repo>/test/integration/pytest/test_example_gpu_integration.py -s

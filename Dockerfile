@@ -8,8 +8,8 @@
 #
 # Stage tree (isaac#427): devel is the shared layer (isaac code + common
 # config); gui / stream / headless are the three leaves, each `FROM devel`.
-# Only the gui service mounts X11 (see `[gui]` / `[stage:gui]` in
-# .setup.conf); the Dockerfile itself carries no X11 packages.
+# Only the gui service mounts X11 (see `[gui]` / `["stage:gui"]` in
+# setup.toml); the Dockerfile itself carries no X11 packages.
 #
 #   sys -> devel-base -> devel -+-> gui
 #                               +-> stream -> producer
@@ -39,7 +39,7 @@
 # tty / profiles. Stage names must match `^[a-z][a-z0-9_-]*$` and must
 # not collide with `latest` / `v[0-9]*` (reserved release tag
 # namespace). `headless` / `stream` below are the two repo-side entrypoint
-# variants emitted via this mechanism. No setup.conf change needed; run
+# variants emitted via this mechanism. No setup.toml change needed; run
 # any wrapper to regenerate compose.yaml, then `just docker run -t <stage>`.
 #
 # Backward-compat: the legacy stage names `base` and `test` are still
@@ -151,10 +151,8 @@ ARG CONFIG_DIR="/tmp/config"
 # /tmp/config/. The first brings .base/dist/config/ defaults; the second
 # overlays <repo>/config/ on top. File-level merge — files in
 # <repo>/config/ replace same-path files in /tmp/config/; files only in
-# .base/dist/config/ stay; files only in <repo>/config/ are added. Mental
-# model is the same as setup.conf section-replace, just at file
-# granularity. Trim <repo>/config/ files that match base default to
-# start receiving template-side improvements.
+# .base/dist/config/ stay; files only in <repo>/config/ are added.
+# Trim <repo>/config/ files that match base defaults to receive template updates.
 ARG CONFIG_SRC="config"
 
 # [isaac #149 / ADR-0018] Isaac Lab as a baked base tool (alongside Isaac
@@ -522,8 +520,8 @@ CMD ["sleep", "infinity"]
 
 ############################## gui ##############################
 # [isaac #427] Desktop GUI variant. The image is the same as devel; what
-# makes it the GUI stage is its compose service: `[stage:gui] gui.mode =
-# auto` in .setup.conf mounts X11 / DISPLAY here and nowhere else.
+# makes it the GUI stage is its compose service: `["stage:gui"]` in setup.toml sets
+# `"gui.mode" = "auto"`, which mounts X11 / DISPLAY here and nowhere else.
 #
 # Usage:
 #   just docker run -t gui
