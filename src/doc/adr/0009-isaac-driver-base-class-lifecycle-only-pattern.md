@@ -38,7 +38,7 @@ Isaac Sim 5.1 的 3-way signal handler 衝突（Kit handler + driver handler + r
 
 ### Scene defaults: base class 預設補建（opt-out）
 
-3/4 driver 在 stage open 後補建 SunLight + GroundPlane。Base class 預設補建，先 `GetPrimAtPath().IsValid()` 檢查再建 — 已存在時 skip，對自帶 scene 的 USD（如 camera-bot example）無副作用。
+3/4 driver 在 stage open 後補建 SunLight + GroundPlane。Base class 預設補建，先 `GetPrimAtPath().IsValid()` 檢查再建 — 已存在時 skip，對自帶 scene 的 USD 無副作用。
 
 ### 模組位置: `script/isaac_driver.py`（flat）
 

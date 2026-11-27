@@ -15,10 +15,10 @@
 #   (test/unit/pytest/, no Isaac Sim installed) must collect at least this
 #   many tests and pass them all. M1 gate floor per the DoD is 115; the
 #   count at extraction (#130) was 171 (121 ported + 50 greenfield). The
-#   example sim (#131) adds 14 hosted unit tests (test_example_driver.py:
+#   example sim (#131) added 14 hosted unit tests (removed in #327):
 #   three-file scene merge, expected base_link prim path, cmd_vel
 #   controller mapping, SCENE attr shape, run() lifecycle-order + SIGINT
-#   spy, import-safety). Live count was then 185. The scaffold (#134)
+#   spy, import-safety. Live count was then 185. The scaffold (#134)
 #   adds 23 hosted structure-check tests
 #   (test/unit/pytest/test_new_workspace_scaffold.py: run new-workspace.sh
 #   into a tmp dir and assert the A5 consumer layout -- 16 emitted-file
@@ -283,6 +283,7 @@
 #   ISAAC_IO_PLUGIN (isaac#423): +10 hosted (test_isaac_driver.py); live 536.
 # isaac#427: test_stage_structure.py (4 tests) -- ratchet UP 536 -> 540.
 # isaac#458: test_check_stale_naming.py adds 14 core cases (691 -> 705, core 650 -> 664).
+# isaac#327: retire 14 bundled-driver tests and add 1 core removal guard (651 -> 638, core 602 -> 589).
 # ADR-0026 (isaac#476) adds 4 docs tests: 642 -> 646; isaac#411 +1 core: 646 -> 647.
 # isaac#430 (this PR) removes ROS settings and adds 5 core tests net of retirements: 647 -> 652.
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
@@ -302,8 +303,13 @@
 # isaac#430 re-merge: 764 -> 769 (core 656 -> 661).
 # isaac#173: 新增 32 個 stream 畫面驗證案例與 1 個 core 工作流程案例（769 -> 802）。
 # isaac#173: 新增 1 個 stream 容器清理範圍案例（802 -> 803）。
-# isaac#484 adds 3 hosted tests on top of main's 803 -> 806 (core 662 -> 663, stream 52 -> 54).
-HOSTED_UNIT_BASELINE = 806
+# isaac#491 adds 19 core cases (hosted 803 -> 822, core 662 -> 681).
+# isaac#327 (re-merge 2): -14 +1 core (822 -> 809, core 681 -> 668).
+# isaac#442: 65 tracker and bot workflow cases, all core:
+#   809 -> 874, core 668 -> 733.
+# isaac#533 adds two core cases for the first line of the tracker PR body.
+# isaac#484 adds 3 hosted tests on top of main's 876 -> 879 (core 735 -> 736, stream 52 -> 54).
+HOSTED_UNIT_BASELINE = 879
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -311,7 +317,7 @@ HOSTED_UNIT_BASELINE = 806
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 806。
+#   以下五組的測試數量下限合計為 879。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -341,10 +347,13 @@ HOSTED_UNIT_BASELINE = 806
 #   isaac#359 adds 7 core cases (core 649 -> 656).
 #   isaac#173 新增串流畫面驗證（hosted 769 -> 802、core 661 -> 662、stream 19 -> 51）。
 #   isaac#173 新增容器清理範圍測試（stream 51 -> 52）。
+#   isaac#491 adds 19 core cases (core 662 -> 681).
+#   isaac#327: -14 +1 core (core 681 -> 668).
+#   isaac#442 adds 65 core cases (core 668 -> 733).
 #   isaac#484 replaces two custom experience checks with four checks for the
 #   official experience and removal of the custom file (stream 52 -> 54), and
-#   adds 1 core case (core 662 -> 663).
-HOSTED_UNIT_BASELINE_CORE = 663
+#   adds 1 core case (core 735 -> 736).
+HOSTED_UNIT_BASELINE_CORE = 736
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -430,7 +439,9 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   The OutputHub GPU delivery test (#365 part 2) adds 4 in-container
 #   (test_output_hub_gpu.py: RGB uint8 (H,W,3), depth float32 (H,W), joint
 #   state, IMU w,x,y,z, all from one runner boot). +4 on top of main (32 -> 36, a ratchet UP).
-#   NOT executed locally; first proof is the CI gpu-integration job.
+#   Executed on a real GPU (isaac#384, Isaac Sim 6.2.0.1, devel-test image):
+#   4 passed / 0 skipped, so the 4 count as passed, not skipped; the GPU
+#   baseline equals the collected count (no raise needed).
 # isaac#326 unit 1: test_scaffold_smoke.py (3 tests) removed with the scaffold
 #   -- intentional ratchet DOWN 35 -> 32.
 # isaac#422: test_kit_extra_args_integration.py (2 tests) -- ratchet UP 36 -> 38.
@@ -444,7 +455,7 @@ GPU_INTEGRATION_BASELINE = 35
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
 #   isaac#173 的兩組下限原合計 836（802 hosted-unit + 35 GPU-integration），
-#   加入容器清理範圍測試後為 837（803 hosted-unit + 35 GPU-integration）。
+#   加入容器清理範圍測試後為 837（803 hosted-unit + 35 GPU-integration）；isaac#327 移除範例後為 844（809 + 35）。
 AGGREGATE_TARGET = 126
 
 # BATS_BASELINE_<GROUP> -- floors for the devel-test bats specs, per group
@@ -458,8 +469,8 @@ AGGREGATE_TARGET = 126
 #   isaac#397 adds five per-worktree --fix-owner cases and one batch flag
 #   forwarding case, raising core from 113 to 119.
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
-#   isaac#430 removes 11 core bats tests (119 -> 108).
-BATS_BASELINE_CORE = 108
+#   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
+BATS_BASELINE_CORE = 119
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13

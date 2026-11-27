@@ -1,79 +1,8 @@
-# example/ -- base repo 的可运行示例（onboarding 导览）
+# 示例
 
-这个目录是 base repo 附带的单一可运行示例，同时兼任 scaffold 模板
-（ADR-0017）。新手或 agent 拿到的就是它：从零跑到一个 live camera topic，
-再换成自己的机器人，**全程不需要读 framework 源码**。
+[ROS 2 软件包](ros2/README.zh-CN.md) 订阅相机图像，并通过 `/cmd_vel` 发布速度指令。
 
-- [`sim/`](sim/) -- Isaac 端：`camera_bot` USD、三档 scene、per-sensor 的
-  `custom.yaml`，以及 `example_driver.py`（发布 camera stream、用 `/cmd_vel`
-  驱动底盘）。
-- [`ros2/`](ros2/) -- 应用端：订阅 camera 并发布 `/cmd_vel` 的最小 ROS 2
-  包。见 [`ros2/README.zh-CN.md`](ros2/README.zh-CN.md)。
-
-## Onboarding 导览（M5 路径）
-
-Onboarding 成功的衡量标准是：scaffold 一个 workspace、跑起来、换机器人、
-换 sensor —— 全部只靠改这个 `example/` 内的文件，绝不靠读 `framework/`
-源码。下面三个任务就是这条路径。
-
-### 1. 第一条 topic（scaffold -> run）
-
-`new-workspace.sh` scaffold 已移除（#326）；从本 repo 根目录执行：
-
-```bash
-just setup && just build && just run
-```
-
-`just run` 启动 example driver；camera topic
-`/camera_bot/camera/color/image_raw` 会出现。从另一个 ROS 2 container 确认：
-
-```bash
-docker run --rm --net=host ros:humble bash -c '
-  source /opt/ros/humble/setup.bash &&
-  ros2 topic echo --once /camera_bot/camera/color/image_raw'
-```
-
-第一条 frame 就是 M1「time-to-first-topic」里程碑。
-
-### 2. 换成自己的机器人 USD
-
-示例加载 [camera_bot.usd](sim/model/usd/robot/camera_bot/camera_bot.usd)。更换模型时：
-
-1. 用 [asset_converter](https://github.com/ycpss91255-lab/asset_converter) 生成 USD，连同引用的资产放入 `sim/model/usd/robot/`。
-2. 在 [sim/scene/robot.yaml](sim/scene/robot.yaml) 设置 `robot.model`（相对于 `sim/` 的 USD 路径）和 `robot.name`。示例 driver 使用 `base_link` 底盘，请把相机的 `link` 设为实际挂载点。
-
-再 `just run` 一次 —— 你的机器人启动，camera topic 照样发布。
-
-### 3. 换 sensor（in scope）
-
-camera 由 per-sensor YAML
-[`sim/config/sensor/custom.yaml`](sim/config/sensor/custom.yaml) 设定。
-以下都是 in-scope 的修改 —— 改文件、重跑，不碰任何 framework 代码：
-
-- **分辨率 / fps**：改 `sensors[0].resolution`（例如 `[640, 480]`）或
-  `sensors[0].fps`。
-- **Topic override**：改 `ros.topic_prefix`（发布的 topic 与 `ros2/` 内对应
-  的 subscriber 都会跟着变）。
-- **加第二颗 camera**：在 `sensors:` 底下再 append 一个 entry，给新的
-  `name` 与自己的 `resolution` / `fov`；每个 entry 各产生一个
-  `UsdGeom.Camera` 与各自的 image topic。
-
-## 超出范围 / 尚未实现
-
-schema 形状从第一天就锁死，但 framework 只实现示例用到的子集（ADR-0017，
-决策 C：「接口冻结、实现渐进」）。加 **lidar** 或 **imu** sensor 是一个
-**刻意的 out-of-scope 边界**：host 端的 YAML 校验会接受这些 category，但
-Isaac 端的 build path 会 **raise `NotImplementedError`**，直到真有需求才补。
-这是设计如此、不是 bug —— 它就是上面 in-scope sensor swap 的明确边界。
-
-| Sensor swap | 状态 |
-|---|---|
-| camera 分辨率 / fps / topic override / 第二颗 camera | in scope（现在就能用） |
-| **lidar** / **imu** sensor category | **out of scope -- raise `NotImplementedError`** |
-| ZED X 立体（`type: zed`） | out of scope -- raise `NotImplementedError`（需要 Stereolabs extension） |
-
-如果你需要 lidar 或 imu，那是一个 framework feature request（开 issue），
-不是 onboarding 期间靠改 `framework/` 源码就该解掉的事。
+本项目未附模拟示例。请参阅 [Isaac Sim 官方示例](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)。
 
 ## License
 
