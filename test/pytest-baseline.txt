@@ -322,8 +322,9 @@
 # isaac#437 adds eleven core cases for the scoped standalone workflow and runner (hosted 989 -> 1000, core 845 -> 856).
 # isaac#438 adds 2 Kit result validation tests (hosted 1000 -> 1002, core 856 -> 858).
 # isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
-# isaac#562 adds one core case for a standalone probe that exits after writing READY.
-HOSTED_UNIT_BASELINE = 1005
+# isaac#336: USD driver and launcher (+12 core) and per-module import guards (+2 core) (hosted 1004 -> 1018, core 860 -> 874).
+# isaac#562 adds one core case for a standalone probe that exits after writing READY (hosted 1018 -> 1019, core 874 -> 875).
+HOSTED_UNIT_BASELINE = 1019
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -331,7 +332,7 @@ HOSTED_UNIT_BASELINE = 1005
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1000。
+#   以下五組的測試數量下限合計為 1018。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -374,7 +375,7 @@ HOSTED_UNIT_BASELINE = 1005
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 861
+HOSTED_UNIT_BASELINE_CORE = 875
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -461,7 +462,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   isaac#429 keeps all 35 cases and moves two I/O checks to no_ros/.
 # isaac#478: pin the collision schema contract on the live stage.
 # isaac#390: test_output_mode_python_gpu.py adds 3 core cases (GPU 36 -> 39).
-GPU_INTEGRATION_BASELINE = 39
+# isaac#336: play the Jetbot USD with the default driver and no I/O plugin (GPU 39 -> 40).
+GPU_INTEGRATION_BASELINE = 40
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
