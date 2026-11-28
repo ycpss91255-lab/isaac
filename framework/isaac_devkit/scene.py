@@ -1,7 +1,7 @@
 """Declarative scene composition from YAML config.
 
-Reads a Scene YAML that lists robot + objects + sensors, resolves model
-paths relative to repo root, and assembles the scene via Isaac Sim Core
+Reads a Scene YAML that lists robot + objects + sensors, resolves relative model
+paths under the MODEL_PATH roots, and assembles the scene via Isaac Sim Core
 Experimental. The pure ``to_spawn_specs`` adapter returns JSON-serializable
 records. Runtime imports stay inside the stage authoring functions.
 
@@ -79,18 +79,12 @@ def _validate_scene(scene, source):
         _spawn_options(obj.get("spawn_overrides", {}), "usd")
 
 
-def _model_search_roots(repo_root):
-    """Return the list of directories to search for relative model paths.
-
-    When the ``MODEL_PATH`` environment variable is set, its colon-separated
-    entries are searched in order. Otherwise, the legacy
-    ``<repo_root>/model/usd/`` directory is used as the sole search root so
-    that existing callers continue to work without any configuration.
-    """
-    env = os.environ.get("MODEL_PATH", "")
-    if env:
-        return [Path(p) for p in env.split(":") if p]
-    return [Path(repo_root) / "model" / "usd"]
+def _model_search_roots():
+    """Return the search roots from the required colon-separated MODEL_PATH."""
+    env = os.environ.get("MODEL_PATH")
+    if not env:
+        raise ValueError("Set MODEL_PATH to the mounted model directories")
+    return [Path(p) for p in env.split(":") if p]
 
 
 def _resolve_package_uri(uri, roots):
@@ -135,16 +129,12 @@ def resolve_model_path(model_rel, repo_root):
     * **package:// URI** -- ``package://<pkg>/<rel>`` is resolved by
       scanning each MODEL_PATH root for a ``<pkg>/`` directory that
       carries a ``package.xml``.
-    * **relative path** -- searched under each MODEL_PATH root (or the
-      legacy ``<repo_root>/model/usd/`` fallback).
-
-    As a transition shim the function also accepts a relative path that
-    already carries the ``model/usd/`` segment; it strips the prefix
-    before searching so that the same relative tail is looked up
-    everywhere.
+    * **relative path** -- looked up verbatim under each MODEL_PATH root
+      in order, returning the first match.
 
     Raises:
-        FileNotFoundError: with a message that lists every root searched.
+        ValueError: if a search is required and MODEL_PATH is unset or empty.
+        FileNotFoundError: if the model is missing, listing any roots searched.
     """
     model_rel = str(model_rel)
 
@@ -155,25 +145,20 @@ def resolve_model_path(model_rel, repo_root):
             return p
         raise FileNotFoundError(f"model not found: {p}")
 
-    roots = _model_search_roots(repo_root)
+    roots = _model_search_roots()
 
     # package:// URIs are resolved via package.xml scanning.
     if model_rel.startswith("package://"):
         return _resolve_package_uri(model_rel, roots)
 
-    # Strip the legacy prefix so the search root can vary.
-    rel = model_rel
-    if rel.startswith("model/usd/"):
-        rel = rel[len("model/usd/"):]
-
     for root in roots:
-        candidate = root / rel
+        candidate = root / model_rel
         if candidate.exists():
             return candidate
 
     searched = ", ".join(str(r) for r in roots)
     raise FileNotFoundError(
-        f"model not found: '{rel}' not in any search root "
+        f"model not found: '{model_rel}' not in any search root "
         f"(searched: {searched})"
     )
 

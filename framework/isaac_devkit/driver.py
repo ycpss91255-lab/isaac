@@ -5,7 +5,7 @@ Subclass contract:
     from isaac_devkit.driver import IsaacDriver
 
     class MyDriver(IsaacDriver):
-        USD = "model/usd/robot/camera_bot/camera_bot.usd"  # repo-relative
+        USD = "/path/in/container/to/robot.usda"  # absolute, e.g. under the sim_asset mount
 
         def setup(self, stage):
             self.stage = stage
@@ -138,32 +138,20 @@ def boot_extension_kit_args(extensions) -> list:
 
 
 def resolve_repo_relative_usd(usd_path: str, *, module_file: str) -> Path:
-    """Resolve a repo-relative USD path to an absolute ``Path``.
+    """Resolve the driver's USD path to an absolute ``Path``.
 
-    Subclasses declare ``USD = "model/usd/robot/camera_bot/camera_bot.usd"``
-    so that the path travels with the repo and does not bake in a
-    container mount point. The resolution uses the module's filesystem
-    location: ``framework/isaac_devkit/driver.py`` lives two levels under
-    the repo root, so ``parents[2]`` of that module's file is the repo
-    root. Models live under ``<repo_root>/src`` (e.g. ``src/model/usd/``),
-    so resolution anchors at ``<repo_root>/src`` -- the same directory the
-    pre-extraction ``src/script/isaac_driver.py`` resolved against via its
-    ``parents[1]``, keeping the repo-relative ``USD`` convention intact
-    across the move.
-
-    Absolute paths are returned unchanged so that ad-hoc tests can point
-    at a fixture USD outside the repo without subclassing the resolver.
+    Set ``USD`` to an absolute path inside the container, for example under
+    the sim_asset mount. Relative paths resolve under ``<repo_root>/src``,
+    so use one only when the asset exists there.
     """
     if not usd_path:
         raise ValueError(
-            "USD class attribute is required; subclass must set it to a "
-            "repo-relative path (e.g. 'model/usd/robot/camera_bot/camera_bot.usd')"
+            "Set the USD class attribute to an absolute path inside the container."
         )
     p = Path(usd_path)
     if p.is_absolute():
         return p
-    # framework/isaac_devkit/driver.py -> parents[2] = repo root; models
-    # live under <repo_root>/src (the old anchor directory).
+    # framework/isaac_devkit/driver.py -> parents[2] = repo root.
     repo_root = Path(module_file).resolve().parents[2]
     return repo_root / "src" / usd_path
 
@@ -177,7 +165,7 @@ class IsaacDriver:
     """Lifecycle-only base class for Isaac Sim standalone drivers (ADR-0009).
 
     Class attributes:
-        ``USD`` -- repo-relative path to the USD that ``run()`` opens
+        ``USD`` -- path inside the container to the USD that ``run()`` opens
         after Kit boots. Deprecated in favor of ``SCENE`` (ADR-0017
         section 9). Set this for drivers that open a USD directly.
         ``SCENE`` -- repo-relative path to a scene YAML (ADR-0017 A7

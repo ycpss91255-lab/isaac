@@ -13,6 +13,8 @@ from isaac_devkit import driver as id_mod  # noqa: E402  (path injection before 
 
 pytestmark = pytest.mark.core
 
+OMWR_MODEL = "usd/robot/custom/omwr/omwr.usd"
+
 
 # ---------- parse_livestream_env ----------
 
@@ -91,11 +93,11 @@ class TestResolveRepoRelativeUsd:
         fake_module.write_text("# stub")
 
         resolved = id_mod.resolve_repo_relative_usd(
-            "model/usd/robot/foo/foo.usd",
+            OMWR_MODEL,
             module_file=str(fake_module),
         )
 
-        assert resolved == repo_root / "src" / "model/usd/robot/foo/foo.usd"
+        assert resolved == repo_root / "src" / OMWR_MODEL
 
     def test_absolute_path_returned_unchanged(self, tmp_path):
         abs_usd = tmp_path / "anywhere" / "fixture.usda"
@@ -108,7 +110,11 @@ class TestResolveRepoRelativeUsd:
     def test_empty_string_raises(self):
         with pytest.raises(ValueError) as ei:
             id_mod.resolve_repo_relative_usd("", module_file=__file__)
-        assert "USD" in str(ei.value)
+        message = str(ei.value)
+        assert "USD" in message
+        assert "absolute path" in message
+        assert "<repo_root>/src" not in message
+        assert OMWR_MODEL not in message
 
     def test_subclass_forgot_to_set_usd_raises(self):
         # Mirrors the "subclass forgot to set USD" failure mode -- the
@@ -324,7 +330,7 @@ class TestLifecycleOrderSpy:
         )
 
         class _SpyDriver(id_mod.IsaacDriver):
-            USD = "model/usd/robot/foo/foo.usd"
+            USD = OMWR_MODEL
 
             def _open_stage(self):
                 calls.append("open_stage")
@@ -457,7 +463,7 @@ class TestIoPlugin:
     ``(stage, robot_prim, config)`` after the stage is built and before the
     timeline plays (isaac#423)."""
 
-    USD = "model/usd/robot/foo/foo.usd"
+    USD = OMWR_MODEL
 
     class _Prim:
         def __init__(self, path):

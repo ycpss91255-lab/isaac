@@ -12,6 +12,7 @@ coverage for the adapter.
 
 Marker lines (the pytest layer asserts on these)::
 
+    [ADAPTER MODEL_PATH] root=<root>         relative mode only
     [ADAPTER PRIM] path=<p> valid=<bool>     ground / light / robot root
     [ADAPTER OBJECT] path=<p> valid=<bool> rigidbody=<bool>
     [ADAPTER CHASSIS] valid=<bool>           Jetbot articulation body
@@ -22,7 +23,11 @@ Marker lines (the pytest layer asserts on these)::
 CLI::
 
     /isaac-sim/python.sh _build_scene_runner.py --repo-root <repo> \\
-        --robot-usd <jetbot.usd> --object-usd <nvidia_cube.usd>
+        --robot-usd <absolute-jetbot-path> --object-usd <absolute-cube-path>
+
+    /isaac-sim/python.sh _build_scene_runner.py --repo-root <repo> \\
+        --model-path-root <root> --robot-rel <relative-jetbot-path> \\
+        --object-rel <relative-cube-path>
 """
 
 import argparse
@@ -34,16 +39,34 @@ from pathlib import Path
 def _main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", required=True)
-    parser.add_argument("--robot-usd", required=True)
-    parser.add_argument("--object-usd", required=True)
+    parser.add_argument("--robot-usd")
+    parser.add_argument("--object-usd")
+    parser.add_argument("--model-path-root")
+    parser.add_argument("--robot-rel")
+    parser.add_argument("--object-rel")
     args = parser.parse_args()
+
+    # Relative model paths exercise the MODEL_PATH search. Absolute paths bypass it.
+    relative_args = (args.model_path_root, args.robot_rel, args.object_rel)
+    if any(value is not None for value in relative_args):
+        if not all(relative_args):
+            parser.error("--model-path-root, --robot-rel and --object-rel are required together")
+        if Path(args.robot_rel).is_absolute() or Path(args.object_rel).is_absolute():
+            parser.error("--robot-rel and --object-rel must be relative paths")
+        os.environ["MODEL_PATH"] = args.model_path_root
+        robot_usd = args.robot_rel
+        object_usd = args.object_rel
+        print(f"[ADAPTER MODEL_PATH] root={args.model_path_root}", flush=True)
+    else:
+        if not args.robot_usd or not args.object_usd:
+            parser.error("--robot-usd and --object-usd are required in absolute mode")
+        robot_usd = str(Path(args.robot_usd).resolve())
+        object_usd = str(Path(args.object_usd).resolve())
 
     repo_root = Path(args.repo_root).resolve()
     framework_dir = repo_root / "framework"
     if str(framework_dir) not in sys.path:
         sys.path.insert(0, str(framework_dir))
-    robot_usd = str(Path(args.robot_usd).resolve())
-    object_usd = str(Path(args.object_usd).resolve())
 
     # Disable livestreaming for the headless scene check.
     os.environ["ISAAC_LIVESTREAM"] = "0"
@@ -61,7 +84,6 @@ def _main() -> None:
 
         from isaac_devkit.scene import build_scene
 
-        # Absolute model paths bypass the MODEL_PATH search.
         scene = {
             "environment": {"ground_plane": True},
             "robot": {

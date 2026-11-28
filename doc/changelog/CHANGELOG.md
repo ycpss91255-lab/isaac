@@ -17,6 +17,7 @@
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
+- **場景模型從掛載目錄載入（isaac#363）。** 相對模型路徑與 `package://` URI 依序搜尋 `MODEL_PATH` 中以冒號分隔的目錄。未設定或為空字串時會拋出 `ValueError`。相對路徑保留完整前綴，絕對路徑可直接使用。Hosted 測試增至 1095 項，core 增至 924 項。
 - **串流 viewer 改用固定版本的公開映像（isaac#284）。** 本機缺少映像時，post-run hook 會從 GHCR 拉取 `0.3.0` 版，可用 `OWV_IMAGE` 覆寫。移除 `web_viewer` 子模組與 `.gitmodules`。
 - **縮減容器的預設權限（isaac#549）。** 預設關閉特權模式，移除整個 `/dev` 的映射、額外的 Linux capabilities 與 `seccomp:unconfined`，並改用容器自己的 PID 與 IPC 命名空間。串流仍使用主機網路。保留 `shm_size = "16g"` 為 Kit 媒體管線預留共享記憶體空間，使用預設的 64 MB 也通過了 stream-smoke。四語 README 說明如何在 `setup.local.toml` 為 GUI 或特殊裝置開放所需權限。
 - **預設相機設定通用化（isaac#136）。** 三種相機共用掛載點 `/World/Robot/carriage`、ROS topic 前綴 `/robot/camera` 與 frame ID 前綴 `robot_camera`。RViz 與無頭相機測試已同步。移除其餘堆高機文字殘留並新增掃描測試，應用模型與場景資產已移交 [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146)。
