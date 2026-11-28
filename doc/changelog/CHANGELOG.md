@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **新增 Git worktree 掛載的回歸測試（isaac#574）。** 驗證一般 clone 不需額外掛載，連結工作樹則須將共用 Git 目錄掛載到容器內相同的絕對路徑。另檢查執行與收集 hosted pytest 的兩處 Docker 指令都引用掛載腳本。Hosted 基準由 1069 增至 1072，core 組由 906 增至 909。
 - **GPU 整合測試依檔案列出 Kit 啟動與測試耗時（isaac#527）。** 計時範圍僅限 `test/integration/pytest/`，`test/integration/no_ros/` 的 GPU 測試檔案尚未納入。每次建立 `SimulationApp` 時計時，共用 fixture 的啟動時間只計一次。pytest 摘要列出各檔與總計的秒數，可用 `KIT_TIMING_JSON` 指定 JSON 報表路徑。新增 4 項 hosted 測試，基準由 1047 提高至 1051（core 888 → 892）。此 PR 僅提供量測工具，驗收項目仍在 #527 追蹤，尚待完成。
 - **GPU 容器清理測試涵蓋串流畫面 E2E（isaac#564）。** 測試從工作流程入口追蹤 bash 呼叫，核對清理篩選器中的 Compose 專案前綴、執行編號與嘗試次數。新增前綴不符與缺少篩選器兩個回歸案例。
 - **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
