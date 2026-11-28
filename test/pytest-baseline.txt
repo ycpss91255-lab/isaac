@@ -329,7 +329,8 @@
 # isaac#558 adds eight core cases for the step timeout, process-group timeout,
 # watchdog default, runner assumption and four READMEs (hosted 1031 -> 1039, core 879 -> 887).
 # isaac#556 adds seven stream probe cases (hosted 1040 -> 1047, stream 55 -> 62).
-HOSTED_UNIT_BASELINE = 1047
+# isaac#574 adds three core cases for Git metadata mounts (hosted 1047 -> 1050, core 888 -> 891).
+HOSTED_UNIT_BASELINE = 1050
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -380,7 +381,7 @@ HOSTED_UNIT_BASELINE = 1047
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 888
+HOSTED_UNIT_BASELINE_CORE = 891
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 62
 HOSTED_UNIT_BASELINE_HEADLESS = 6

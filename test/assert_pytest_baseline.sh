@@ -249,10 +249,17 @@ if [[ -n "${GROUP}" ]]; then
   PYTEST_SELECT="-m ${GROUP}"
   [[ "${GROUP}" == "core" ]] || PYTEST_COV=""
 fi
-# Run the FORBIDDEN_NAMES scan from a normal clone. The container mounts only
-# the worktree directory, and a linked worktree's .git file points outside it.
+git_mount_args=()
+if [[ -e "${REPO_ROOT}/.git" ]]; then
+  mount_output="$("${REPO_ROOT}/script/ci/git_common_mount.sh" "${REPO_ROOT}")"
+  if [[ -n "${mount_output}" ]]; then
+    # Split only the first space so whitespace in the mount path is preserved.
+    git_mount_args=("${mount_output%% *}" "${mount_output#* }")
+  fi
+fi
 docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${GROUP}" \
-  -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
+  "${git_mount_args[@]}" -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c \
+  '# git_common_mount.sh lets the FORBIDDEN_NAMES scan read a linked worktree.
   set -eu
   just_version="$(/w/.base/dist/script/base/just-version.sh)"
   pip install --quiet --user pyyaml pytest pytest-cov numpy "rust-just==${just_version}"
@@ -286,7 +293,8 @@ PY
 GROUPS_LIST="${GROUP:-${ALL_GROUPS}}"
 counts="$(
   docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES \
-    -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
+    "${git_mount_args[@]}" -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c \
+    '# git_common_mount.sh supplies the same Git metadata during collection.
     set -eu
     pip install --quiet --user pyyaml pytest numpy >/dev/null
     total="$(python -m pytest test/unit/pytest/ --collect-only -q -p no:cacheprovider \
