@@ -6,11 +6,6 @@ import one stable namespace::
 
     from isaac_devkit import load_scene, build_scene, IsaacDriver
 
-The six modules (``usd_model`` / ``materials`` / ``sensors`` /
-``ros_io`` / ``scene`` / ``driver``) remain importable directly for the
-fuller per-module surface; this ``__init__`` exposes the A7 contract
-shapes plus the exception hierarchy.
-
 Import-safety invariant (ADR-0017 section 8 / PRD A1): importing this
 package, or any of its modules, on a host without Isaac Sim must leave
 ``sys.modules`` free of ``omni`` / ``pxr`` / ``isaacsim``. Every Isaac
@@ -32,7 +27,6 @@ from isaac_devkit.exceptions import (
     SensorConfigError,
     SensorNotFoundError,
 )
-from isaac_devkit.ros_io import Msg, RosIo, setup_ros2_io
 from isaac_devkit.scene import build_scene, load_scene
 from isaac_devkit.sensors import setup_sensors
 from isaac_devkit.usd_model import PrimSummary
@@ -47,12 +41,8 @@ __all__ = [
     # Scene (ADR-0017 section 9).
     "load_scene",
     "build_scene",
-    # Sensors (L3 outbound contract entry).
+    # Sensors.
     "setup_sensors",
-    # ROS 2 inbound I/O.
-    "setup_ros2_io",
-    "RosIo",
-    "Msg",
     # USD model structure.
     "PrimSummary",
     # Driver lifecycle (ADR-0009 / A2).

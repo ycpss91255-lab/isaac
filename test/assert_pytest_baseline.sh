@@ -24,11 +24,11 @@
 #          AGGREGATE_TARGET (the PRD 126 parity floor).
 #     The hosted leg is re-derived from the baseline file (no second
 #     container run); only the GPU collected/passed counts come from the
-#     live GPU run.
+#     in-container pytest report.
 #
 # Usage:
 #   test/assert_pytest_baseline.sh           # hosted-unit (M1 gate)
-#   test/assert_pytest_baseline.sh --gpu     # GPU aggregate (M2 gate)
+#   test/assert_pytest_baseline.sh --gpu     # in-container GPU suite and M2 aggregate
 #   test/assert_pytest_baseline.sh --group <g>
 #       hosted-unit for ONE scope group (isaac#434): runs `pytest -m <g>` and
 #       checks that group against its own floor HOSTED_UNIT_BASELINE_<G>. The
@@ -158,7 +158,6 @@ if [[ "${MODE}" == "gpu" ]]; then
   fi
   "${REPO_ROOT}/script/run.sh" -t test -- \
     env PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX=/tmp/gpu-pycache \
-    ROS_DOMAIN_ID="${GPU_ROS_DOMAIN_ID:-0}" \
     /isaac-sim/python.sh -m pytest \
     "${GPU_PYTEST}" \
     -p no:cacheprovider \

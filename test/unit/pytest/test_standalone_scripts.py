@@ -103,3 +103,17 @@ def test_run_and_exit_passes_main_return_code_through(returned, expected):
 def test_standalone_smoke_has_no_hard_coded_workspace():
     source = (_SCRIPT_DIR / "test" / "standalone_smoke.sh").read_text(encoding="utf-8")
     assert not _HARD_CODED_HOME.search(source)
+
+
+@pytest.mark.parametrize("script, entry", [
+    ("camera_setup", "setup_camera"),
+    ("sensor_setup", "setup_sensor"),
+])
+def test_standalone_sensor_shims_expose_devkit_prim_setup(script, entry, monkeypatch):
+    monkeypatch.syspath_prepend(str(_REPO_ROOT / "framework"))
+    from isaac_devkit import sensors
+
+    spec = importlib.util.spec_from_file_location(script, _SCRIPT_DIR / f"{script}.py")
+    shim = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(shim)
+    assert getattr(shim, entry) is getattr(sensors, entry)

@@ -49,7 +49,7 @@ def _do_setup(args, app) -> int:
     """Inner body: load config + build stage + dispatch + report."""
     import omni.usd  # noqa: E402
 
-    from isaac_devkit.sensors import load_config, setup_sensor
+    from isaac_devkit.sensors import get_category, load_config, setup_sensor
 
     ctx = omni.usd.get_context()
     ctx.new_stage()
@@ -70,7 +70,14 @@ def _do_setup(args, app) -> int:
         # the printed marker line.
         print(f"[RAISED] {type(exc).__name__}: {exc}", flush=True)
         return 1
-    print(f"[OK] setup_sensor returned: {result}", flush=True)
+    # IsaacSensorCreateImuSensor returns (False, None) and creates no prim on
+    # Isaac Sim 6.2. See https://github.com/ycpss91255-lab/isaac/issues/520
+    if get_category(cfg) != "imu" and not stage.GetPrimAtPath(result).IsValid():
+        raise AssertionError(f"setup_sensor returned a missing prim: {result}")
+    for graph_root in ("/World/CameraGraphs", "/World/SensorGraphs"):
+        if stage.GetPrimAtPath(graph_root).IsValid():
+            raise AssertionError(f"Unexpected publish graph at {graph_root}")
+    print(f"[SENSOR PRIM] {result}", flush=True)
     return 0
 
 

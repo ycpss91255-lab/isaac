@@ -26,13 +26,13 @@ NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；为何不�
 ./script/init_isaac_dirs.sh             # 首次必跑，会执行 ./script/setup.sh apply，并建好 10 个 host-owned cache 目录
 ```
 
-> cache 目录必须在容器 mount 之**前**就存在且 owner 是你。否则 docker daemon 会以 **root** 身份创建它们，Kit 就无法写入自己的 cache，进而无法注册 ROS 2 OmniGraph node（`[Errno 13] ... kit/cache/ogn_generated`），而且照样 exit 0。`init_isaac_dirs.sh` 负责创建这些目录，pre-run hook 也会在每次 `just docker run` 之前再跑一次。如果目录已经是 root 所有，脚本会停下来并打印 `chown` 修复指令。
+> cache 目录必须在容器 mount 之**前**就存在且 owner 是你。否则 docker daemon 会以 **root** 身份创建它们，Kit 就无法写入自己的 cache。`init_isaac_dirs.sh` 负责创建这些目录，pre-run hook 也会在每次 `just docker run` 之前再跑一次。如果目录已经是 root 所有，脚本会停下来并打印 `chown` 修复指令。
 
 接着**只选一条**路径。各 stage 相互独立：只 build 你要跑的那个 stage。走 headless 路径之前**不需要**先 build devel。
 
 | 你想要 | Build | Run |
 |---|---|---|
-| 跑一个场景并看它的 ROS 2 topic（建议从这里开始） | `just docker build -t headless` | `just docker run -t headless -d`，接着看下方「Headless：启动 Isaac 并跑一个场景」 |
+| 运行无界面场景 | `just docker build -t headless` | `just docker run -t headless -d`，接着看下方「Headless：启动 Isaac 并跑一个场景」 |
 | 一个用来开发的交互 shell | `just docker build`（devel） | `just docker run` |
 | 通过 WebRTC 看仿真画面 | `just docker build -t stream` | `just docker run -t stream -d`，接着看「连接 WebRTC livestream」 |
 
@@ -56,12 +56,10 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh path/to/your_scene.py'
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
 just docker stop
 ```
-
-使用 ROS 2 场景时，请让场景与 ROS 2 客户端使用同一个未被占用的 `ROS_DOMAIN_ID`（此处为 `77`）。
 
 Kit 会把 session log 写到 host 端的 `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log`。追最新一份：
 
@@ -234,13 +232,11 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 必要条件：NVIDIA GPU runtime（`--gpus all`）做 NVENC 编码、`--network=host`、非 localhost client 需要 `PUBLIC_IP`。`ISAAC_SIGNAL_PORT` 可选（默认 `49100`）。driver 也接受 `--public-ip` / `--port` / `--run-seconds N`（`N>0` 界定 smoke run；默认永久运行）。
 
-## ROS I/O
+## 驱动程序配置
 
-镜像本身不提供 ROS 集成。将 `ISAAC_IO_PLUGIN` 设为外部插件的 `module:function` 即可启用 ROS I/O。
+`IsaacDriver` 启动时默认只启用 `isaacsim.core.nodes`。要接入 ROS 2，将 `ISAAC_IO_PLUGIN` 设为外部插件的 `module:function`，并通过 `ISAAC_KIT_EXTRA_ARGS` 启用插件所需的 Kit 扩展。传感器配置仍接受 YAML 的 `ros:` 字段，创建后返回 USD prim 或挂载路径。
 
-### Standalone Python 驱动程序
-
-#### 额外 Kit 参数（`ISAAC_KIT_EXTRA_ARGS`）
+### 额外 Kit 参数（`ISAAC_KIT_EXTRA_ARGS`）
 
 `IsaacDriver.run` 会读取 `ISAAC_KIT_EXTRA_ARGS`，按空白切开后接在启动 Kit 的现有参数（内置 boot 参数）之后。未设置、空字符串或只有空白时行为不变。只有 `IsaacDriver` 会读这个变量；`stream_source_producer` 与 `src/script/` 下的脚本不支持。
 
@@ -251,7 +247,7 @@ export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
 ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver.py
 ```
 
-#### 启动插件（`ISAAC_IO_PLUGIN`）
+### 启动插件（`ISAAC_IO_PLUGIN`）
 
 `IsaacDriver.run` 会读取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之后、timeline play 之前，import 该 module 并调用一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 与 `robot_prim`，即 stage 的 default prim 路径）。未设置或空字符串时不调用，也不 import 任何 ROS 模块。格式错误、module 无法 import、找不到 function，各自在启动时失败并指出原因。只有 `IsaacDriver.run` 支持；`stream_source_producer` 与 `src/script/` 下的脚本不支持。
 
@@ -335,16 +331,13 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 系统的 `python3` 无法安装这些套件（Isaac base image 的 PEP 668 拦截 `pip`）— 一律走 `/isaac-sim/python.sh -m pytest ...`，不要用 `pytest ...`。
 
-GPU integration test（需要 Isaac Sim 真正启动，例如 Jetbot 的无头集成测试）走 `test` compose service；该 service 的 NVIDIA GPU reservation 来自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
+GPU integration test（需要 Isaac Sim 真正启动，例如 headless 相机 prim 测试，#127）走 `test` compose service；该 service 的 NVIDIA GPU reservation 来自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/
+    test/integration/pytest/test_camera_headless.py
 ```
 
-GPU 作业会收集 `test/integration/` 下两个目录中的测试。
+对 `test/integration/` 运行 pytest，即可执行 GPU 集成测试与 [无 ROS 验证](../test/integration/no_ros/README.md)。
 
-- [test/integration/pytest/](../test/integration/pytest/) — 场景、传感器和驱动程序的集成测试，包括无头模式的 Jetbot 示例。
-- [test/integration/no_ros/](../test/integration/no_ros/README.md) — 反向测试，验证 Isaac 能在不加载 ROS 模块的情况下运行。
-
-Kit 可在 `app.close` 中直接结束进程，因此 Jetbot 示例会检查 stdout 中的 `[BOOT OK]`、`[CAMERA PRIM OK]` 和 `[EXIT CLEAN]` 等标记。[测试清单](test/TEST.md)
+判定标准是 stdout marker 行（`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 会调用 `_exit(0)`。详见 [doc/test/TEST.md](test/TEST.md)。

@@ -4,11 +4,10 @@
 # reusable workflow gpu-self-hosted.yml (which owns the runner, the fork-PR
 # gate, the workspace reclaim and the checkout).
 #
-# Builds the devel-test image (warm-cached on the runner), then boots
-# headless Isaac and runs both suites under test/integration/. assert_pytest_baseline.sh
-# --gpu enforces: the GPU suite actually RAN (passed > 0 -- a skipped GPU job
-# is NOT green), collected >= GPU_INTEGRATION_BASELINE (ratchet), and the
-# cross-runner aggregate (HOSTED_UNIT + GPU_INTEGRATION) >= AGGREGATE_TARGET.
+# Builds the devel-test image, then runs the headless integration suite inside
+# that container, including the no-ROS suite under test/integration/. The gate
+# requires at least one passing test, enforces the
+# GPU collection floor and checks the hosted-unit plus GPU aggregate.
 # Guard: test/bats/smoke/gpu_job_scripts_spec.bats.
 set -euo pipefail
 
@@ -26,7 +25,10 @@ gpu_job_cache_dirs
 # co-hosted manual stream stack on this shared GPU host (owv#55). base's
 # self-test.yaml convention -- run_id + run_attempt: unique per re-run.
 gpu_job_group "GPU integration pytest + aggregate gate (M2)"
-BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}" \
-  GPU_ROS_DOMAIN_ID="$(( (GITHUB_RUN_ID % 99) + 1 ))" \
-  ./test/assert_pytest_baseline.sh --gpu
+export BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+./test/assert_pytest_baseline.sh --gpu
+gpu_job_endgroup
+
+gpu_job_group "Official Isaac Sim startuptests"
+./script/ci/official_startuptests.sh
 gpu_job_endgroup

@@ -1,26 +1,6 @@
-"""Kit-side runner for the headless Jetbot GPU integration test (#132, #325).
+"""Build an in-memory scene around the Jetbot USD supplied by the GPU test.
 
-Builds a scene from the supplied Jetbot USD, mounts a custom camera, and
-injects SIGINT after inspecting the live stage. The test reads stdout
-markers because Kit can exit the process directly during app.close().
-
-Marker lines::
-
-    [KIT LOG] path=...              Kit log file for CUDA/Vulkan checks
-    [CUDA OK] devices=N             CUDA driver device count
-    [BOOT OK]                       Scene built and timeline playing
-    [L1 BASE_LINK OK] path=... valid=True rigidbody=True
-    [L1 COUNTS OK] links=N joints=N root=...
-    [CAMERA PRIM OK] path=... valid=True
-    [SIGINT SHUTDOWN OK]            Signal handler requested shutdown
-    [ROS_MODULES] <sorted list>     Module check at shutdown (expected [])
-    [EXIT CLEAN]                    Lifecycle completed
-    [RAISED] ...                    Exception escaped the lifecycle
-
-CLI::
-
-    /isaac-sim/python.sh _example_headless_runner.py \\
-        --repo-root <repo> --robot-usd <path/to/jetbot.usd>
+Report the chassis, joints, mounted camera prim and shutdown markers from Kit.
 """
 
 import argparse
@@ -36,7 +16,7 @@ _CHASSIS_PRIM = f"{_ROBOT_PRIM}/chassis"
 
 
 def _build_scene_dict(robot_usd: str) -> dict:
-    """Build the in-memory Jetbot scene with a ground plane."""
+    """In-memory scene: ground and the Jetbot."""
     return {
         "environment": {"ground_plane": True},
         "robot": {
@@ -88,18 +68,15 @@ def _main() -> None:
     parser.add_argument("--robot-usd", required=True)
     args = parser.parse_args()
 
-    # Keep the example headless regardless of the container environment.
     os.environ["ISAAC_LIVESTREAM"] = "0"
 
     repo_root = Path(args.repo_root).resolve()
-    sys.path.insert(0, str(repo_root / "test" / "integration"))
     framework_dir = repo_root / "framework"
     if str(framework_dir) not in sys.path:
         sys.path.insert(0, str(framework_dir))
     robot_usd = str(Path(args.robot_usd).resolve())
 
     try:
-        from no_ros._io_plugin_runner import loaded_ros_modules
         from isaac_devkit.driver import (  # noqa: E402
             IsaacDriver,
             parse_livestream_env,
@@ -110,6 +87,12 @@ def _main() -> None:
 
         class _ExampleIntegrationDriver(IsaacDriver):
             """Build the Jetbot scene, then probe it in setup() / main()."""
+
+            def __init__(self) -> None:
+                super().__init__()
+                self._robot_prim_path = _ROBOT_PRIM
+
+            # -- Lifecycle (the SCENE shape the example driver walked) --
 
             def run(self) -> None:
                 from isaacsim import SimulationApp
@@ -145,11 +128,15 @@ def _main() -> None:
                     self._app.close()
 
             def _setup_camera(self, stage) -> None:
+                from pxr import UsdGeom
+
                 from isaac_devkit.sensors import setup_camera
 
-                mount_path = setup_camera(_camera_cfg(), stage)
-                valid = stage.GetPrimAtPath(mount_path).IsValid()
-                print(f"[CAMERA PRIM OK] path={mount_path} valid={valid}", flush=True)
+                mount = setup_camera(_camera_cfg(), stage)
+                camera = stage.GetPrimAtPath(f"{mount}/color")
+                if not camera or not camera.IsA(UsdGeom.Camera):
+                    raise AssertionError(f"Missing USD camera under {mount}")
+                print(f"[CAMERA PRIM] {camera.GetPath()}", flush=True)
 
             def setup(self, stage) -> None:
                 import carb.settings
@@ -178,19 +165,21 @@ def _main() -> None:
                     flush=True,
                 )
 
-                # Re-root the live robot subtree at the asset name so its link
-                # and joint counts use the importer's path convention.
-                robot_root = stage.GetPrimAtPath(_ROBOT_PRIM)
+                # Fold the live committed-USD robot subtree into a
+                # PrimSummary with the same pure summarizer the unit tests
+                # exercise, then report the OBSERVED link/joint structure.
+                # Report paths relative to the USD robot root.
+                robot_root = stage.GetPrimAtPath(self._robot_prim_path)
                 records = []
                 for prim in Usd.PrimRange(robot_root):
                     path = str(prim.GetPath())
-                    if path == _ROBOT_PRIM:
+                    if path == self._robot_prim_path:
                         continue
                     records.append((path, prim.GetTypeName()))
 
                 robot_name = _build_scene_dict(robot_usd)["robot"]["name"]
                 expected_root = f"/{robot_name}"
-                prefix_len = len(_ROBOT_PRIM)
+                prefix_len = len(self._robot_prim_path)
                 rerooted = [
                     (expected_root + path[prefix_len:], type_name)
                     for path, type_name in records
@@ -205,12 +194,12 @@ def _main() -> None:
                 )
 
             def main(self) -> None:
+                self._app.update()
                 self._on_signal(signal.SIGINT, None)
 
             def shutdown(self) -> None:
                 if self._should_quit:
                     print("[SIGINT SHUTDOWN OK]", flush=True)
-                print(f"[ROS_MODULES] {loaded_ros_modules()}", flush=True)
                 print("[EXIT CLEAN]", flush=True)
 
         _ExampleIntegrationDriver().run()

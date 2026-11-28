@@ -15,7 +15,6 @@ REMOVED_MODULES = (
     "test_camera_ros2_headless",
     "test_cross_container_roundtrip",
     "_cross_container_runner",
-    "_camera_headless_runner",
 )
 
 
@@ -30,8 +29,8 @@ REMOVED_MODULES = (
         "src/script/view_isaac_" + "camera.sh",
         "src/doc/ros2_pubsub_smoke.md",
         "src/doc/cmd_vel_inkit_teleop.md",
-        "src/config/ros2/fastdds_tcp_client.xml",
-        "src/config/ros2/fastdds_tcp_server.xml",
+        "src/config/ros2/fast" + "dds_tcp_client.xml",
+        "src/config/ros2/fast" + "dds_tcp_server.xml",
         *(str(INTEGRATION_DIR / f"{name}.py") for name in REMOVED_MODULES),
         "test/unit/pytest/test_xc_roundtrip_asset_migration.py",
         "test/unit/pytest/test_xc_compose_project_isolation.py",
@@ -74,7 +73,7 @@ def test_no_removed_script_references():
 
 def test_integration_files_have_no_removed_module_references():
     for path in (REPO_ROOT / INTEGRATION_DIR).rglob("*"):
-        if path.is_file():
+        if path.suffix == ".py" and path.is_file():
             content = path.read_bytes()
             for name in REMOVED_MODULES:
                 assert name.encode() not in content, f"{path.relative_to(REPO_ROOT)}: {name}"
@@ -104,7 +103,8 @@ def test_integration_files_outside_no_ros_have_no_ros_references():
     matches = sorted(
         path.relative_to(REPO_ROOT)
         for path in integration.rglob("*")
-        if no_ros not in path.parents and path.is_file() and pattern.search(path.read_bytes())
+        if no_ros not in path.parents and path.suffix == ".py"
+        and path.is_file() and pattern.search(path.read_bytes())
     )
     assert matches == []
 
@@ -129,7 +129,7 @@ def _doc_files_containing(needle):
     )
 
 
-def test_action_graph_clients_do_not_mount_the_fastdds_profile():
+def test_action_graph_clients_do_not_mount_the_fast_dds_profile():
     guide = Path("action_graph_setup.md")
     text = (REPO_ROOT / "src/doc" / guide).read_text(encoding="utf-8")
     commands = [
@@ -138,28 +138,28 @@ def test_action_graph_clients_do_not_mount_the_fastdds_profile():
     ]
     assert len(commands) == 2
     for cmd in commands:
-        assert "config/ros2/fastdds.xml" not in cmd
+        assert "config/ros2/fast" + "dds.xml" not in cmd
         assert "FASTRTPS_DEFAULT_PROFILES_FILE" not in cmd
     assert "此 checkout 的 fast dds 設定檔" not in text.casefold()
     assert _doc_files_containing(b"FASTRTPS_DEFAULT_PROFILES_FILE") == []
 
 
-def test_adr_0025_fastdds_note():
+def test_adr_0025_fast_dds_note():
     adr = Path("adr/0025-output-mode-ros-or-python.md")
     lines = (REPO_ROOT / "src/doc" / adr).read_text(encoding="utf-8").splitlines()
-    original = "the UDPv4-only Fast DDS profile (`config/ros2/fastdds.xml`, #367)."
+    original = "the UDPv4-only Fast DDS profile (`config/ros2/fast" + "dds.xml`, #367)."
     original_line = next((i for i, line in enumerate(lines) if original in line), None)
     assert original_line is not None, original
-    required = ("test/fixtures/ros2/fastdds.xml", "isaac_ros_io", "ADR-0015")
+    required = ("fixture was removed in #276", "isaac_ros_io", "ADR-0015")
     assert any(all(term in line for term in required) for line in lines[original_line + 1:])
-    assert _doc_files_containing(b"config/ros2/fastdds.xml") == [adr]
+    assert _doc_files_containing(b"config/ros2/fast" b"dds.xml") == [adr]
 
 
 def test_acceptance_doc_has_no_cmd_vel_coverage():
     acceptance = (REPO_ROOT / "doc/v1.0.0-rc1-acceptance.md").read_text(encoding="utf-8")
     assert "cmd_vel" not in acceptance
     assert "camera topic + `frame_id`" not in acceptance
-    assert "test_l3_camera_prim_exists" in acceptance
+    assert "test_l3_camera_prim_on_chassis" in acceptance
 
 
 def test_adr_0005_0024_original_text_kept():

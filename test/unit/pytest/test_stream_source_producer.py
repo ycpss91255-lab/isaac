@@ -28,10 +28,15 @@ is the import / CLI surface, which these tests pin:
 """
 
 import importlib.util
+import json
 import re
+import runpy
+import shlex
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -41,6 +46,7 @@ pytestmark = pytest.mark.stream
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DRIVER = _REPO_ROOT / "src" / "script" / "stream_source_producer.py"
+_OFFICIAL_EXPERIENCE = "/isaac-sim/apps/isaacsim.exp.full.streaming.kit"
 
 # Top-level Isaac namespaces that must never load on a hosted import.
 _ISAAC_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab", "carb")
@@ -161,10 +167,7 @@ def test_kit_args_target_the_6_0_livestream_namespace():
     # The setting that makes the extension create a stream at all.
     assert "--/exts/omni.kit.livestream.app/primaryStream/streamType=webrtc" in args
     assert "/app/livestream/port" not in joined, "5.x path is ignored by 6.0"
-    # NOT --enable. Settings alone do not start the stream, but the missing
-    # piece is a DEPENDENCY and it belongs in the experience file -- declaring
-    # it here as well would be the same fact in two places. The experience is
-    # asserted separately, below.
+    # The streaming experience loads the extension.
     assert "--enable" not in args
 
 
@@ -183,36 +186,41 @@ def test_media_port_defaults_from_env(monkeypatch):
     assert args.media_port == 47777
 
 
-# ---------------------------------------------------------------------------
-# The experience file is the fix, so the experience file is what this pins.
-#
-# The producer stage had NO test at all before isaac#252 -- `stream_smoke.sh`
-# exercises `./script/run.sh -t stream`, a different bringup path that keeps
-# working on 6.0.1, so the whole 5.1.0 -> 6.0.1 migration went green while the
-# producer silently stopped streaming. A test that only checked the driver's
-# argv would have stayed green too: the driver was not where the defect was.
-
-_EXPERIENCE = _REPO_ROOT / "apps" / "isaacsim.exp.base.python.streaming.kit"
+def test_producer_pins_the_official_streaming_experience():
+    assert _load_module().STREAM_EXPERIENCE == _OFFICIAL_EXPERIENCE
 
 
-def test_streaming_experience_depends_on_the_extension_that_creates_the_stream():
-    text = _EXPERIENCE.read_text(encoding="utf-8")
-    deps = text.split("[dependencies]", 1)[1].split("[settings", 1)[0]
-    # On 6.0 omni.kit.livestream.webrtc no longer brings the server up by
-    # itself; omni.kit.livestream.app does, and only if it is loaded.
-    assert '"omni.kit.livestream.app" = {}' in deps, (
-        "the streaming experience must depend on omni.kit.livestream.app -- "
-        "without it Isaac Sim 6.x boots, reports ready, and binds no port, "
-        "with nothing in the log to say so (isaac#252)"
-    )
+def test_standalone_smoke_pins_the_official_streaming_experience(monkeypatch):
+    smoke = _DRIVER.with_name("standalone_livestream_smoke.py")
+    # Capture the experience at startup and stop before the Kit-side imports.
+    class KitStartup(Exception):
+        pass
+
+    simulation_app = Mock(side_effect=KitStartup)
+    monkeypatch.setitem(sys.modules, "isaacsim", SimpleNamespace(SimulationApp=simulation_app))
+    with pytest.raises(KitStartup):
+        runpy.run_path(str(smoke))
+    assert simulation_app.call_args.kwargs["experience"] == _OFFICIAL_EXPERIENCE
+    assert "isaacsim.exp.base.python.streaming.kit" not in smoke.read_text(encoding="utf-8")
 
 
-def test_streaming_experience_defines_streamtype():
-    text = _EXPERIENCE.read_text(encoding="utf-8")
-    assert '[settings.exts."omni.kit.livestream.app"]' in text
-    # "The extension automatically creates a primary stream at startup if the
-    # streamType setting is defined." Undefined = no stream, silently.
-    assert 'primaryStream.streamType = "webrtc"' in text
+def test_repo_has_no_custom_apps_directory():
+    assert not (_REPO_ROOT / "apps").exists()
+
+
+def test_dockerfile_does_not_copy_custom_kits():
+    dockerfile = (_REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    for line in dockerfile.replace("\\\n", "").splitlines():
+        instruction = re.match(r"\s*(?:COPY|ADD)\s+(?:--\S+\s+)*", line, re.I)
+        if not instruction:
+            continue
+        operands = line[instruction.end():]
+        if re.match(r'\[\s*"', operands):
+            paths = json.loads(operands)
+        else:
+            paths = shlex.split(operands)
+        for source in paths[:-1]:
+            assert source != "apps" and not source.startswith("apps/"), line
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ pytestmark = pytest.mark.core
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = REPO_ROOT / "Dockerfile"
-ROS_TERMS = re.compile(r"ROS_DISTRO|fastdds|isaacsim\.ros2|isaac-ros-env")
+ROS_TERMS = re.compile(r"ROS_DISTRO|fast" + r"dds|isaacsim\.ros2|isaac-ros-env")
 
 
 def test_image_inputs_have_no_ros_configuration_references():
@@ -51,7 +51,7 @@ def test_setup_toml_has_no_ros_environment():
 def test_obsolete_ros_files_are_removed():
     obsolete = (
         "script/isaac-ros-env-wrapper.sh",
-        "config/ros2/fastdds.xml",
+        "config/ros2/fast" + "dds.xml",
         "test/bats/smoke/isaac_ros_env_wrapper.bats",
     )
     remaining = [name for name in obsolete if os.path.lexists(REPO_ROOT / name)]

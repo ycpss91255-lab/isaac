@@ -2120,7 +2120,7 @@ _setup_apply() {
 
   # S4: structured app-config channel. Every config/<component>/ the repo
   # ships is dev-bound into the container so structured runtime config
-  # (ros1_bridge bridge topics, realsense yaml/udev, isaac's fastdds.xml)
+  # (ros1_bridge bridge topics, realsense yaml/udev)
   # is editable on the host with edit + restart, no rebuild. Convention
   # over configuration: a directory's presence is the only switch (no
   # setup.toml knob). The deploy flow (S6) COPY-bakes the SAME population

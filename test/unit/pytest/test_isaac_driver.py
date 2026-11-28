@@ -134,7 +134,6 @@ class TestConstructionWithoutKit:
         assert driver._should_quit is False
         assert driver._app is None
         assert not hasattr(driver, "_app_launcher")
-        assert driver._rclpy_inited is False
 
     def test_default_usd_is_empty(self):
         assert id_mod.IsaacDriver.USD == ""
@@ -158,19 +157,19 @@ class TestBootExtensionKitArgs:
     """
 
     def test_single_extension(self):
-        assert id_mod.boot_extension_kit_args(["isaacsim.ros2.bridge"]) == [
+        assert id_mod.boot_extension_kit_args(["isaacsim.sensors.rtx"]) == [
             "--enable",
-            "isaacsim.ros2.bridge",
+            "isaacsim.sensors.rtx",
         ]
 
     def test_multiple_extensions_preserve_order(self):
         assert id_mod.boot_extension_kit_args(
-            ("isaacsim.core.nodes", "isaacsim.ros2.bridge")
+            ("isaacsim.core.nodes", "isaacsim.sensors.rtx")
         ) == [
             "--enable",
             "isaacsim.core.nodes",
             "--enable",
-            "isaacsim.ros2.bridge",
+            "isaacsim.sensors.rtx",
         ]
 
     def test_empty_is_noop(self):
@@ -179,10 +178,8 @@ class TestBootExtensionKitArgs:
     def test_none_is_noop(self):
         assert id_mod.boot_extension_kit_args(None) == []
 
-    def test_default_boot_extensions_include_ros2_bridge(self):
-        # The base driver ships ros2.bridge in its boot set so downstream
-        # setup_camera / setup_ros2_io never enable it at runtime.
-        assert "isaacsim.ros2.bridge" in id_mod.IsaacDriver.BOOT_EXTENSIONS
+    def test_default_boot_extensions(self):
+        assert id_mod.IsaacDriver.BOOT_EXTENSIONS == ("isaacsim.core.nodes",)
 
 
 # ---------- A7 contract shape + lifecycle-order spy (ADR-0017 additions) ----

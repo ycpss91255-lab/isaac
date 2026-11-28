@@ -6,15 +6,15 @@ imu) on a minimal in-memory stage, and that the IMU mount-validation
 rule rejects a non-RigidBody parent (ADR-0010 L3 + ADR-0006 IMU mount
 constraint).
 
-Scope for this PR (per #35 first L3 cut): Kit-side ``setup_sensor`` runs
-without raising on positive cases and raises on the IMU negative case.
+Each positive case supplies a legacy ros section and checks the returned
+sensor or mount prim on the live stage.
 
 Each test shells out to ``_sensor_setup_runner.py`` because
 ``SimulationApp`` is a process singleton.
 """
 
+import re
 import subprocess
-import sys
 import textwrap
 from pathlib import Path
 
@@ -53,16 +53,17 @@ def _dump(result: subprocess.CompletedProcess, label: str) -> str:
 # NOTE on exit codes: Kit's app.close() calls _exit(0) on the way down
 # and swallows any sys.exit(N) that would otherwise propagate after it.
 # Tests therefore key off stdout marker lines emitted by the runner
-# ([OK] / [RAISED]) instead of the subprocess returncode. If neither
+# ([SENSOR PRIM] / [RAISED]) instead of the subprocess returncode. If neither
 # marker shows up, the runner crashed before reaching either branch and
 # the assertion message surfaces both streams for diagnosis.
 
 
-def _assert_setup_ok(result: subprocess.CompletedProcess, label: str) -> None:
-    assert "[OK] setup_sensor returned" in result.stdout, (
-        f"{label}: runner did not print the [OK] marker (no successful "
-        f"setup_sensor return). " + _dump(result, label)
-    )
+def _assert_setup_ok(result: subprocess.CompletedProcess, label: str, leaf: str) -> None:
+    match = re.search(r"^\[SENSOR PRIM\] (\S+)$", result.stdout, re.MULTILINE)
+    assert match, _dump(result, label)
+    path = Path(match.group(1))
+    assert Path("/World/Robot/base_link") in path.parents
+    assert path.name == leaf
 
 
 def _assert_setup_raised(result: subprocess.CompletedProcess, label: str, expected_substr: str) -> None:
@@ -120,7 +121,7 @@ def test_imu_setup_succeeds_on_rigid_body(write_yaml):
           frame_id_prefix: "imu"
         """))
     result = _run(yaml, body_mode="rigid")
-    _assert_setup_ok(result, "imu_positive")
+    _assert_setup_ok(result, "imu_positive", "imu_sensor")
 
 
 def test_camera_realsense_setup_succeeds(write_yaml):
@@ -151,7 +152,7 @@ def test_camera_realsense_setup_succeeds(write_yaml):
           frame_id_prefix: "camera"
         """))
     result = _run(yaml, body_mode="rigid")
-    _assert_setup_ok(result, "camera_realsense")
+    _assert_setup_ok(result, "camera_realsense", "RealSenseMount")
 
 
 def test_lidar_3d_setup_succeeds(write_yaml):
@@ -171,7 +172,7 @@ def test_lidar_3d_setup_succeeds(write_yaml):
           publish_type: "point_cloud"
         """))
     result = _run(yaml, body_mode="rigid")
-    _assert_setup_ok(result, "lidar_3d")
+    _assert_setup_ok(result, "lidar_3d", "lidar")
 
 
 def test_lidar_2d_setup_succeeds(write_yaml):
@@ -191,4 +192,4 @@ def test_lidar_2d_setup_succeeds(write_yaml):
           publish_type: "laser_scan"
         """))
     result = _run(yaml, body_mode="rigid")
-    _assert_setup_ok(result, "lidar_2d")
+    _assert_setup_ok(result, "lidar_2d", "lidar")

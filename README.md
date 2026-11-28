@@ -26,13 +26,13 @@ From a fresh clone, run these two first-time steps from the repo root:
 ./script/init_isaac_dirs.sh             # first time only — runs ./script/setup.sh apply, creates the 10 host-owned cache dirs
 ```
 
-> The cache dirs must exist and be owned by you **before** a container mounts them. Otherwise the docker daemon creates them as **root**, and Kit cannot write its caches. It then cannot register the ROS 2 OmniGraph nodes (`[Errno 13] ... kit/cache/ogn_generated`), and it still exits 0. `init_isaac_dirs.sh` creates them, and the pre-run hook runs it again before every `just docker run`. If they are already root-owned, the script stops and prints a `chown` fix.
+> The cache dirs must exist and be owned by you **before** a container mounts them. Otherwise the docker daemon creates them as **root**, and Kit cannot write its caches. `init_isaac_dirs.sh` creates them, and the pre-run hook runs it again before every `just docker run`. If they are already root-owned, the script stops and prints a `chown` fix.
 
 Then pick **one** path. The stages are independent: build only the stage you are going to run. The devel build is **not** needed before the headless path.
 
 | You want to | Build | Run |
 |---|---|---|
-| Run a scene and its ROS 2 topics (start here) | `just docker build -t headless` | `just docker run -t headless -d`, then [Headless: bring Isaac up and run a scene](#headless-bring-isaac-up-and-run-a-scene) |
+| Run a headless scene | `just docker build -t headless` | `just docker run -t headless -d`, then [Headless: bring Isaac up and run a scene](#headless-bring-isaac-up-and-run-a-scene) |
 | An interactive shell to develop in | `just docker build` (devel) | `just docker run` |
 | Watch the sim over WebRTC | `just docker build -t stream` | `just docker run -t stream -d`, then [Connecting to the WebRTC livestream](#connecting-to-the-webrtc-livestream) |
 
@@ -56,12 +56,10 @@ This repository does not ship a simulation example. Choose a headless script fro
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh path/to/your_scene.py'
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
 just docker stop
 ```
-
-For a ROS 2 scene, use the same free `ROS_DOMAIN_ID` in the scene and its ROS 2 clients (here, `77`).
 
 Kit writes its session log to `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` on the host. To follow the newest one:
 
@@ -234,13 +232,11 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 Required: an NVIDIA GPU runtime (`--gpus all`) for NVENC frame encoding, `--network=host`, and `PUBLIC_IP` for a non-localhost client. `ISAAC_SIGNAL_PORT` is optional (defaults to `49100`). The driver also accepts `--public-ip` / `--port` / `--run-seconds N` (`N>0` bounds a smoke run; the default runs forever).
 
-## ROS I/O
+## Driver configuration
 
-ROS support comes from an external plugin. Set `ISAAC_IO_PLUGIN` to its `module:function` to enable ROS I/O.
+The base `IsaacDriver` enables only `isaacsim.core.nodes` at boot. To use ROS 2 with this driver, set `ISAAC_IO_PLUGIN` to the external plugin’s `module:function` and pass any Kit extensions it requires through `ISAAC_KIT_EXTRA_ARGS`. Sensor setup accepts the existing `ros:` YAML fields and returns the USD prim or mount path.
 
-### Standalone Python drivers
-
-#### Extra Kit arguments (`ISAAC_KIT_EXTRA_ARGS`)
+### Extra Kit arguments (`ISAAC_KIT_EXTRA_ARGS`)
 
 `IsaacDriver.run` reads `ISAAC_KIT_EXTRA_ARGS`, splits it on whitespace, and appends the tokens to the Kit arguments it boots with (after the built-in boot arguments). Unset, empty or whitespace-only leaves behaviour unchanged. Only `IsaacDriver` reads this variable; `stream_source_producer` and the scripts under `src/script/` do not support it.
 
@@ -251,7 +247,7 @@ export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
 ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver.py
 ```
 
-#### Startup plugin (`ISAAC_IO_PLUGIN`)
+### Startup plugin (`ISAAC_IO_PLUGIN`)
 
 `IsaacDriver.run` reads `ISAAC_IO_PLUGIN` (`module:function`). After the stage is built and before the timeline plays, it imports the module and calls `function(stage, robot_prim, config)` once. `config` is an opaque dict (currently `usd_path` and `robot_prim`, the stage's default prim path). Unset or empty calls nothing and imports no ROS module. A malformed value, a module that cannot be imported, or a missing function each fail at startup with an error naming the cause. Only `IsaacDriver.run` supports it; `stream_source_producer` and the scripts under `src/script/` do not.
 
@@ -335,16 +331,13 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 System `python3` cannot install these packages (PEP 668 blocks `pip` on the Isaac base image) — always invoke `/isaac-sim/python.sh -m pytest ...` instead of `pytest ...`.
 
-GPU integration tests (Isaac Sim must boot, e.g. the headless Jetbot integration test) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `["stage:devel-test"]` override in `setup.toml` (`"deploy.gpu_mode" = "force"`, base #493):
+GPU integration tests (Isaac Sim must boot, e.g. headless camera prim smoke test, #127) run through the `test` compose service, which gets an NVIDIA GPU reservation from the `["stage:devel-test"]` override in `setup.toml` (`"deploy.gpu_mode" = "force"`, base #493):
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/
+    test/integration/pytest/test_camera_headless.py
 ```
 
-The GPU job collects both directories under `test/integration/`.
+Run pytest against `test/integration/` to include both the GPU integration tests and the [no-ROS checks](test/integration/no_ros/README.md).
 
-- [test/integration/pytest/](test/integration/pytest/) — Scene, sensor, and driver integration tests, including the headless Jetbot example.
-- [test/integration/no_ros/](test/integration/no_ros/README.md) — Reverse tests that verify Isaac runs without loading ROS modules.
-
-The Jetbot example checks stdout markers such as `[BOOT OK]`, `[CAMERA PRIM OK]`, and `[EXIT CLEAN]` because Kit can exit directly in `app.close`. [Test inventory](doc/test/TEST.md)
+Pass criterion is stdout marker lines (`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).

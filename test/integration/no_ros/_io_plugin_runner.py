@@ -1,9 +1,9 @@
 """Kit-side runner for the ISAAC_IO_PLUGIN integration test (isaac#423).
 
-Not a pytest test (leading underscore). Boots a minimal ``IsaacDriver``
-(no boot extensions) and, from ``main()``, prints ``[MARKER_PRIM] <bool>``
-and ``[ROS_MODULES] <sorted list>`` (``rclpy`` / ``isaacsim.ros2*`` entries
-of ``sys.modules``).
+Boots ``IsaacDriver`` with its default extensions. Once the timeline is
+playing, ``main()`` reports the configured tuple (``[BOOT_EXT]``), whether the
+plugin marker exists (``[MARKER_PRIM]``), and the sorted list of loaded
+``rclpy`` and ``isaacsim.ros2*`` modules (``[ROS_MODULES]``).
 """
 
 import argparse
@@ -32,11 +32,11 @@ def _main() -> None:
 
     class _Driver(IsaacDriver):
         USD = usd_path
-        BOOT_EXTENSIONS = ()
 
         def main(self) -> None:
             import omni.usd
 
+            print(f"[BOOT_EXT] {type(self).BOOT_EXTENSIONS!r}", flush=True)
             stage = omni.usd.get_context().get_stage()
             root = stage.GetDefaultPrim().GetPath()
             marker = stage.GetPrimAtPath(f"{root}/io_plugin_marker")

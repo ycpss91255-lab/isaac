@@ -243,20 +243,8 @@ COPY --chown="${USER}":"${GROUP}" --chmod=0755 .base/dist/config "${CONFIG_DIR}"
 # Files here overlay matching paths from layer 1.
 COPY --chown="${USER}":"${GROUP}" --chmod=0755 "${CONFIG_SRC}" "${CONFIG_DIR}"
 
-# [isaac] Custom kit experience files. Layered into /isaac-sim/apps/
-# next to NVIDIA's bundled experiences (isaacsim.exp.base.python.kit,
-# isaacsim.exp.full.streaming.kit, ...). SimulationApp drivers can opt
-# in via experience="/isaac-sim/apps/<name>.kit".
-#
-# Current entries:
-#   isaacsim.exp.base.python.streaming.kit
-#       Closes #21 fix-B: the lightweight Python experience layered with
-#       omni.kit.livestream.{core,webrtc} so SimulationApp + livestream:2
-#       actually serves a WebRTC stream. On Isaac Sim 5.1.0, loading
-#       full.streaming.kit via SimulationApp led to a reported segfault.
-#       On 6.2.0.1, 3/3 non-root runs started the server without a segfault.
-#       Client connection and default port 49100 were untested (#473, #485).
-COPY --chmod=0644 apps/*.kit /isaac-sim/apps/
+# [isaac] Streaming drivers use NVIDIA's bundled isaacsim.exp.full.streaming.kit.
+# The custom Kit experience was removed in isaac#484.
 
 # [isaac] Pre-create the extension folders Kit tries to create at boot.
 # The experience file lists ${app}/../extsUser, which the NGC image does
@@ -449,6 +437,7 @@ COPY --chmod=0755 script/ci/headless_smoke.sh /smoke_test/headless_smoke.sh
 # step order and env scoping are checked on every build against stubs --
 # no docker, no GPU.
 COPY --chmod=0755 script/ci/gpu_job_lib.sh script/ci/gpu_integration_job.sh \
+     script/ci/official_startuptests.sh script/ci/startuptests_in_container.sh \
      script/ci/stream_smoke_job.sh script/ci/headless_smoke_job.sh \
      /smoke_test/
 # [base #440] Scripts under test by the migrated specs: the livestream

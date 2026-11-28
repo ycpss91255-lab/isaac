@@ -98,9 +98,11 @@ Isaac Sim 預先提供的 **30+ 個 ROS 2 OmniGraph nodes**（`/isaac-sim/exts/i
 
 Isaac Sim 6.0 已把 `isaacsim.ros2.bridge` 拆成 4 個 extension（`core`/`nodes`/`ui`/`examples`），standalone tutorial 也改成 OnImpulseEvent OmniGraph 架構 — NVIDIA 等於承認 5.1 這條路是死路。
 
-**更新（2026-08-28）：base image 已升 `nvcr.io/nvidia/isaac-sim:6.0.1`**（5.1.0 -> 6.0.1 遷移，isaac#247 / isaac#248），6.0 不再是 Early Developer Release，pre-built container 已在 nvcr.io。遷移採「最小到綠」策略：**本文件的 GUI teleop / Action Graph 路徑這次沒有重新實作**（歷史內容保留當紀錄，不移除）。實際變動的是 camera / ROS 2 出口 —— `isaacsim.ros2.bridge` 在 6.0.1 拆成 `isaacsim.ros2.core`（+ `isaacsim.ros2.nodes` 等），且 base `IsaacDriver` 現在於 Kit BOOT 階段 boot-enable `isaacsim.ros2.bridge`（`BOOT_EXTENSIONS` + `--enable` kit args）才能在 headless + `enable_cameras` 下把 camera frame 送上 ROS 2（isaac#248）。純腳本 OnImpulseEvent OmniGraph 路徑仍是未來可選的清理方向，尚未落地。
+**更新（2026-08-28）：base image 已升 `nvcr.io/nvidia/isaac-sim:6.0.1`**（5.1.0 -> 6.0.1 遷移，isaac#247 / isaac#248），6.0 不再是 Early Developer Release，pre-built container 已在 nvcr.io。遷移採「最小到綠」策略：**本文件的 GUI teleop / Action Graph 路徑這次沒有重新實作**（歷史內容保留當紀錄，不移除）。實際變動的是 camera / ROS 2 出口 —— `isaacsim.ros2.bridge` 在 6.0.1 拆成 `isaacsim.ros2.core`（+ `isaacsim.ros2.nodes` 等），且當時的 base `IsaacDriver` 於 Kit BOOT 階段 boot-enable `isaacsim.ros2.bridge`（`BOOT_EXTENSIONS` + `--enable` kit args）才能在 headless + `enable_cameras` 下把 camera frame 送上 ROS 2（isaac#248）。純腳本 OnImpulseEvent OmniGraph 路徑仍是未來可選的清理方向，尚未落地。
 
-**更新（2026-11-04）：base image 再升 `nvcr.io/nvidia/isaac-sim:6.2.0.1`（6.2.0 GA）+ Isaac Lab `v3.0.0`（isaac#295）。** 本文件的 GUI teleop / Action Graph 路徑仍未重新實作，上段結論不變；連結改指 6.2.0 文件。
+**更新（2026-11-04）：base image 再升 `nvcr.io/nvidia/isaac-sim:6.2.0.1`（6.2.0 GA）+ Isaac Lab `v3.0.0`（isaac#295）。** 本文件的 GUI teleop / Action Graph 路徑仍未重新實作，連結改指 6.2.0 文件。
+
+**更新（isaac#276）：** `IsaacDriver.BOOT_EXTENSIONS` 預設只有 `isaacsim.core.nodes`。ROS 2 I/O 由 `ISAAC_IO_PLUGIN` 載入的外部插件提供，插件所需擴充套件可透過 `ISAAC_KIT_EXTRA_ARGS` 啟用。
 
 GA 後可重評：拿掉本 MD 的 GUI 步驟 → 改純腳本路徑。本 MD 屆時可刪除。
 
