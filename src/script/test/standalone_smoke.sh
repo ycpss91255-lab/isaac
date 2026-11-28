@@ -84,7 +84,10 @@ _run_case() {
       break
     fi
     if ! kill -0 "$exec_pid" 2>/dev/null; then
-      # Process died before marker — likely error in script
+      # The process may have written the marker after the first grep.
+      if grep -q -E "$marker" "$tmp" 2>/dev/null; then
+        result="PASS"
+      fi
       break
     fi
     sleep 1

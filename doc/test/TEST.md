@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1041 tests**.
+**236 tests** total (bats). Hosted pytest collects **1069 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,11 +8,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 893 | 40 | 1062 |
+| core | 129 | 906 | 40 | 1075 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 91 | 55 | 0 | 146 |
+| stream | 94 | 62 | 0 | 156 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 87 | 0 | 87 |
+| docs | 0 | 95 | 0 | 95 |
 
 The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
@@ -25,7 +25,11 @@ GITHUB_WORKSPACE="$PWD" GITHUB_RUN_ID=local437 GITHUB_RUN_ATTEMPT=1 \
   ./script/ci/official_nativepython_job.sh
 ```
 
-The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. The bucket runs from a writable temporary working directory so Replicator can create render outputs. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist.
+The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. The bucket runs from a writable temporary working directory so Replicator can create render outputs.
+
+The watchdog kills a case's process group after 1500 seconds by default (override with `CASE_TIMEOUT_SECONDS`), so the runner can record the failure in JUnit and continue with the next case. A warm, uncontended run took 1576 s for 41 cases, with a maximum of 331 s per case. In #437, `ros2.bridge.test_carter_camera_multi_robot_nav` took 518 s warm and 712 s under load, so the default allows about twice the observed time under load. If one stuck case uses the full 1500 s and the remaining cases take about 1576 s warm, the bucket takes about 3076 s (~51 min) of the 55-minute step limit (3300 s), leaving little margin for the two examples and pip, so lower `CASE_TIMEOUT_SECONDS` if several stalls are expected. The watchdog replaces `subprocess.run` globally in the interpreter running NVIDIA's `run_tests.py` and relies on the runner launching each case through one of its two `subprocess.run` calls in the `print_live_output=True` path used by `main()`. Any new `subprocess.run` call in the runner would inherit the limit, so recheck the call sites when upgrading Isaac Sim.
+
+The run step has a 55-minute limit within the 60-minute job to leave time for cleanup and artifact upload. A step timeout kills the runner shell without forwarding signals to `docker run --rm`, so the workflow's `reap-container-filter` step removes the leftover container by its `com.docker.compose.project` label. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist.
 
 The job also runs the existing Kit settings probe through this repository's `IsaacDriver`. The probe requires the running app to report the setting passed in its launch configuration.
 
@@ -158,7 +162,7 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
 | `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (17)
+## test/bats/smoke/stream_smoke_isolation_spec.bats (20)
 
 Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-lab/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
 
@@ -181,6 +185,9 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)` | With `SMOKE_SKIP_PORT_PREFLIGHT=1`, the same signal-port conflict allows `run.sh` to run. |
 | `stream_smoke: reports load at startup and elapsed time and load at readiness (isaac#497)` | Checks the three load averages before bring-up and again when Kit is ready, along with elapsed seconds. |
 | `stream_smoke: ready timeout reports load, marker progress and port holders (isaac#497)` | A live container logs only the first ready marker. The timeout diagnostic includes the wait duration, load, both markers and both ports' holders. |
+| `stream_smoke: passes custom signal and media ports to Kit (isaac#563)` | The Kit launch passes the exported ports 49200 and 47999 as Docker exec environment options. |
+| `stream_smoke: passes default signal and media ports to Kit (isaac#563)` | With both variables unset and no host.yaml, the launch passes 49100 and 47998. |
+| `stream_smoke: host.yaml overrides the environment signal port passed to Kit (isaac#563)` | With signal port 49291 in host.yaml and 49200 in the environment, the launch passes 49291. |
 
 ## test/bats/smoke/stream_smoke_lib_spec.bats (25)
 
@@ -462,6 +469,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 
 | File | Collected | Scope |
 |------|:---------:|-------|
+| `test_kit_timing.py` | 4 | `core`. Checks that every Kit runner in `test/integration/pytest/` times its boot, each boot counts once, file durations add up to the suite total, and the JSON report matches the terminal rows (isaac#527). |
 | `test_container_min_privilege.py` | 14 | `core`. Checks privileged mode, host device bindings, three added capabilities, seccomp, PID and IPC isolation, shared memory size and host networking. Checks all four READMEs for stale claims about using the host PID namespace (isaac#549). |
 | `test_readme_container_permissions.py` | 4 | `docs`. Checks that each README explains the local privilege override in its container permissions section (isaac#549). |
 | `test_repository_purity.py` | 2 | `core` (#136). Reports tracked text lines containing `forklift` or `modela` outside the documented exceptions and checks the default camera mount paths and ROS topic prefixes. |
@@ -469,6 +477,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
 | `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and documentation of the sample and the `just run scene` recipe in all four READMEs (isaac#338, #336). |
 | `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream` and the standalone livestream SOP and ZED installation guide for retired stage names, the `isaac-headless` container name and stale headless prose. Requires the SOP to include both `run -t stream -d` (start the idle container) and `exec -t stream /isaac-sim/runheadless.sh` (start Kit inside it). |
+| `test_arch_overview.py` | 8 | `docs` (isaac#274). Checks the [architecture overview](../arch/overview.html), ADR rows and links, numbered sections, SVG labels and captions, dark mode, and restrictions on scripts, disclosures and external images. |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |
 | `test_check_forbidden_names.py` | 14 | `core`. Checks case-insensitive matches, redaction in filenames and matched lines, tracked-file scope, the skip reason when the secret is unavailable, Git errors, and the current checkout. Verifies that CI passes the secret to the standalone scan and hosted core tests, and checks the core runner’s image, skip gate, and per-test reporting (isaac#487). |
 | `test_import_safety.py` | 15 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
@@ -505,7 +514,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_stream_visual_verdict.py` | 12 | Pixel statistics, known-colour thresholds and WebRTC requirements. |
 | `test_stream_visual_wiring.py` | 5 | 驗證 stream 組觸發條件、GPU 工作流程、失敗時的產物上傳、必要檢查，以及容器清理篩選器只命中同一次執行與嘗試的容器。 |
 | `test_main_workflow_scope.py` | 29 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
-| `test_official_nativepython.py` | 10 | `core`. Scoped and manual GPU workflow, required CI gate, artifact upload, Docker network and mounts, the complete NVIDIA bucket, and failure propagation for JUnit, both examples and the driver launch probe (#437). |
+| `test_official_nativepython.py` | 18 | `core`. Scoped and manual GPU workflow, required CI gate, artifact upload, Docker network and mounts, the complete NVIDIA bucket, and failure propagation for JUnit, both examples and the driver launch probe (#437). Checks the step timeout and verifies that a timed-out case and its children are killed while the next case completes. Pins the 1500 s watchdog default in code and all four READMEs and checks that the watchdog docstring identifies the runner's dependency on `subprocess.run` in the live-output path (#558). |
 | `test_official_pythontests.py` | 11 | `core`. Checks shared GPU workflow and artifact wiring, sequential bucket execution, and failure on Docker errors or failed, skipped, missing, malformed, or incomplete JUnit results. Also checks retained Kit logs, RTX regression coverage, and the actuator skip allowlist (isaac#438, #440). |
 | `test_official_startuptests.py` | 3 | `core`. The per-PR GPU job calls the official Isaac Sim suite helper, the helper has no Isaac Lab dependency, and the reusable workflow uploads `artifacts/startuptests` on success and failure (isaac#436). |
 | `test_workflow_naming.py` | 42 | `core`. Workflow naming rule and lint (isaac#443), `script/ci/lint_workflow_names.py` + `doc/workflow-naming.md`: the real `.github/workflows/` follows the rule (and the glob finds `main.yaml` and `ci-stream-smoke.yaml`, no vacuous pass; the pre-rename stream smoke file is gone); detector self-tests on temp trees for bad file names (`.yml`, no category, uppercase, underscores), bad display names (parenthesised note, wrong case, wrong category), non-kebab job ids, a CI job with no group prefix, job-level `name:`; the allowed CI ids (`changes` / `gate` / `release` / `<group>-...`) and a bot job needing only kebab-case; exemptions are by exact file name and each carries a reason; `main.yaml` is exempt from file and display name but not from the job rule; base's `init.sh` still generates `base-version-monitor.yaml` under that name and only creates it when absent (the reason it keeps its name); the doc lists every category, group and exemption; retired names (`RETIRED_NAMES` in the lint: the old job ids, the old stream smoke file name and display name) are reported in docs while the new file name and history (changelog, ADRs) are not. |
@@ -525,7 +534,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_readme_multi_instance.py` | 24 | `docs`. Six checks per README across four languages (isaac#289) cover section placement, the ADR-0019 and multi_run#15 links, per-instance cache, memory and project guidance, headless ports, and the absence of personal identifiers. |
 | `test_no_ai_attribution.py` | 30 | PR commit checks (isaac#413, isaac#414). Clean commits, ordinary mentions, and human co-author names containing Claude pass. Model names and versions, anthropic.com co-author, author, or committer addresses, generation notices (including Markdown links), and session trailers flag the offending commit SHAs. Coverage includes indentation, mixed case, and versions written without a space (`Claude Sonnet4.5`, `Claude Opus4`, and `Claude-3`). With a stubbed git log, an empty range succeeds and an invalid range reports an error with exit code 2. Omitting both the range and `--stdin` is a usage error. |
 | `test_model_readme_layout.py` | 11 | `docs`. Checks the four current paths for the two listed robots, the removal of stale paths, and the sim_asset repository and README links (isaac#363). |
-| `test_standalone_smoke_matrix.py` | 11 | `core`. Three parametrized checks guard against reintroducing the USD gate. Two more verify that each case has three fields and that the runner passes `bash -n` (isaac#359). Two parser cases verify that both an empty matrix and a matrix containing only a comment yield an empty list. Four more checks cover the empty matrix exit, default paths from outside the checkout, environment overrides, and inclusion in Docker ShellCheck. |
+| `test_standalone_smoke_matrix.py` | 12 | `core`. Three parametrized checks guard against reintroducing the USD gate. Two more verify that each case has three fields and that the runner passes `bash -n` (isaac#359). Two parser cases verify that both an empty matrix and a matrix containing only a comment yield an empty list. Four more checks cover the empty matrix exit, default paths from outside the checkout, environment overrides, and inclusion in Docker ShellCheck. One regression test expects PASS when the first marker check misses and the probe writes READY and exits before the liveness check (isaac#562). |
 | `test_standalone_scripts.py` | 14 | Checks the pure helpers for Kit configuration, periodic timers, exit codes, removal of OpenBase-specific attributes, the smoke script’s workspace path, and the sensor and camera shim entry points. Also checks that the USD inspector stays removed and that tracked Python files contain no references to the retired extension. |
 | `test_ros_scripts_removed.py` | 25 | Guards against restoring retired ROS scripts and cross-container tests, checks the no-ROS integration layout, and verifies the documentation updates. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |
@@ -538,6 +547,8 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 ### test/integration/pytest/
 
 The GPU suite collects **40 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
+
+For `test/integration/pytest/`, the terminal summary prints a `[FILE-TIMING]` row per file and a `TOTAL` row. Each row splits elapsed time, including fixture setup and teardown, into Kit construction (`kit_boot_sec`) and the remaining time (`test_body_sec`). Set `KIT_TIMING_JSON` to a file path to save the same measurements.
 
 | Test | Description |
 |------|-------------|
@@ -553,6 +564,8 @@ The GPU suite collects **40 tests**, all inside the Isaac test container. `test/
 | `test_isaac_driver_integration.py` (1) | Exercises the driver lifecycle in Kit. |
 
 ### test/integration/no_ros/
+
+The `[FILE-TIMING]` report excludes the test files in this directory.
 
 [Suite files and purpose](../../test/integration/no_ros/README.md)
 
