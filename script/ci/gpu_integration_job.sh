@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # gpu_integration_job.sh -- the M2 GPU integration gate (PRD #4-int /
-# isaac#132), run by main.yaml's gpu-integration job through the org
+# isaac#132), run by main.yaml's core-gpu job through the org
 # reusable workflow gpu-self-hosted.yml (which owns the runner, the fork-PR
 # gate, the workspace reclaim and the checkout).
 #
@@ -17,6 +17,9 @@ cd "${repo_root}"
 
 gpu_job_apply_and_pin_ws_path
 gpu_job_build test
+gpu_job_group "Check host UID and GID matrix with GPU import"
+script/ci/uid_matrix.sh
+gpu_job_endgroup
 gpu_job_cache_dirs
 
 # BASELINE_PROJECT: per-run-unique compose project so run.sh's EXIT-trap

@@ -98,7 +98,7 @@ def test_gpu_integration_passes_run_scoped_reap_filter():
 
 
 _STUB_SETUP = "#!/usr/bin/env bash\nprintf 'WS_PATH=/x\\n' > .env.generated\n"
-_STUB_BUILD = "#!/usr/bin/env bash\nexit 0\n"
+_STUB_SUCCESS = "#!/usr/bin/env bash\nexit 0\n"
 _STUB_BASELINE = (
     "#!/usr/bin/env bash\n"
     'echo "BASELINE_PROJECT=${BASELINE_PROJECT}" > "${OBSERVED}"\n'
@@ -118,7 +118,8 @@ def test_reap_filter_matches_script_baseline_project(tmp_path):
                     tmp_path / "script" / "ci" / name)
     for rel, body in (
         ("script/setup.sh", _STUB_SETUP),
-        ("script/build.sh", _STUB_BUILD),
+        ("script/build.sh", _STUB_SUCCESS),
+        ("script/ci/uid_matrix.sh", _STUB_SUCCESS),
         ("script/ci/official_startuptests.sh", "#!/usr/bin/env bash\ntrue\n"),
         ("test/assert_pytest_baseline.sh", _STUB_BASELINE),
     ):
