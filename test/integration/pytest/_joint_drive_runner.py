@@ -36,9 +36,10 @@ def _main() -> None:
     if str(framework_dir) not in sys.path:
         sys.path.insert(0, str(framework_dir))
 
-    from isaacsim import SimulationApp
+    from _kit_boot import time_kit_boot
 
-    app = SimulationApp({"headless": True})
+    with time_kit_boot() as SimulationApp:
+        app = SimulationApp({"headless": True})
     try:
         import omni.usd
         from pxr import UsdPhysics
