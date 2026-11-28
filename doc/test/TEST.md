@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 829 | 36 | 994 |
+| core | 129 | 829 | 39 | 997 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -504,7 +504,7 @@ The hosted suite collects **964 tests** on a host without Isaac Sim. isaac#440 a
 
 ### test/integration/pytest/
 
-The GPU suite collects **36 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
+The GPU suite collects **39 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
 
 | Test | Description |
 |------|-------------|
@@ -526,6 +526,7 @@ The GPU suite collects **36 tests**, all inside the Isaac test container. `test/
 | Test | Description |
 |------|-------------|
 | `test_io_plugin_integration.py` (2) | Boots the Jetbot with the default extensions and checks that the fake I/O plugin creates its marker only when configured. Both cases verify that no ROS client or bridge module was loaded. |
+| `test_output_mode_python_gpu.py` (3) | Checks that Python mode delivers a Jetbot RGB frame and creates no ROS 2 bridge nodes. After 30 warm-up steps, the runner times 300 calls to `app.update()` plus `out.step()`, reports mean and p95 latency, and the test requires p95 below 33.3 ms (isaac#390). |
 
 ## example/ros2/ — app-side ament package tests (colcon test, not in the counts above)
 

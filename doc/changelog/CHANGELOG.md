@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **新增 Python 輸出模式的 GPU 整合測試（isaac#390）。** 測試放在 `test/integration/no_ros/`，因為檢查內容需要提到 ROS 2 bridge 節點名稱。驗證 Jetbot 相機的 RGB 回呼能收到影格，並確認 OmniGraph 中的 ROS 2 bridge 節點數為零。暖機 30 步後量測 300 步的平均耗時與第 95 百分位數，要求後者低於 33.3 毫秒。GPU 測試基準由 36 提高至 39。
 - **框架純淨度檢查與基礎 repo 契約（isaac#137）。** Core CI 檢查框架原始碼與套件設定中的應用專屬詞彙。四語 README 說明下游透過 submodule 匯入共用框架，以及 `src/` 保留可執行範例的定位。補上 ADR 搬遷指引與九項 hosted 測試。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
