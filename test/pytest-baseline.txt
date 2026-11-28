@@ -333,8 +333,10 @@
 # isaac#549 adds ten core container-default cases and four README cases (1023 -> 1037).
 # isaac#549 adds four core README checks for stale host PID claims (core +14, docs +4 in total; merged with main: hosted 1051 -> 1069).
 # isaac#574 adds three core cases for Git metadata mounts (hosted 1069 -> 1072, core 906 -> 909).
-# isaac#363 adds two net core cases for required roots and literal model paths, plus one for the sensor bench model path (hosted 1072 -> 1075, core 909 -> 912).
-HOSTED_UNIT_BASELINE = 1075
+# isaac#363 adds two net core cases for required roots and literal model paths, plus one for the sensor bench model path (merged with main: hosted 1092 -> 1095, core 921 -> 924).
+# isaac#284 adds 8 docs cases for the published viewer image (merged with main: hosted 1084 -> 1095).
+# isaac#88: add 12 core cases for 3D and 2D lidar callbacks (merged with main: hosted 1072 -> 1084, core 909 -> 921).
+HOSTED_UNIT_BASELINE = 1095
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -342,7 +344,7 @@ HOSTED_UNIT_BASELINE = 1075
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1075。
+#   以下五組的測試數量下限合計為 1095。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -385,7 +387,7 @@ HOSTED_UNIT_BASELINE = 1075
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 912
+HOSTED_UNIT_BASELINE_CORE = 924
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 62
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -393,7 +395,9 @@ HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
 #   isaac#274 adds 8 docs cases (docs 83 -> 91).
-HOSTED_UNIT_BASELINE_DOCS = 95
+#   isaac#549 adds four docs README cases (docs 91 -> 95).
+#   isaac#284 adds 8 docs cases for the published viewer image (docs 95 -> 103).
+HOSTED_UNIT_BASELINE_DOCS = 103
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/). NOT enforced at M1 (a skipped GPU job is
@@ -474,8 +478,9 @@ HOSTED_UNIT_BASELINE_DOCS = 95
 # isaac#478: pin the collision schema contract on the live stage.
 # isaac#390: test_output_mode_python_gpu.py adds 3 core cases (GPU 36 -> 39).
 # isaac#336: play the Jetbot USD with the default driver and no I/O plugin (GPU 39 -> 40).
-# isaac#363: build_scene resolves relative model paths under MODEL_PATH (three GPU cases, GPU 40 -> 43).
-GPU_INTEGRATION_BASELINE = 43
+# isaac#363: build_scene resolves relative model paths under MODEL_PATH (three GPU cases, GPU 42 -> 45).
+# isaac#88: check delivery from both RTX lidar profiles (GPU 40 -> 42).
+GPU_INTEGRATION_BASELINE = 45
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
@@ -500,8 +505,9 @@ AGGREGATE_TARGET = 126
 #   isaac#474 adds six UID matrix cases (core 120 -> 126).
 #   isaac#429 adds four GPU baseline guard cases (core 126 -> 130).
 # isaac#480 replaces two package pin checks with one standalone Python smoke.
+# isaac#284 adds three stream post-run cases for the pinned viewer pull (stream 91 -> 94).
 BATS_BASELINE_CORE = 129
 BATS_BASELINE_GUI = 0
-BATS_BASELINE_STREAM = 94
+BATS_BASELINE_STREAM = 97
 BATS_BASELINE_HEADLESS = 13
 BATS_BASELINE_DOCS = 0
