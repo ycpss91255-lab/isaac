@@ -1,4 +1,4 @@
-"""Workflow triggers (isaac#434): no nightly test run, stream smoke on demand.
+"""Workflow triggers (isaac#434): official nightly tests and stream smoke on demand.
 
 The stream smoke used to run from a `schedule` trigger every night. Over its
 last 100 runs it failed 86 times and nobody acted on it, so a scheduled run
@@ -15,9 +15,12 @@ pytestmark = pytest.mark.core
 
 _WORKFLOWS = Path(__file__).resolve().parents[3] / ".github" / "workflows"
 
-# A schedule is allowed only for a bot that tracks an upstream release; it
-# runs no tests. Anything else on a timer is the nightly run this removed.
-_SCHEDULE_ALLOWED = {"base-version-monitor.yaml", "bot-isaac-sim-version.yaml"}
+# Upstream release tracking and the separate official native Python suite.
+_SCHEDULE_ALLOWED = {
+    "base-version-monitor.yaml",
+    "bot-isaac-sim-version.yaml",
+    "ci-official-native-python.yaml",
+}
 
 
 def _load(name):
@@ -34,7 +37,7 @@ def _all():
     return files
 
 
-def test_only_the_upstream_tracking_bot_has_a_schedule():
+def test_only_release_trackers_and_official_native_python_have_schedules():
     scheduled = {f.name for f in _all() if "schedule" in _triggers(yaml.safe_load(f.read_text()))}
     assert scheduled <= _SCHEDULE_ALLOWED, scheduled
 
