@@ -247,6 +247,21 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+# numpy (isaac#446): the Isaac Lab install above pulls numpy 2.5.5 into Kit's
+# site-packages, which shadows the numpy Isaac Sim ships in pip_prebundle
+# (2.3.1 on 6.2.0.1). Four official isaacsim.sensors.experimental.rtx cases
+# (test_camera_property, test_wrap_regex_multiple_prims, and the two
+# test_data cases) then fail with NumPy 2.5 TypeErrors on this image only.
+# Put numpy back to the version Isaac Sim itself ships, read from the image
+# so a Sim bump follows; the python check fails the build if the numpy that
+# actually imports is not that version. Must run as root (site-packages).
+RUN path="$(find /isaac-sim/extscache -maxdepth 3 -path '*/pip_prebundle/numpy-*.dist-info' -print -quit)" && \
+    name="${path##*/numpy-}" && \
+    prebundled="${name%.dist-info}" && \
+    test -n "${prebundled}" && \
+    /isaac-sim/python.sh -m pip install --no-cache-dir "numpy==${prebundled}" && \
+    /isaac-sim/python.sh -c "import numpy; assert numpy.__version__ == '${prebundled}', numpy.__version__; print('numpy', numpy.__version__)"
+
 # [isaac#288] Fail the build if any pip step above left a pip_prebundle
 # package without its __init__.py. Isaac Sim shares prebundled packages
 # between extensions as symlink farms; a pip install that removes the copy
