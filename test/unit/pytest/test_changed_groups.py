@@ -96,6 +96,42 @@ def test_docs_only_pr_touches_only_docs(cg, path):
 
 
 @pytest.mark.parametrize(
+    "paths, expected, build",
+    [
+        pytest.param(
+            [
+                "src/doc/adr/0011-ci-architecture-with-self-hosted-gpu-runner.md",
+                "README.md",
+                "doc/changelog/CHANGELOG.md",
+            ],
+            ["docs"], "false", id="all-docs",
+        ),
+        pytest.param(
+            ["doc/changelog/CHANGELOG.md", "framework/isaac_devkit/driver.py"],
+            ["core", "docs"], "true", id="docs-and-core",
+        ),
+        pytest.param(
+            ["doc/changelog/CHANGELOG.md", "Dockerfile"],
+            ALL, "true", id="docs-and-dockerfile",
+        ),
+        pytest.param([".github/workflows/main.yaml"], ALL, "true", id="main-workflow"),
+        pytest.param(
+            [".github/workflows/ci-stream-smoke.yaml"],
+            ["stream", "docs"], "true", id="stream-smoke",
+        ),
+        pytest.param(
+            [".github/workflows/base-version-monitor.yaml"],
+            ["docs"], "false", id="base-version-monitor",
+        ),
+    ],
+)
+def test_pr_scope_and_build(cg, paths, expected, build):
+    groups = _pr(cg, *paths)
+    assert groups == expected
+    assert cg.outputs(groups)["build"] == build
+
+
+@pytest.mark.parametrize(
     "path, expected",
     [
         ("Dockerfile", ALL),
