@@ -34,6 +34,7 @@
 
 ### Fixed
 
+- **stream smoke 把解析出的連接埠傳進容器（isaac#563）。** `stream_smoke.sh` 讀 `ISAAC_SIGNAL_PORT` / `ISAAC_MEDIA_PORT`（host.yaml 的訊號連接埠優先），但啟動 Kit 的 `docker exec -d` 沒帶入，Kit 仍綁預設 49100，與 client 連的連接埠不一致。現在 `docker exec -d` 以 `-e` 傳入同一組值。新增 3 個 Bats 案例（自訂值、預設值、host.yaml 優先）。
 - **延長串流畫面驗證的重試時間（isaac#556）。** 驗證腳本會將 `VISUAL_E2E_TOTAL_TIMEOUT_S` 傳入 Playwright 探測容器，設定總等待秒數，預設為 600 秒。每次重試都重新載入檢視器，最多等候畫面 30 秒。驗證失敗時，主控台與 `result.json` 會記錄實際等待秒數及最後一幀的判定結果；若未取得畫面，則記為 `no frame`。失敗重試之間會退避 1 秒，且只記錄前 20 次嘗試（`attemptCount` 記總次數），避免連線被拒時空轉。新增 7 項 hosted 測試，總數由 989 增至 996，stream 由 55 增至 62。
 - **限制官方 standalone Python 測試的執行時間（isaac#558）。** 每個案例預設最多執行 1500 秒，可用 `CASE_TIMEOUT_SECONDS` 調整。暖機後且無資源競爭時，單一案例實測最長為 331 秒；#437 記錄的 Carter 相機案例在高負載下耗時 712 秒，預設上限約為其兩倍。逾時時會終止該案例的程序群組，讓 runner 能記錄 JUnit 失敗並繼續下一個案例。工作上限為 60 分鐘，執行步驟上限為 55 分鐘，以預留清理與上傳產物的時間。Hosted pytest 基準由 1000 增至 1008（core 856 → 864）。
 - **校正測試數量（isaac#416）。** 修正 `just cleanup-merged` 條目的 Bats 數量。TEST.md 的 hosted 總數集中在檔首，新增 2 個 core 測試防止舊數字與重複摘要再度出現。Hosted 基準由 986 提高至 988（core 842 → 844）。
