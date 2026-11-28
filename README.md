@@ -319,7 +319,7 @@ The stream group’s `stream-visual-e2e` GPU job boots the stream stage and chec
 
 The `core-gpu` job runs the official Isaac Sim `asset` and `deprecated` Python test buckets in sequence. Both JUnit reports are included in the `official-tests` artifact.
 
-The scoped `core-official-nativepython` job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. Each bucket case has a 600-second timeout by default. The run step has a 55-minute limit within the 60-minute job. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
+The scoped `core-official-nativepython` job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. Each bucket case has a 1500-second timeout by default. The run step has a 55-minute limit within the 60-minute job. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
 
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 

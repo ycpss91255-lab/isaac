@@ -71,6 +71,17 @@ def test_watchdog_default_case_timeout(watchdog):
     assert 2 * 712 <= timeout < inputs["step-timeout-minutes"] * 60
 
 
+@pytest.mark.parametrize(
+    "readme", ["README.md", "doc/README.zh-TW.md", "doc/README.zh-CN.md", "doc/README.ja.md"]
+)
+def test_readmes_state_watchdog_default_timeout(watchdog, readme):
+    """Check the documented per-case timeout for the standalone CI job."""
+    paragraphs = (ROOT / readme).read_text(encoding="utf-8").split("\n\n")
+    paragraph = next((p for p in paragraphs if f"core-{JOB}" in p), "")
+    assert f"{watchdog.DEFAULT_CASE_TIMEOUT_SECONDS}" in paragraph
+    assert "600" not in paragraph
+
+
 def test_watchdog_documents_runner_assumption(watchdog):
     assert "subprocess.run" in watchdog.__doc__
     assert "print_live_output" in watchdog.__doc__

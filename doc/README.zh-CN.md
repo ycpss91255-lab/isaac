@@ -319,7 +319,7 @@ stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromi
 
 `core-gpu` 作业依次运行 Isaac Sim 官方 `asset` 和 `deprecated` Python 测试，并将两份 JUnit 报告上传至 `official-tests` 制品。
 
-`core-official-nativepython` 作业按 core 变更范围运行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。测试桶中每个用例的默认超时时间为 600 秒，执行步骤限时 55 分钟，整个作业限时 60 分钟。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+`core-official-nativepython` 作业按 core 变更范围运行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。测试桶中每个用例的默认超时时间为 1500 秒，执行步骤限时 55 分钟，整个作业限时 60 分钟。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
 
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 
