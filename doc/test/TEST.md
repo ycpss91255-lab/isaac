@@ -1,6 +1,6 @@
 # TEST.md
 
-**239 tests** total (bats). Hosted pytest collects **1077 tests**.
+**239 tests** total (bats). Hosted pytest collects **1080 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 906 | 40 | 1075 |
+| core | 129 | 909 | 40 | 1078 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 97 | 62 | 0 | 159 |
 | headless | 13 | 6 | 0 | 19 |
@@ -476,6 +476,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_container_min_privilege.py` | 14 | `core`. Checks privileged mode, host device bindings, three added capabilities, seccomp, PID and IPC isolation, shared memory size and host networking. Checks all four READMEs for stale claims about using the host PID namespace (isaac#549). |
 | `test_readme_container_permissions.py` | 4 | `docs`. Checks that each README explains the local privilege override in its container permissions section (isaac#549). |
 | `test_repository_purity.py` | 2 | `core` (#136). Reports tracked text lines containing `forklift` or `modela` outside the documented exceptions and checks the default camera mount paths and ROS topic prefixes. |
+| `test_git_common_mount.py` | 3 | `core` (#574). Checks that a normal clone needs no extra mount, a linked worktree mounts its shared Git directory at the same absolute path, and both hosted pytest Docker commands reference the helper. |
 | `test_operator_volumes.py` | 7 | `core`. Checks the pre-run hook’s advisory volume coverage against base’s TOML merge rules (isaac#528). |
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
 | `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and documentation of the sample and the `just run scene` recipe in all four READMEs (isaac#338, #336). |
