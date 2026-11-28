@@ -14,6 +14,7 @@ build instead of a silently skipped one:
 """
 
 import importlib.util
+import re
 import subprocess
 import sys
 import textwrap
@@ -304,3 +305,24 @@ def test_test_md_pytest_counts_match_the_baseline(tg):
     # Every GPU integration test is core: it boots Isaac on the shared layer.
     assert table["core"]["gpu"] == baseline["GPU_INTEGRATION_BASELINE"]
     assert all(table[g]["gpu"] == 0 for g in tg.GROUPS if g != "core")
+
+
+def test_cleanup_merged_changelog_avoids_stale_bats_counts():
+    changelog = (_REPO_ROOT / "doc/changelog/CHANGELOG.md").read_text(encoding="utf-8")
+    entry, = (
+        line for line in changelog.splitlines()
+        if line.startswith("- **`just cleanup-merged`")
+    )
+    assert not re.search(r"\b(?:159|162)\b", entry), entry
+
+
+def test_test_md_has_one_hosted_count_summary(tg):
+    baseline = tg.read_baseline(_BASELINE)
+    document = _TEST_MD.read_text(encoding="utf-8")
+    expected = f"Hosted pytest collects **{baseline['HOSTED_UNIT_BASELINE']} tests**."
+    assert expected in document.splitlines()[2]
+    assert re.findall(r"(?:Hosted pytest|The hosted suite) collects \*\*\d+ tests\*\*", document) == [
+        expected.rstrip(".")
+    ]
+    assert "Live collected = 299" not in document
+    assert "ratchets to **513**" not in document
