@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **`core-gpu` 執行 Isaac Sim 官方 core 與 sensors 測試（isaac#438）。** 串行驗證 18 支 core 與 14 支 sensors 腳本，並保留各桶的 JUnit 與 Kit log。檢查四個 RTX 回歸案例及兩個已知的 actuator skips，僅排除官方映像會崩潰的 tiled camera 案例。Hosted 基準由 964 提高至 966（core 820 → 822）。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
