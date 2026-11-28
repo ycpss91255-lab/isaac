@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1031 tests**.
+**233 tests** total (bats). Hosted pytest collects **1039 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 879 | 40 | 1048 |
+| core | 129 | 887 | 40 | 1056 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -25,7 +25,11 @@ GITHUB_WORKSPACE="$PWD" GITHUB_RUN_ID=local437 GITHUB_RUN_ATTEMPT=1 \
   ./script/ci/official_nativepython_job.sh
 ```
 
-The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. The bucket runs from a writable temporary working directory so Replicator can create render outputs. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist.
+The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. The bucket runs from a writable temporary working directory so Replicator can create render outputs.
+
+The watchdog kills a case's process group after 1500 seconds by default (override with `CASE_TIMEOUT_SECONDS`), so the runner can record the failure in JUnit and continue with the next case. A warm, uncontended run took 1576 s for 41 cases, with a maximum of 331 s per case. In #437, `ros2.bridge.test_carter_camera_multi_robot_nav` took 518 s warm and 712 s under load, so the default allows about twice the observed time under load. If one stuck case uses the full 1500 s and the remaining cases take about 1576 s warm, the bucket takes about 3076 s (~51 min) of the 55-minute step limit (3300 s), leaving little margin for the two examples and pip, so lower `CASE_TIMEOUT_SECONDS` if several stalls are expected. The watchdog replaces `subprocess.run` globally in the interpreter running NVIDIA's `run_tests.py` and relies on the runner launching each case through one of its two `subprocess.run` calls in the `print_live_output=True` path used by `main()`. Any new `subprocess.run` call in the runner would inherit the limit, so recheck the call sites when upgrading Isaac Sim.
+
+The run step has a 55-minute limit within the 60-minute job to leave time for cleanup and artifact upload. A step timeout kills the runner shell without forwarding signals to `docker run --rm`, so the workflow's `reap-container-filter` step removes the leftover container by its `com.docker.compose.project` label. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist.
 
 The job also runs the existing Kit settings probe through this repository's `IsaacDriver`. The probe requires the running app to report the setting passed in its launch configuration.
 
@@ -504,7 +508,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_stream_visual_verdict.py` | 12 | Pixel statistics, known-colour thresholds and WebRTC requirements. |
 | `test_stream_visual_wiring.py` | 5 | 驗證 stream 組觸發條件、GPU 工作流程、失敗時的產物上傳、必要檢查，以及容器清理篩選器只命中同一次執行與嘗試的容器。 |
 | `test_main_workflow_scope.py` | 29 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
-| `test_official_nativepython.py` | 10 | `core`. Scoped and manual GPU workflow, required CI gate, artifact upload, Docker network and mounts, the complete NVIDIA bucket, and failure propagation for JUnit, both examples and the driver launch probe (#437). |
+| `test_official_nativepython.py` | 18 | `core`. Scoped and manual GPU workflow, required CI gate, artifact upload, Docker network and mounts, the complete NVIDIA bucket, and failure propagation for JUnit, both examples and the driver launch probe (#437). Checks the step timeout and verifies that a timed-out case and its children are killed while the next case completes. Pins the 1500 s watchdog default in code and all four READMEs and checks that the watchdog docstring identifies the runner's dependency on `subprocess.run` in the live-output path (#558). |
 | `test_official_pythontests.py` | 11 | `core`. Checks shared GPU workflow and artifact wiring, sequential bucket execution, and failure on Docker errors or failed, skipped, missing, malformed, or incomplete JUnit results. Also checks retained Kit logs, RTX regression coverage, and the actuator skip allowlist (isaac#438, #440). |
 | `test_official_startuptests.py` | 3 | `core`. The per-PR GPU job calls the official Isaac Sim suite helper, the helper has no Isaac Lab dependency, and the reusable workflow uploads `artifacts/startuptests` on success and failure (isaac#436). |
 | `test_workflow_naming.py` | 42 | `core`. Workflow naming rule and lint (isaac#443), `script/ci/lint_workflow_names.py` + `doc/workflow-naming.md`: the real `.github/workflows/` follows the rule (and the glob finds `main.yaml` and `ci-stream-smoke.yaml`, no vacuous pass; the pre-rename stream smoke file is gone); detector self-tests on temp trees for bad file names (`.yml`, no category, uppercase, underscores), bad display names (parenthesised note, wrong case, wrong category), non-kebab job ids, a CI job with no group prefix, job-level `name:`; the allowed CI ids (`changes` / `gate` / `release` / `<group>-...`) and a bot job needing only kebab-case; exemptions are by exact file name and each carries a reason; `main.yaml` is exempt from file and display name but not from the job rule; base's `init.sh` still generates `base-version-monitor.yaml` under that name and only creates it when absent (the reason it keeps its name); the doc lists every category, group and exemption; retired names (`RETIRED_NAMES` in the lint: the old job ids, the old stream smoke file name and display name) are reported in docs while the new file name and history (changelog, ADRs) are not. |
