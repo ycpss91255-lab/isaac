@@ -15,7 +15,7 @@ _README = _REPO_ROOT / "src" / "model" / "README.md"
     "usd/omwr/",
     "urdf/openbase/",
     "usd/openbase/",
-    "usd/forklift_blocky/",
+    "usd/temp/",
 ])
 def test_model_readme_omits_stale_path(path):
     assert path not in _README.read_text(encoding="utf-8")
@@ -26,13 +26,14 @@ def test_model_readme_omits_stale_path(path):
     "usd/robot/guiritter/openbase/",
     "model/robot/custom/omwr/",
     "usd/robot/custom/omwr/",
-    "usd/temp/forklift_blocky/",
 ])
 def test_model_readme_lists_sim_asset_path(path):
     assert path in _README.read_text(encoding="utf-8")
 
 
-def test_model_readme_cites_sim_asset_readme():
-    source = "https://github.com/ycpss91255-lab/sim_asset/blob/main/README.md"
-    assert source in _README.read_text(encoding="utf-8")
-
+@pytest.mark.parametrize("url", [
+    "https://github.com/ycpss91255-lab/sim_asset",
+    "https://github.com/ycpss91255-lab/sim_asset/blob/main/README.md",
+])
+def test_model_readme_links_to_sim_asset(url):
+    assert f"]({url})" in _README.read_text(encoding="utf-8")

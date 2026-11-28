@@ -33,7 +33,7 @@ def _write_stub_usd(tmp_path: Path) -> Path:
 
             def Xform "World"
             {
-                def Xform "Forklift"
+                def Xform "Robot"
                 {
                     def Xform "carriage"
                     {
@@ -97,7 +97,7 @@ def test_camera_custom_yaml_creates_prims_headless(tmp_path):
 
     cameras = re.findall(r"^\[CAMERA PRIM\] (\S+)$", result.stdout, re.MULTILINE)
     assert len(cameras) == 2
-    assert all(path.startswith("/World/Forklift/carriage/") for path in cameras)
+    assert all(path.startswith("/World/Robot/carriage/") for path in cameras)
     assert {Path(path).name for path in cameras} == {"color", "depth"}
 
     assert "[EXIT CLEAN]" in result.stdout, "Runner did not exit cleanly."
