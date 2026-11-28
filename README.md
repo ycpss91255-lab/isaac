@@ -338,4 +338,6 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
 
+Run pytest against `test/integration/` to include both the GPU integration tests and the [no-ROS checks](test/integration/no_ros/README.md).
+
 Pass criterion is stdout marker lines (`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`), not the return code — Kit's `app.close` calls `_exit(0)`. See [doc/test/TEST.md](doc/test/TEST.md).

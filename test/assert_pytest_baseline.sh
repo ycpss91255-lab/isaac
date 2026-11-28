@@ -14,7 +14,7 @@
 #     on every PR independently of the GPU suite.
 #
 #   --gpu (self-hosted)  Runs the GPU integration suite
-#     (test/integration/pytest/) inside the devel-test GPU container via
+#     (test/integration/) inside the devel-test GPU container via
 #     ./script/run.sh -t test, then enforces the M2 cross-runner gate:
 #       1. the GPU suite actually RAN -- passed > 0 (an all-skipped or
 #          collected-only GPU job does NOT count as green, PRD Testing &
@@ -111,8 +111,8 @@ if [[ "${MODE}" == "gpu" ]]; then
   # so the host reads the same file the container wrote regardless of the
   # container's absolute mount point. The caller passes the test path as
   # seen INSIDE the container via GPU_PYTEST_PATH (CI checkout = ~/work,
-  # so test/integration/pytest/ resolves; a nested worktree sets it to
-  # worktree/<name>/test/integration/pytest/).
+  # so test/integration/ resolves; a nested worktree sets it to
+  # worktree/<name>/test/integration/).
   GPU_REPORT="${REPO_ROOT}/test/.gpu-pytest-report.xml"
   rm -f "${GPU_REPORT}"
   # Keep the mounted workspace clean: -p no:cacheprovider drops pytest's
@@ -124,7 +124,7 @@ if [[ "${MODE}" == "gpu" ]]; then
   # actions/checkout (running as the runner user) cannot unlink them
   # (EACCES) -- the same workspace-poison class the hosted leg already
   # guards against (#131 CI fix).
-  GPU_PYTEST="${GPU_PYTEST_PATH:-test/integration/pytest/}"
+  GPU_PYTEST="${GPU_PYTEST_PATH:-test/integration/}"
   GPU_JUNIT="${GPU_JUNIT_PATH:-test/.gpu-pytest-report.xml}"
   # Isolated compose project (owv#55 second axis; first axis was isaac#239).
   # This is a foreground run.sh with no --no-rm, so run.sh installs its EXIT

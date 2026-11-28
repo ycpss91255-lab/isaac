@@ -129,6 +129,7 @@ graph in `isaac`; the B arrangement is UNVERIFIED). This ADR does not choose.
   dependency at all; `ros` mode uses the bridge extension, not `rclpy`.
 - **Operations.** A receiver of `ros` mode output should use RELIABLE QoS and
   the UDPv4-only Fast DDS profile (`config/ros2/fastdds.xml`, #367).
+  (2026-11-27) The Fast DDS profile moved to a test fixture in #430. The fixture was removed in #276. `isaac_ros_io` provides the runtime profile (see [ADR-0015](0015-cross-subnet-ros2-viewing-tcp-dds.md)).
 - **Verification.** Per-mode behaviour is guarded by GPU integration tests
   (`test_output_mode_python_gpu.py`, `test_output_mode_ros_gpu.py`) and the
   resolver by hosted unit tests, instead of citing the benchmark as the

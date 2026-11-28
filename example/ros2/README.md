@@ -83,8 +83,7 @@ Each `[CMD_VEL OK]` line reports a Twist published by the node. The C++ package 
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`.
 
-The Isaac–ament round-trip test moved to `isaac_ros_io` (isaac#276). Hosted CI
-checks these templates with `colcon build` and `ament_lint`.
+CI checks these templates with `colcon build` and `ament_lint` in the hosted ROS container.
 
 ## Make it yours
 

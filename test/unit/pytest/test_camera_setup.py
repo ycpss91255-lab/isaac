@@ -87,6 +87,20 @@ class TestValidateCamera:
     def test_accepts_custom(self):
         camera_setup.validate_camera(_custom_cfg(), source="t")
 
+    def test_custom_defaults_missing_ros_to_none(self):
+        cfg = _custom_cfg()
+        del cfg["ros"]
+        camera_setup.validate_camera(cfg, source="t")
+        assert cfg["ros"] is None
+
+    def test_custom_preserves_existing_ros(self):
+        cfg = _custom_cfg()
+        ros = cfg["ros"]
+        expected = ros.copy()
+        camera_setup.validate_camera(cfg, source="t")
+        assert cfg["ros"] is ros
+        assert ros == expected
+
     def test_accepts_zed(self):
         camera_setup.validate_camera(_zed_cfg(), source="t")
 

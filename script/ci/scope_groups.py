@@ -29,6 +29,7 @@ _BATS_DIR = _REPO_ROOT / "test" / "bats" / "smoke"
 _PYTEST_DIRS = (
     _REPO_ROOT / "test" / "unit" / "pytest",
     _REPO_ROOT / "test" / "integration" / "pytest",
+    _REPO_ROOT / "test" / "integration" / "no_ros",
 )
 
 _FILE_TAGS_RE = re.compile(r"^#\s*bats\s+file_tags\s*=\s*(.*?)\s*$")

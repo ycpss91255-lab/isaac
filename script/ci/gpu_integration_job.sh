@@ -5,7 +5,8 @@
 # gate, the workspace reclaim and the checkout).
 #
 # Builds the devel-test image, then runs the headless integration suite inside
-# that container. The gate requires at least one passing test, enforces the
+# that container, including the no-ROS suite under test/integration/. The gate
+# requires at least one passing test, enforces the
 # GPU collection floor and checks the hosted-unit plus GPU aggregate.
 # Guard: test/bats/smoke/gpu_job_scripts_spec.bats.
 set -euo pipefail

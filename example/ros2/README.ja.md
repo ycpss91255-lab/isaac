@@ -84,8 +84,7 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`。
 
-Isaac と ament のコンテナ間の往復テストは `isaac_ros_io` に移りました（isaac#276）。
-このテンプレートはホスト側の CI で `colcon build` と `ament_lint` を使って検証します。
+CI はホスト上の ROS コンテナで `colcon build` と `ament_lint` を実行してテンプレートを検証します。
 
 ## 自分用にする
 

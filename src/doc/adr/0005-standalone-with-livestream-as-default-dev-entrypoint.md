@@ -95,3 +95,7 @@ The Decision / Why / Considered Options in the body of this ADR all stand — th
 ## Editorial note (2026-06-11)
 
 Incidental application-specific example names in this ADR were replaced with generic wording (camera-bot example) as part of the base-repo convergence (ADR-0017, #128). Decision content is unchanged; the original wording is preserved in git history.
+
+## Editorial note (2026-11-27)
+
+#429 removed the ROS scripts and the `cmd_vel_inkit_teleop.md` guide. References to that guide above describe the historical Script Editor workflow.

@@ -181,6 +181,9 @@ matches + bound MDL path hits; L3 (camera, implemented path) — topic exists + 
 resolves to the expected prim-path string); ros_io — publish one `/cmd_vel`, `latest()`
 returns a matching message within K ticks; no message returns `None` without blocking.
 
+**Update (#429).** The example GPU test now checks the camera mount and loaded
+modules. ROS message delivery is outside this repository’s GPU suite.
+
 **GPU CI policy**: integration runs headless (no livestream — avoids the known
 bridge+livestream crash, #228 lineage); timeout = boot budget x 1.5; at most 1 logged retry;
 GPU runner unavailable -> job `skipped` but the PR is not mergeable on hosted-only green.

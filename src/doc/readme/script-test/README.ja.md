@@ -1,31 +1,16 @@
 # Standalone scripts smoke
 
-`isaac_ws/src/script/*_standalone.py` の統合 smoke テスト。各スクリプトは `just docker exec -t stream /isaac-sim/python.sh <script>` 経由で実行したとき、タイムアウト内に対応する "ready marker" 文字列を出力しなければいけません。Runner はスクリプトを起動し、stdout を marker でポーリング、見つけ次第ジョブを片付け、各 case の PASS / FAIL を報告します。
-
 **[English](../../../script/test/README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
+
+`standalone_smoke.sh` には現在テストケースがありません。実行するとその旨を表示し、Docker を起動せずに正常終了します。
 
 ## 使い方
 
 ```bash
-# フル matrix(~6-10 min)
 ./isaac_ws/src/script/test/standalone_smoke.sh
-
-# 単一 case(スクリプト編集時の高速イテレーション)
-./isaac_ws/src/script/test/standalone_smoke.sh --only ros2_test_pub
 ```
 
-前提:
-
-- `just docker run -t stream -d` が成功すること(container が起きていない場合 smoke が自動で起動します)
-
-## Cases
-
-| Script | Marker phrase | Timeout |
-|--------|---------------|--------:|
-| `ros2_test_pub_standalone.py` | `standalone publishing` | 150s |
-| `ros2_test_sub_standalone.py` | `standalone subscribed to` | 150s |
-
-Marker は受け取った stdout+stderr ストリームに対する regex マッチ。各 standalone スクリプトはコア setup 完了(rclpy subscriber 起動、または最初の `[tick]`)時にタグ付き行を 1 回だけ出力します。
+各ケースにはスクリプトのファイル名、起動完了を示す正規表現、タイムアウト秒数を指定します。
 
 ## Exit codes
 
@@ -34,18 +19,3 @@ Marker は受け取った stdout+stderr ストリームに対する regex マッ
 | 0 | 選択した全 case が PASS |
 | 1 | 1 件以上 FAIL |
 | 2 | 不明なオプション、または Pre-flight 失敗(docker dir が無い / standalone container 起動不可)|
-
-## 失敗デバッグ
-
-FAIL 時、runner は当該スクリプトの stdout+stderr 末尾 20 行を stderr に出力します。よくあるパターン:
-
-- `ModuleNotFoundError: No module named 'rclpy'` — `enable_extension("isaacsim.ros2.bridge")` 呼び出し漏れ、または `import rclpy` の後に呼び出している
-- タイムアウトまで marker を一度も検出せず — kit は起動したがスクリプトのメインループが print に到達していない。marker 行より前に exception が出ていないか確認
-
-## なぜ integration、unit ではないのか
-
-Standalone scripts は kit + livestream + rclpy subscriber を起動します。純粋な Python unit test は「スクリプトが実際に ROS subscriber loop に到達し、bridge が生きている」ことを置き換えられません。Marker 文字列が契約 — スクリプトがそれを print できる、即ち SimulationApp init、ROS 2 bridge extension load、rclpy import、ノード生成がすべて成立しています。
-
-## なぜこのディレクトリ、`isaac_ws/src/docker/test/` ではないのか
-
-`isaac_ws/src/docker/test/` は docker repo(`ycpss91255-lab/isaac`)に属し、container image / wrapper をテストします。container 内で動くスクリプトはテストしません。Standalone scripts は `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`)に住み、smoke はそれと一緒に置かれていて、移動時も一緒に動きます。

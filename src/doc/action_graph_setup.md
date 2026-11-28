@@ -31,8 +31,6 @@ Isaac Sim 5.1 在 standalone `python.sh` 流程下，**同 process 同時啟用 
 
 `just docker run -t headless -d` 跑的是 `runheadless.sh -v`，**不是** `python.sh` 啟動腳本。它載入 `isaacsim.exp.full.streaming.kit` experience 檔，這個 experience 把 bridge 列在預載清單 — kit 從一開始就把 bridge 拉起來，跟 USD load 順序對得上，**不撞**。
 
-M1 階段 `ros2_test_pub.py` / `ros2_test_sub.py` 走 Script Editor 在這條 kit 上跑，跨 container DDS 都通，就是同一條穩定路徑。
-
 ### 解法策略
 
 把 ROS 2 訂閱 + 速度套用邏輯**寫進 USD 的 Action Graph**：
@@ -291,12 +289,12 @@ OpenBase 應該掉到 GroundPlane 上停住。沒有任何 cmd_vel 進來時 bas
 
 #### Step 10.4 — 從 host 推 `/cmd_vel`
 
+跨子網路 DDS 與 ROS I/O 的維護位置見 [ADR-0015](adr/0015-cross-subnet-ros2-viewing-tcp-dds.md)。
+
 另開 terminal：
 
 ```bash
 docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
-    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
-    -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'source /opt/ros/humble/setup.bash && \
         ros2 topic pub /cmd_vel geometry_msgs/Twist "{linear: {x: 0.5}}" -r 10'
 ```
@@ -311,8 +309,6 @@ WebRTC viewport 內 OpenBase 應該開始沿 +x 方向移動，速度約 0.5 m/s
 
 ```bash
 docker run --rm -it --net=host --ipc=host -e ROS_DOMAIN_ID=0 \
-    -v "$(git rev-parse --show-toplevel)"/config/ros2/fastdds.xml:/isaac-sim/fastdds.xml:ro \
-    -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac-sim/fastdds.xml \
     ros:humble bash -c 'apt update && apt install -y ros-humble-teleop-twist-keyboard && \
         source /opt/ros/humble/setup.bash && \
         ros2 run teleop_twist_keyboard teleop_twist_keyboard'

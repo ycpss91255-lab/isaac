@@ -338,4 +338,6 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
 
+`test/integration/` を指定すると、GPU 統合テストと [ROS 非依存の検証](../test/integration/no_ros/README.md) の両方を実行できます。
+
 合否判定は stdout の marker 行（`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`）であり、return code ではない — Kit の `app.close` は `_exit(0)` を呼ぶ。詳細は [doc/test/TEST.md](test/TEST.md) を参照。

@@ -1,31 +1,16 @@
 # Standalone scripts smoke
 
-集成 smoke 测试 `isaac_ws/src/script/*_standalone.py`。每支 script 在透过 `just docker exec -t stream /isaac-sim/python.sh <script>` 跑起来后,必须在 timeout 内打印出对应的 "ready marker" 字串。Runner 启动 script、轮询 stdout 找 marker,看到就收掉,回报每个 case 是 PASS / FAIL。
-
 **[English](../../../script/test/README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
+
+`standalone_smoke.sh` 目前没有配置任何测试用例。运行时会提示用例为空，随后正常退出，不会启动 Docker。
 
 ## 用法
 
 ```bash
-# 完整 matrix(~6-10 min)
 ./isaac_ws/src/script/test/standalone_smoke.sh
-
-# 单一 case(改 script 时快速 iterate)
-./isaac_ws/src/script/test/standalone_smoke.sh --only ros2_test_pub
 ```
 
-前置条件:
-
-- `just docker run -t stream -d` 跑得起来(container 没起时 smoke 会自动带起)
-
-## Cases
-
-| Script | Marker phrase | Timeout |
-|--------|---------------|--------:|
-| `ros2_test_pub_standalone.py` | `standalone publishing` | 150s |
-| `ros2_test_sub_standalone.py` | `standalone subscribed to` | 150s |
-
-Marker 用 regex 比对在收到的 stdout+stderr 串上。每支 standalone script 都会在核心 setup 完成(rclpy subscriber 活、或第一次 `[tick]`)时恰好打印一次该 tag 行。
+每个用例需指定脚本文件名、匹配就绪消息的正则表达式和超时秒数。
 
 ## Exit codes
 
@@ -34,18 +19,3 @@ Marker 用 regex 比对在收到的 stdout+stderr 串上。每支 standalone scr
 | 0 | 所选案例全部 PASS |
 | 1 | 至少 1 个 FAIL |
 | 2 | 未知选项或 Pre-flight 失败(docker dir 不在 / standalone container 起不来)|
-
-## 失败除错
-
-FAIL 时 runner 会把该 script 的 stdout+stderr 最后 20 行打印到 stderr。常见模式:
-
-- `ModuleNotFoundError: No module named 'rclpy'` — `enable_extension("isaacsim.ros2.bridge")` 没调用,或在 `import rclpy` 之后才调用
-- 跑到 timeout 都没看到 marker — kit 起来但 script 主 loop 没走到 print;检查 marker 行以上是否有 exception
-
-## 为什么用 integration 不用 unit
-
-Standalone scripts 会起 kit + livestream + rclpy subscriber。纯 Python unit test 无法取代「script 真的有走到 ROS subscriber loop,bridge alive」这件事。Marker 字串就是契约 — script 打印得出来,等于 SimulationApp init、ROS 2 bridge extension load、rclpy import 和 node 创建均已完成。
-
-## 为什么放这个目录,不放 isaac_ws/src/docker/test/
-
-`isaac_ws/src/docker/test/` 属于 docker repo(`ycpss91255-lab/isaac`),测的是 container image / wrapper,不是跑在 container 内的 script。Standalone scripts 住在 `isaac_ws/src/script/`(本 repo `ycpss91255/isaac`);smoke 跟着它们放一起,搬家也跟着走。

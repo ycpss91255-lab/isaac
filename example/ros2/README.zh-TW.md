@@ -81,7 +81,7 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`。
 
-Isaac 與 ament 的跨容器往返測試已移至 `isaac_ros_io`（isaac#276）。這裡的範本由 hosted CI 執行 `colcon build` 與 `ament_lint` 驗證。
+CI 在 hosted ROS 容器內以 `colcon build` 與 `ament_lint` 驗證這些範本。
 
 ## 改成你自己的
 

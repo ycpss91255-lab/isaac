@@ -160,7 +160,7 @@ run():
 - **錯誤契約**：link 不存在 → raise `LinkNotFoundError`；catalog 三層全 miss → `SensorNotFoundError`；deep-merge list 欄位 = replace（非 append）。未實作路徑 raise `NotImplementedError`。
 
 ### A5. 資料夾架構
-**base repo**（root = 消費端 `src/docker`）：`Dockerfile/compose/.base/apps/web_viewer` + `config/`(env 級 instances+ros2 fastdds) + `script/`(wrapper+hooks+`new-workspace.sh`) + `framework/`(pyproject+`isaac_devkit/{__init__,driver,usd_model,materials,sensors,ros_io,scene}.py` + `isaac_devkit/` 內附 **base 預設 sensor catalog** 資料，three-tier 的中間層、隨 mount 提供) + `example/`(README i18n + `sim/`{model,config/sensor,scene,example_driver.py} + `ros2/src/`{ament_python,ament_cmake 各一}) + `doc/`(adr+changelog+test+readme) + `test/`(smoke/bats, unit/pytest+import-safety, integration/pytest example 端到端) + README。現有 root `src/` 整個移除。
+**base repo**（root = 消費端 `src/docker`）：`Dockerfile/compose/.base/apps/web_viewer` + `config/`(env 級 instances) + `script/`(wrapper+hooks+`new-workspace.sh`) + `framework/`(pyproject+`isaac_devkit/{__init__,driver,usd_model,materials,sensors,ros_io,scene}.py` + `isaac_devkit/` 內附 **base 預設 sensor catalog** 資料，three-tier 的中間層、隨 mount 提供) + `example/`(README i18n + `sim/`{model,config/sensor,scene,example_driver.py} + `ros2/src/`{ament_python,ament_cmake 各一}) + `doc/`(adr+changelog+test+readme) + `test/`(smoke/bats, unit/pytest+import-safety, integration/pytest example 端到端) + README。現有 root `src/` 整個移除。
 
 **消費端**：`my-robot-ws/`（WS_PATH，掛 `~/work`）→ `.env` + `src/{docker(submodule pin tag), isaac/{README+i18n, sim/{model,config/sensor,scene,<driver>.py}, ros2/src/<pkg>}}`。
 

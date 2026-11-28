@@ -119,6 +119,8 @@ remains the same.
   `isaac_ros2`'s OmniGraph publish chain.  Both can be moved with a
   one-line import change in layer (b).
 
+**Update (2026-11-27).** #429 removed `test_camera_ros2_headless.py`. Its entry above records the coverage at the time of this decision.
+
 ## References
 
 - isaac#309 -- repo split tracking.

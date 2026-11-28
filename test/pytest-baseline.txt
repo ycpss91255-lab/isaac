@@ -305,7 +305,8 @@
 # isaac#375: test_sim_version.py adds 6 core cases (hosted 853 -> 859, core 710 -> 716).
 # isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (859 -> 863, core 716 -> 720).
 # isaac#474 adds 40 core cases (ownership guard 27, UID setup 13): 863 -> 903.
-HOSTED_UNIT_BASELINE = 903
+# isaac#429: hosted 903 -> 921 and core 760 -> 778.
+HOSTED_UNIT_BASELINE = 921
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -313,7 +314,7 @@ HOSTED_UNIT_BASELINE = 903
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 903。
+#   以下五組的測試數量下限合計為 921。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -356,7 +357,7 @@ HOSTED_UNIT_BASELINE = 903
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 760
+HOSTED_UNIT_BASELINE_CORE = 778
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -366,7 +367,7 @@ HOSTED_UNIT_BASELINE_HEADLESS = 6
 HOSTED_UNIT_BASELINE_DOCS = 83
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
-#   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
+#   (test/integration/). NOT enforced at M1 (a skipped GPU job is
 #   not green, but hosted-only green is mergeable here). The full
 #   cross-runner aggregate (HOSTED_UNIT + GPU_INTEGRATION) is asserted at
 #   M2 with #132. The in-container suite exercises USD robot structure, camera
@@ -440,6 +441,7 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 # isaac#447: timeline settings and clock checks on both engines add 4 core cases.
 # isaac#276 removes two in-container ROS cases and two host round-trip cases.
 #   The 35 remaining cases all run in the Isaac test container.
+#   isaac#429 keeps all 35 cases and moves two I/O checks to no_ros/.
 GPU_INTEGRATION_BASELINE = 35
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
@@ -463,7 +465,8 @@ AGGREGATE_TARGET = 126
 #   isaac#497 adds 9 stream smoke cases (stream 81 -> 90).
 #   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 223 -> 219), then isaac#436 adds 5 (core 115 -> 120, total 224).
 #   isaac#474 adds six UID matrix cases (core 120 -> 126).
-BATS_BASELINE_CORE = 126
+#   isaac#429 adds four GPU baseline guard cases (core 126 -> 130).
+BATS_BASELINE_CORE = 130
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13

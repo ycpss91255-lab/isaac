@@ -5,7 +5,6 @@
 > Driver 走這條的代表:`script/standalone_livestream_smoke.py`(最小 sanity check);完整 forklift demo driver 已搬到 isaac_physics_test(#309)。
 >
 > 為什麼選這條 vs 過去的 in-kit Script Editor:見 `adr/0005-standalone-with-livestream-as-default-dev-entrypoint.md`。
-> 過去 in-kit Script Editor 日常 SOP 留在 `cmd_vel_inkit_teleop.md` 當歷史參考(已標 legacy)。
 
 ---
 
@@ -208,7 +207,7 @@ else:
 | 改完重跑 | 編輯 → Script Editor 重 Ctrl+Enter | 編輯 → terminal 重跑 command |
 | LLM agent 可驅動 | 否(要人手點 Ctrl+Enter) | 是(`just docker exec` 是 docker exec,LLM 可呼叫) |
 
-舊流程沒被移除 — `cmd_vel_inkit_teleop.md` 保留當歷史參考。但**新 driver 不要再走舊路**,除非有非寫不可的理由(例如:driver 要在 stage 已開的 GUI session 裡做互動式偵錯)。
+**新 driver 不要再走舊路**,除非有非寫不可的理由(例如:driver 要在 stage 已開的 GUI session 裡做互動式偵錯)。
 
 ---
 
@@ -216,7 +215,6 @@ else:
 
 - `adr/0005-standalone-with-livestream-as-default-dev-entrypoint.md` — 這條路徑的決策依據
 - isaac_physics_test `src/doc/adr/0002-cmd-vel-teleop-via-in-kit-script-editor.md` — 舊 in-kit 流程的決策依據(2026-05-20 之後僅為歷史)
-- `cmd_vel_inkit_teleop.md` — 舊 in-kit 日常 SOP(legacy)
 - `action_graph_setup.md` — 更早期 Action Graph 一次性 GUI SOP(deprecated)
 - `script/standalone_livestream_smoke.py` — 最小 sanity driver(`SimulationApp + livestream:2` 開合 / 30s spin / exit 0)
 - forklift Model A-hybrid 完整 demo(51s pickup cycle)— 已搬到 isaac_physics_test(#309)

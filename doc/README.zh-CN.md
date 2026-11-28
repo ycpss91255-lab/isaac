@@ -338,4 +338,6 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
 
+对 `test/integration/` 运行 pytest，即可执行 GPU 集成测试与 [无 ROS 验证](../test/integration/no_ros/README.md)。
+
 判定标准是 stdout marker 行（`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 会调用 `_exit(0)`。详见 [doc/test/TEST.md](test/TEST.md)。

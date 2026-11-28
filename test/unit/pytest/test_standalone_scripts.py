@@ -1,21 +1,5 @@
-"""Hosted guards for the README-listed standalone driver scripts.
+"""Hosted tests for the pure helpers in standalone_common.py."""
 
-The README's "Standalone Python workflow" table points a new user at
-scripts under ``src/script/``. A README-only onboarding run on Isaac Sim
-6.2.0 found that:
-
-  - ``ros2_test_pub_standalone.py`` claimed ~1 Hz but published every 60
-    Kit updates, i.e. 3.5-7.5 Hz depending on load;
-  - all of them hard-coded a developer's workspace path.
-
-The runtime behaviour needs the GPU and is verified in the container (see
-the PR); these hosted tests pin the shape that makes it hold: a pure helper
-(``standalone_common``) for the exit code, the Kit config, the repo paths
-and a wall-clock publish timer, and each script routing through it with no
-module-top Isaac import. Pure -- file reads, AST parses and a fake clock.
-"""
-
-import ast
 import importlib.util
 import re
 import sys
@@ -30,11 +14,6 @@ _SCRIPT_DIR = _REPO_ROOT / "src" / "script"
 _HELPER = _SCRIPT_DIR / "standalone_common.py"
 _HARD_CODED_HOME = re.compile(r"/home/[^/\s<>]+/")
 
-# Standalone ROS diagnostics have their own publish and subscribe entry points.
-_README_SCRIPTS = (
-    "ros2_test_pub_standalone.py",
-    "ros2_test_sub_standalone.py",
-)
 _ISAAC_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab", "carb", "rclpy")
 
 
@@ -43,23 +22,6 @@ def _load_helper():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _tree(name):
-    return ast.parse((_SCRIPT_DIR / name).read_text(encoding="utf-8"))
-
-
-def _imported_modules(tree):
-    names = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            names.extend(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            names.append(node.module)
-    return names
-
-
-# -- the pure helper -----------------------------------------------------
 
 
 def test_helper_exists_and_imports_without_isaac():
@@ -138,67 +100,9 @@ def test_run_and_exit_passes_main_return_code_through(returned, expected):
     assert codes == [expected]
 
 
-# -- every README-listed script --------------------------------------------
-
-
-@pytest.mark.parametrize("name", _README_SCRIPTS)
-def test_script_does_not_use_removed_dynamic_control(name):
-    modules = _imported_modules(_tree(name))
-    assert not [m for m in modules if "dynamic_control" in m]
-
-
-@pytest.mark.parametrize("name", _README_SCRIPTS)
-def test_script_has_no_hard_coded_home(name):
-    source = (_SCRIPT_DIR / name).read_text(encoding="utf-8")
-    assert not _HARD_CODED_HOME.search(source)
-
-
 def test_standalone_smoke_has_no_hard_coded_workspace():
     source = (_SCRIPT_DIR / "test" / "standalone_smoke.sh").read_text(encoding="utf-8")
     assert not _HARD_CODED_HOME.search(source)
-
-
-@pytest.mark.parametrize("name", _README_SCRIPTS)
-def test_script_has_no_module_top_isaac_import_or_app(name):
-    """A module-top failure would bypass run_and_exit and exit 0."""
-    offenders = []
-    for node in _tree(name).body:
-        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
-            continue  # function bodies run inside run_and_exit
-        if isinstance(node, ast.Import):
-            mods = [alias.name for alias in node.names]
-        elif isinstance(node, ast.ImportFrom):
-            mods = [node.module or ""]
-        else:
-            mods = []
-        offenders += [m for m in mods if m.partition(".")[0] in _ISAAC_TOP_LEVEL]
-        offenders += [
-            "SimulationApp(...)"
-            for call in ast.walk(node)
-            if isinstance(call, ast.Call)
-            and getattr(call.func, "id", "") == "SimulationApp"
-        ]
-    assert offenders == []
-
-
-@pytest.mark.parametrize("name", _README_SCRIPTS)
-def test_script_main_block_routes_through_run_and_exit(name):
-    tree = _tree(name)
-    main_blocks = [
-        node
-        for node in tree.body
-        if isinstance(node, ast.If) and "__main__" in ast.unparse(node.test)
-    ]
-    assert len(main_blocks) == 1
-    assert "run_and_exit(" in ast.unparse(main_blocks[0])
-
-
-def test_ros2_test_pub_publishes_on_a_wall_clock_period():
-    source = (_SCRIPT_DIR / "ros2_test_pub_standalone.py").read_text(
-        encoding="utf-8"
-    )
-    assert "PeriodicTimer(" in source
-    assert "_PUBLISH_EVERY" not in source
 
 
 @pytest.mark.parametrize("script, entry", [
