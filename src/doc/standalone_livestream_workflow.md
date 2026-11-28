@@ -2,7 +2,7 @@
 
 > 跑 driver script 的日常流程。`SimulationApp({"headless": True, "livestream": 2})` 從 host CLI 起 Kit + 開 WebRTC livestream;瀏覽器隨開隨關,不影響 sim;Ctrl-C 乾淨退場。
 >
-> Driver 走這條的代表:`script/standalone_livestream_smoke.py`(最小 sanity check);完整 forklift demo driver 已搬到 isaac_physics_test(#309)。
+> 可用 `script/standalone_livestream_smoke.py` 確認串流能正常啟動與關閉。
 >
 > 為什麼選這條 vs 過去的 in-kit Script Editor:見 `adr/0005-standalone-with-livestream-as-default-dev-entrypoint.md`。
 
@@ -60,11 +60,11 @@ just docker exec -t stream /isaac-sim/python.sh \
 ```bash
 nohup just docker exec -t stream /isaac-sim/python.sh \
     /home/<user>/work/src/script/<your_driver>.py \
-    > /tmp/forklift.out 2>&1 &
-echo $! > /tmp/forklift.pid
+    > /tmp/isaac-driver.out 2>&1 &
+echo $! > /tmp/isaac-driver.pid
 ```
 
-收掉:`kill $(cat /tmp/forklift.pid)` — SIGTERM,同樣攔到走乾淨 shutdown。
+收掉:`kill $(cat /tmp/isaac-driver.pid)` — SIGTERM,同樣攔到走乾淨 shutdown。
 
 ### 限時跑(自動驗證 / CI 用)
 
@@ -203,4 +203,3 @@ sys.exit(exit_code)
 - isaac_physics_test `src/doc/adr/0002-cmd-vel-teleop-via-in-kit-script-editor.md` — 舊 in-kit 流程的決策依據(2026-05-20 之後僅為歷史)
 - `action_graph_setup.md` — 更早期 Action Graph 一次性 GUI SOP(deprecated)
 - `script/standalone_livestream_smoke.py` — 最小 sanity driver(`SimulationApp + livestream:2` 開合 / 30s spin / exit 0)
-- forklift Model A-hybrid 完整 demo(51s pickup cycle)— 已搬到 isaac_physics_test(#309)

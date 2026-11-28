@@ -17,8 +17,7 @@ WRITING (Isaac Sim 5.1.0 + Isaac Lab `v2.3.2` -> URDF importer `2.4.31`, loaded 
 Kit experience; #177, see decision 4). **That pin is retired**: the current stack is Isaac Sim
 6.0.1 + Isaac Lab `v3.0.0-beta2.patch1` with the bundled importer `3.11.2` -- see the 2026-08-28
 update, which is what decision 4 now resolves to. It amends ADR-0018
-decision 6. The running example stays the camera-bot; this ADR is the contract a real forklift
-ingestion is checked against.
+decision 6.
 
 ## Context
 
@@ -46,9 +45,7 @@ importer reads the DAE material -> USD prim gets a colored material`. **STL carr
 
 `UrdfConverterCfg.collider_type` defaults to **`"convex_hull"`** -- the whole part's convex hull,
 which fills in every concavity. The only other built-in is `"convex_decomposition"` (multiple
-convex pieces). Neither is a full-resolution triangle-mesh collider. For a concave part (e.g. a
-forklift's forks) the convex hull is a wrong collider (the gap between the forks is filled
-solid).
+convex pieces). Neither is a full-resolution triangle-mesh collider.
 
 - The ingestion config exposes `collider_type` to the consumer; concave parts use
   `convex_decomposition` or a hand-authored simplified collision mesh.
@@ -178,10 +175,6 @@ driver), and the CHANGELOG `[Unreleased]` migration entry for the full delta.
 
 ## Update (2026-09-05) -- collision authoring policy for concave dynamic parts
 
-Empirically settled how to author collision geometry for the forklift articulation (mast, fork
-carriage, tines) so a fork tine can enter a pallet pocket. Decision 2 (convex hull is wrong for
-concave parts; opt into something else) stands; this pins WHICH route and WHY.
-
 PhysX 5.4 forbids triangle-mesh colliders on non-kinematic bodies, and articulation links are
 dynamic, so a raw mesh collider is out. Three legal routes for a concave collider remain:
 
@@ -190,76 +183,14 @@ dynamic, so a raw mesh collider is out. Three legal routes for a concave collide
 2. **convex_decomposition** -- an algorithm chops the mesh into several convex pieces.
 3. **SDF mesh** -- a signed-distance-field grid; GPU collision pipeline only.
 
-**Decision: box-union for the rectilinear parts.** NOT because decomposition "cannot" do it. It
-demonstrably can, on synthetic *and* on real concave geometry ([`verify_decomp_pocket.py`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/verify_decomp_pocket.py); and
-the vendor-asset measurements below, where decomposition reproduced a real pallet faithfully --
-open through both real tine tunnels, solid at the real centre block). The case for box-union rests
-on determinism and on where the decision lives, not on decomposition being inaccurate:
-
-- box-union is **exact** for rectangular stock (not an approximation), **deterministic**
-  (byte-stable across Isaac upgrades), and the decision **lives in the URDF** (single source of
-  truth).
-- convex_decomposition is an approximation whose output **changes across importer / algorithm
-  versions** -- a silent physics change with no diff signal (cf. the #247 importer churn). This is
-  the strongest single objection: an Isaac upgrade can alter contact behaviour without anything in
-  our tree changing. Secondary: hulls bulge slightly, so a gap near the tolerance limit is not
-  guaranteed to survive a re-decomposition even when it survives today. The decision lives in
-  importer flags / a post-import edit, not in the URDF.
-- SDF is marginal at our scale (`sdfResolution` = cells along the longest AABB axis; a 2 m tine at
-  256 gives ~8 mm cells, ~3 across a 2.5 cm clearance -> needs 512, ~8x memory), GPU-only, and
-  lives in the USD not the URDF. Reserve it for genuinely arbitrary concavity with no dimensional
-  source (scanned cargo, damaged pallets).
-
-Per-part classification (premise: rectilinear parts with known CAD dimensions; if that fails --
-scanned / damaged / no drawings -- switch those parts to SDF; the table is the durable decision,
-not the technique):
-
-| Part | Collider |
-|---|---|
-| fork tines, mast, fork carriage, chassis | box-union |
-| standard pallet | box-union |
-| wheels | cylinder primitive |
-| non-functional concavity (bracket cutouts, housings) | convexHull (filling the void is harmless) |
-
-Add a separate smaller box for the tapered tine tip (insertion begins there; one box
-over-approximates the taper and its corner can catch the pocket lip).
+For rectilinear parts with known CAD dimensions, author collision geometry as a union of
+boxes in the URDF to preserve clearances. Application-specific decisions and measurements
+are tracked in [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146).
 
 **Converter scope (verified).** `UrdfConverterCfg.collision_type` is a single GLOBAL scalar and is
 IGNORED for explicit `<collision>` mesh geometry (the importer hard-codes `convexHull` there;
 `collision_type` is honored only on the `collision_from_visuals` path). So `convex_decomposition`
 is not a per-part option through the converter cfg -- only per-prim via a post-import USD edit.
-Another reason box-union (authored in the URDF) is the clean path. Read off the importer source in
-the 6.0.1 container, and confirmed end-to-end below.
-
-**Evidence on real geometry (isaac#261).** The claims above were re-established against NVIDIA's
-own shipped assets and against our own import path, rather than against synthetic boxes only. Four
-drivers, logs committed beside them:
-
-- *The approximation is the deciding factor, not mesh quality or our importer.*
-  [`verify_real_asset_collision.py`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/verify_real_asset_collision.py) inventories vendor props over direct HTTPS
-  (result JSON now in `isaac_physics_test`). NVIDIA ships the same kind of pallet in three
-  different collision states: `Props/Pallet/pallet.usd` is `boundingCube`, `o3dyn_pallet.usd` is
-  `convexDecomposition`, `pallet_holder.usd` has no collision authored at all. So
-  `convexDecomposition` is what the vendor itself uses for a concave pallet.
-- *What each approximation does to the entry face.* [`verify_pallet_entry_map.py`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/verify_pallet_entry_map.py) raycasts a
-  (y,z) grid across the pallet's entry face and prints an occupancy map
-  (result JSON now in `isaac_physics_test`): `boundingCube` 0 open cells of 221, `convexHull` 13 (an edge
-  sliver only), `convexDecomposition` 68 forming two through tunnels. This is also how the tunnels
-  were located -- an earlier insertion attempt aimed at y = +/-0.26 and hit solid everywhere.
-- *A fork actually entering.* [`verify_real_pallet_insertion.py`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/verify_real_pallet_insertion.py) drives a 1-DOF prismatic tine
-  into the same pallet with the approximation overridden per lane
-  (result JSON now in `isaac_physics_test`): free control 2.628 m at all three offsets;
-  `boundingCube` and `convexHull` blocked at all three (~0 m); `convexDecomposition` 2.628 m at
-  y = -0.15 and +0.15 and correctly **blocked** at 0.005 m at y = 0. That last cell is the point:
-  decomposition is not "letting everything through", it is open where the pallet is open and solid
-  where it is solid.
-- *The hard-coded `convexHull`, measured rather than read.*
-  [`verify_urdf_mesh_collision_path.py`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/verify_urdf_mesh_collision_path.py) (in `isaac_physics_test`) exports the same real pallet mesh to OBJ, wraps it in a
-  URDF `<collision><mesh>`, and pushes it through `model_import._convert_urdf`
-  ([`.verify-urdf-mesh-collision.json`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/.verify-urdf-mesh-collision.json)): the produced USD comes back with approximation
-  `convexHull` and **0 open cells** on its entry face. There is no route for an author to request a
-  different approximation from the URDF -- which is what makes box-union the only authoring form
-  that survives our own pipeline.
 
 **Import fidelity (verified empirically on 6.0.1; keep as CI regression guards).**
 
@@ -271,14 +202,6 @@ drivers, logs committed beside them:
   equals the URDF tensor (not recomputed), collider world origin equals the authored origin.
   ([`verify_import_fidelity.py`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/test/verify_import_fidelity.py), in `isaac_physics_test`)
 
-**Contact offset.** "The tine won't enter" has two independent causes with identical symptoms:
-(a) wrong geometry (pocket filled -- visible in the collision view) and (b) contact offset too
-large (view looks correct, tine still blocked; default `contactOffset` 0.02 m -> ~4 cm combined
-against a ~2.5 cm clearance). Fix (b) with a reduced per-shape `contactOffset` + small negative
-`restOffset`, **scoped to fork/pallet colliders only** (a global reduction costs tunnelling
-resistance and solver stability at chassis speed). Exact values pending the offset sweep (B2) and
-the global-stability check (B3).
-
 **Mesh-in-collision guard.** The importer silently convex-hulls any mesh left in a `<collision>`,
 so it becomes a filled hull with no warning (on CAD re-export / new links). The collision-authoring
 tool must hard-error on any mesh `<collision>` in the generated URDF -- turn the silent failure
@@ -287,8 +210,3 @@ loud.
 **Tooling location.** The fine-model-simplification work (auto-OBB box fitting, coverage/bloat
 metrics, drift + rename detection, fail-loud checks) lives in a DEDICATED repo, not here. This ADR
 records only the policy (which route, why); that repo implements it.
-
-**vs NVIDIA's forklift_b recommendation.** NVIDIA's forums recommend SDF for that sample's forks
-because it is an ART ASSET with no dimensional drawings. We have CAD dimensions, so hand-authored
-boxes are reading numbers off a drawing, not measuring a mesh -- a different premise, a different
-optimum.

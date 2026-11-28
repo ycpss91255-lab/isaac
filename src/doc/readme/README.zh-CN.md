@@ -1,8 +1,8 @@
 # isaac — workspace
 
-NVIDIA Isaac Sim workspace 内容（scripts、文档、USD 模型），属于 `ycpss91255-lab/isaac`。
+NVIDIA Isaac Sim workspace 内容（scripts、文档、传感器配置），属于 `ycpss91255-lab/isaac`。
 
-本目录收的是运行在 repo 根目录定义的 Isaac Sim Docker 开发环境**内**的可编辑内容（driver scripts、文档、3D 模型）。它以前是独立的 repo `ycpss91255-lab/isaac`，以 `docker/` submodule 包着 Docker 环境；两者已依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合并成这一个 repo，research repo 已归档。
+本目录收的是运行在 repo 根目录定义的 Isaac Sim Docker 开发环境**内**的可编辑内容（driver scripts、文档、传感器配置）。它以前是独立的 repo `ycpss91255-lab/isaac`，以 `docker/` submodule 包着 Docker 环境；两者已依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合并成这一个 repo，research repo 已归档。
 
 **[English](../../README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
 
@@ -16,11 +16,8 @@ src/
 ├── doc/           # 文档、ADR、SOP
 │   ├── readme/    # README 翻译版本
 │   └── adr/       # 架构决策记录（ADR）
-├── scene/         # Scene 定义
 ├── script/        # Driver scripts（在 Isaac Sim Kit / standalone Python 内执行）
-└── model/         # 3D 模型
-    ├── sw/        # SolidWorks 原始文件
-    └── usd/       # 自制或转换生成的 USD
+└── model/         # 模型在 sim_asset 的路径（见 model/README.md）
 ```
 
 ## 上手

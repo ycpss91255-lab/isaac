@@ -276,8 +276,8 @@ YAML
 @test "stream_smoke: reaps only OTHER projects under SMOKE_REAP_PROJECT_PREFIX, never a developer stack (isaac#291)" {
   export SMOKE_PROJECT=isaac-smoke-9-1
   export SMOKE_REAP_PROJECT_PREFIX=isaac-smoke-
-  export STUB_PROJECTS=$'alice-isaac\nisaac-smoke-8-1\nisaac-smoke-9-1\nisaac-forklift-perf'
-  export STUB_NAMES=$'alice-isaac-stream\nalice-isaac-owv\nalice-isaac-owv-isaac-smoke-8-1\nisaac-smoke-8-1-client-browser\nalice-isaac-owv-isaac-smoke-9-1\nisaac-forklift-perf-viewer-i1'
+  export STUB_PROJECTS=$'alice-isaac\nisaac-smoke-8-1\nisaac-smoke-9-1\nisaac-perf'
+  export STUB_NAMES=$'alice-isaac-stream\nalice-isaac-owv\nalice-isaac-owv-isaac-smoke-8-1\nisaac-smoke-8-1-client-browser\nalice-isaac-owv-isaac-smoke-9-1\nisaac-perf-viewer-i1'
   run "${FAKE}/script/ci/stream_smoke.sh"
 
   [ -f "${DOCKER_ARGS_FILE}" ]
@@ -287,9 +287,9 @@ YAML
   grep -qE '\] rm -f isaac-smoke-8-1-client-browser$' "${DOCKER_ARGS_FILE}"
   # ... while the developer project, a foreign project and this run's own
   # project are never reaped by the stale sweep.
-  run grep -qE 'rm -f id-(alice-isaac|isaac-forklift-perf|isaac-smoke-9-1)$' "${DOCKER_ARGS_FILE}"
+  run grep -qE 'rm -f id-(alice-isaac|isaac-perf|isaac-smoke-9-1)$' "${DOCKER_ARGS_FILE}"
   [ "$status" -ne 0 ]
-  run grep -qE 'rm -f (alice-isaac-stream|alice-isaac-owv|isaac-forklift-perf-viewer-i1)$' "${DOCKER_ARGS_FILE}"
+  run grep -qE 'rm -f (alice-isaac-stream|alice-isaac-owv|isaac-perf-viewer-i1)$' "${DOCKER_ARGS_FILE}"
   [ "$status" -ne 0 ]
 }
 
