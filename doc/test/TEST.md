@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1047 tests**.
+**233 tests** total (bats). Hosted pytest collects **1049 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 888 | 40 | 1057 |
+| core | 129 | 890 | 40 | 1059 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 62 | 0 | 153 |
 | headless | 13 | 6 | 0 | 19 |
@@ -490,7 +490,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_sensor_prim.py` | 23 | `isaac_devkit.sensor_prim` (layer a, ADR-0024): config loading, shared/per-category validation, `ros:` section optional (loads without `ros:`, validates `ros:` when present), host-pure helpers (`fov_to_aperture`, `role_to_helper_type`), `get_category`. |
 | `test_sensors_dispatch.py` | 10 | 驗證相容入口與感測器設定。自訂相機在有、無 `ros:` 的情況下均建立 color、depth 兩個 Camera prim，並回傳掛載路徑。 |
 | `test_material_setup.py` | 29 | `isaac_devkit.materials`: material YAML load / validate, variant enumeration, prim-material mapping, plus `material_cfg_from_yaml` (ADR-0018 decision 7) -- color-only variant -> per-prim spawn cfg-param mapping (`{prim: {shader, diffuse_color (r,g,b), ...}}`), JSON-serializable / GPU-free, the seam `build_scene` uses to set Preview Surface diffuse color. |
-| `test_scene_builder.py` | 74 | Checks YAML loading and validation, model path resolution (including `MODEL_PATH` and `package://`), instance expansion and sensor config resolution. The pure `to_spawn_specs` adapter checks ordered ground, light, robot and prop specs, scalar-first orientation, mobility, variants, diffuse color, and JSON serialization. It also checks the override allowlist and rejects five physics keys across robot, prop, light and ground settings, with an error directing authors to sim_asset and asset_converter. |
+| `test_scene_builder.py` | 76 | Checks YAML loading and validation, model path resolution (required `MODEL_PATH` roots, literal relative paths, and `package://` URIs), instance expansion and sensor config resolution. The pure `to_spawn_specs` adapter checks ordered ground, light, robot and prop specs, scalar-first orientation, mobility, variants, diffuse color, and JSON serialization. It also checks the override allowlist and rejects five physics keys across robot, prop, light and ground settings, with an error directing authors to sim_asset and asset_converter. |
 | `test_no_urdf_import.py` | 6 | Enforces the USD-only boundary and verifies that the USD helpers remain importable. |
 | `test_isaac_driver.py` | 57 | Tests both livestream helpers, USD resolution, boot extension ordering, Kit-free construction, and the `SCENE` class attribute. A fake `SimulationApp` records headless mode, streaming experience, and the boot arguments followed by whitespace-split `ISAAC_KIT_EXTRA_ARGS` in `extra_args`. The tests check caller `sys.argv` during and after construction, invalid livestream rejection before startup, signal registration and lifecycle order, traceback output before close, and `ISAAC_IO_PLUGIN` invocation and error handling before timeline play. `TestPlayTimeline` checks warm start callback preference, package fallback, and the warning when neither callback is available. It verifies all three settings (fixed time stepping, rate limiting enabled, and a 60 Hz limit) and the call order from disabling looping through setting the end time, starting playback, and running 10 warmup updates. |
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |

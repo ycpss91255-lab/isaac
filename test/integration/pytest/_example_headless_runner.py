@@ -110,8 +110,7 @@ def _main() -> None:
                     stage = omni.usd.get_context().get_stage()
                     from isaac_devkit.scene import build_scene
 
-                    # robot.model is absolute, so repo_root only anchors
-                    # the (unused) legacy model/usd fallback.
+                    # The absolute robot.model path bypasses the MODEL_PATH search.
                     build_scene(scene, stage, repo_root)
                     self._setup_camera(stage)
                     self._ensure_scene_defaults(stage)

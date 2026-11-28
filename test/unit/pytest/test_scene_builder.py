@@ -16,19 +16,33 @@ from isaac_devkit import scene as scene_builder
 
 pytestmark = pytest.mark.core
 
+OPENBASE_MODEL = "usd/robot/guiritter/openbase/openbase.usda"
+PREFIXED_OBJECT_MODEL = Path("model") / "usd" / "object/pallet/pallet.usd"
+
 
 @pytest.fixture
-def repo_root(tmp_path):
-    """Create a minimal model directory structure for path resolution."""
-    usd_dir = tmp_path / "model" / "usd" / "robot" / "openbase"
-    usd_dir.mkdir(parents=True)
-    (usd_dir / "openbase.usd").write_text("#usda 1.0")
+def model_root(tmp_path, monkeypatch):
+    """Mount a temporary model repository through MODEL_PATH."""
+    root = tmp_path / "sim_asset"
+    robot = root / OPENBASE_MODEL
+    robot.parent.mkdir(parents=True)
+    robot.write_text("#usda 1.0")
 
-    obj_dir = tmp_path / "model" / "usd" / "object" / "pallet"
+    obj_dir = root / "object" / "pallet"
     obj_dir.mkdir(parents=True)
     (obj_dir / "pallet.usd").write_text("#usda 1.0")
 
-    sensor_dir = tmp_path / "config" / "camera"
+    monkeypatch.setenv("MODEL_PATH", str(root))
+    return root
+
+
+@pytest.fixture
+def repo_root(tmp_path, model_root):
+    """Create the scene repository alongside the mounted models."""
+    root = tmp_path / "isaac"
+    # Material YAML paths are relative to the scene repository.
+    (root / "model" / "usd" / "object" / "pallet").mkdir(parents=True)
+    sensor_dir = root / "config" / "camera"
     sensor_dir.mkdir(parents=True)
     sensor_cfg = {
         "mount": {"parent_prim": "/World/Robot/base_link", "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]}},
@@ -38,7 +52,7 @@ def repo_root(tmp_path):
     }
     (sensor_dir / "realsense.yaml").write_text(yaml.dump(sensor_cfg))
 
-    imu_dir = tmp_path / "config" / "imu"
+    imu_dir = root / "config" / "imu"
     imu_dir.mkdir(parents=True)
     imu_cfg = {
         "mount": {"parent_prim": "/World/Robot/base_link", "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]}},
@@ -47,14 +61,14 @@ def repo_root(tmp_path):
     }
     (imu_dir / "default.yaml").write_text(yaml.dump(imu_cfg))
 
-    return tmp_path
+    return root
 
 
 @pytest.fixture
 def minimal_scene(repo_root):
     cfg = {
         "robot": {
-            "model": "robot/openbase/openbase.usd",
+            "model": OPENBASE_MODEL,
             "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
         },
     }
@@ -68,7 +82,7 @@ def minimal_scene(repo_root):
 def full_scene(repo_root):
     cfg = {
         "robot": {
-            "model": "robot/openbase/openbase.usd",
+            "model": OPENBASE_MODEL,
             "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
         },
         "objects": [
@@ -99,7 +113,7 @@ class TestLoadScene:
     def test_loads_minimal_scene(self, minimal_scene, repo_root):
         scene = scene_builder.load_scene(minimal_scene, repo_root=repo_root)
         assert "robot" in scene
-        assert scene["robot"]["model"] == "robot/openbase/openbase.usd"
+        assert scene["robot"]["model"] == OPENBASE_MODEL
 
     def test_loads_full_scene(self, full_scene, repo_root):
         scene = scene_builder.load_scene(full_scene, repo_root=repo_root)
@@ -130,7 +144,7 @@ class TestValidateScene:
             scene_builder.load_scene(path, repo_root=repo_root)
 
     def test_rejects_robot_without_pose(self, repo_root):
-        cfg = {"robot": {"model": "robot/openbase/openbase.usd"}}
+        cfg = {"robot": {"model": OPENBASE_MODEL}}
         path = repo_root / "scene" / "bad.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(yaml.dump(cfg))
@@ -139,7 +153,7 @@ class TestValidateScene:
 
     def test_rejects_object_without_model(self, repo_root):
         cfg = {
-            "robot": {"model": "robot/openbase/openbase.usd", "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]}},
+            "robot": {"model": OPENBASE_MODEL, "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]}},
             "objects": [{"pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]}}],
         }
         path = repo_root / "scene" / "bad.yaml"
@@ -150,25 +164,24 @@ class TestValidateScene:
 
 
 class TestResolveModelPath:
-    def test_resolves_sim_asset(self, repo_root):
-        resolved = scene_builder.resolve_model_path("robot/openbase/openbase.usd", repo_root)
-        assert resolved.exists()
-        assert resolved.name == "openbase.usd"
+    def test_resolves_sim_asset(self, repo_root, model_root):
+        resolved = scene_builder.resolve_model_path(OPENBASE_MODEL, repo_root)
+        assert resolved == model_root / OPENBASE_MODEL
 
-    def test_resolves_object_model(self, repo_root):
+    def test_resolves_object_model(self, repo_root, model_root):
         resolved = scene_builder.resolve_model_path("object/pallet/pallet.usd", repo_root)
-        assert resolved.exists()
+        assert resolved == model_root / "object/pallet/pallet.usd"
 
-    def test_resolves_prefixed_model(self, repo_root):
-        # Transition shim: a value that already carries the model/usd/
-        # segment (the example scene's robot entry) resolves to the same
-        # path as the bare convention, not a doubled model/usd/model/usd/.
-        bare = scene_builder.resolve_model_path("robot/openbase/openbase.usd", repo_root)
-        prefixed = scene_builder.resolve_model_path(
-            "model/usd/robot/openbase/openbase.usd", repo_root
-        )
-        assert prefixed == bare
-        assert prefixed.exists()
+    def test_missing_prefixed_model_does_not_match_unprefixed_file(self, repo_root):
+        # Only object/pallet/pallet.usd exists under the mount.
+        with pytest.raises(FileNotFoundError):
+            scene_builder.resolve_model_path(PREFIXED_OBJECT_MODEL, repo_root)
+
+    def test_resolves_literal_prefixed_model(self, repo_root, model_root):
+        model = model_root / PREFIXED_OBJECT_MODEL
+        model.parent.mkdir(parents=True)
+        model.write_text("#usda 1.0")
+        assert scene_builder.resolve_model_path(PREFIXED_OBJECT_MODEL, repo_root) == model
 
     def test_rejects_missing_model(self, repo_root):
         with pytest.raises(FileNotFoundError, match="not found"):
@@ -210,14 +223,17 @@ class TestModelPathSearch:
         resolved = scene_builder.resolve_model_path(str(abs_model), tmp_path)
         assert resolved == abs_model
 
-    def test_model_path_fallback_to_repo_root(self, repo_root, monkeypatch):
-        """Without MODEL_PATH, resolve_model_path uses <repo_root>/model/usd/."""
-        monkeypatch.delenv("MODEL_PATH", raising=False)
-        resolved = scene_builder.resolve_model_path(
-            "robot/openbase/openbase.usd", repo_root
-        )
-        assert resolved.exists()
-        assert resolved.name == "openbase.usd"
+    @pytest.mark.parametrize("model_path", [None, ""], ids=["unset", "empty"])
+    def test_relative_model_requires_model_path(self, tmp_path, monkeypatch, model_path):
+        legacy_dir = tmp_path / "model" / "usd"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "bot.usd").write_text("#usda 1.0")
+        if model_path is None:
+            monkeypatch.delenv("MODEL_PATH", raising=False)
+        else:
+            monkeypatch.setenv("MODEL_PATH", model_path)
+        with pytest.raises(ValueError, match="MODEL_PATH"):
+            scene_builder.resolve_model_path("bot.usd", tmp_path)
 
     def test_model_path_error_lists_all_roots(self, tmp_path, monkeypatch):
         """The error for a missing model names every root that was searched."""
@@ -397,7 +413,7 @@ def test_spawn_spec_orientation_is_scalar_first(repo_root, rpy, expected):
 
 def _scene_dict(robot=None, objects=None, environment=None):
     base_robot = {
-        "model": "robot/openbase/openbase.usd",
+        "model": OPENBASE_MODEL,
         "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
     }
     if robot:
@@ -478,7 +494,7 @@ class TestToSpawnSpecs:
         )
         robot = next(s for s in specs if s.prim_path == "/World/Robot")
         assert robot.kind == "usd"
-        assert robot.kwargs["usd_path"].endswith("openbase.usd")
+        assert robot.kwargs["usd_path"].endswith(OPENBASE_MODEL)
         assert robot.translation == pytest.approx((1.0, 2.0, 3.0))
         assert robot.orientation == pytest.approx((1.0, 0.0, 0.0, 0.0))
         assert robot.mobility is None

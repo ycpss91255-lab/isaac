@@ -1,10 +1,9 @@
 # Model Assets
 
-Robot models (URDF and USD) that were previously committed under
-`src/model/urdf/robot/` and `src/model/usd/robot/` have moved to a
-dedicated repository:
-
-  **[ycpss91255-lab/sim_asset](https://github.com/ycpss91255-lab/sim_asset)** (private)
+Robot models (URDF and USD) live in the private
+[ycpss91255-lab/sim_asset](https://github.com/ycpss91255-lab/sim_asset) repository.
+For relative scene model paths, mount the repository and set `MODEL_PATH`
+to its in-container mount point. Separate multiple roots with colons in search order.
 
 The `sw/` and `object/` subdirectories remain here as placeholders for
 SolidWorks source files and object assets respectively.

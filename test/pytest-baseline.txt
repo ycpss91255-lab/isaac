@@ -45,9 +45,8 @@
 #   adds the TestToIsaaclabCfg + TestRpyToQuat coverage (curated-field
 #   translation, rpy->quat, mobility, spawn_overrides spread (overrides-win),
 #   instance expansion, optional material-diffuse hook): 17 -> 38 (+21).
-#   Live count is now 254. The same PR makes resolve_model_path tolerant of
-#   a value that already carries the model/usd/ segment (the example scene's
-#   robot entry) and adds 1 test for it (test_resolves_prefixed_model):
+#   Live count is now 254. The same PR added 1 test for prefixed model paths
+#   (now looked up verbatim under each MODEL_PATH root):
 #   38 -> 39. Live count is now 255 -- the enforced floor.
 #
 #   isaac#223 (GHCR stream-source producer image): adds 8 hosted unit tests
@@ -329,7 +328,8 @@
 # isaac#558 adds eight core cases for the step timeout, process-group timeout,
 # watchdog default, runner assumption and four READMEs (hosted 1031 -> 1039, core 879 -> 887).
 # isaac#556 adds seven stream probe cases (hosted 1040 -> 1047, stream 55 -> 62).
-HOSTED_UNIT_BASELINE = 1047
+# isaac#363 adds two net core cases for required roots and literal model paths.
+HOSTED_UNIT_BASELINE = 1049
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -337,7 +337,7 @@ HOSTED_UNIT_BASELINE = 1047
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1047。
+#   以下五組的測試數量下限合計為 1049。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -380,7 +380,7 @@ HOSTED_UNIT_BASELINE = 1047
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 888
+HOSTED_UNIT_BASELINE_CORE = 890
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 62
 HOSTED_UNIT_BASELINE_HEADLESS = 6

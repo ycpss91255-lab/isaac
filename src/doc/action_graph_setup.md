@@ -117,10 +117,10 @@ GA 後可重評：拿掉本 MD 的 GUI 步驟 → 改純腳本路徑。本 MD �
    just docker build
    ```
 
-2. **OpenBase USD 已產出**：
+2. **OpenBase USD 已放在 `setup.isaac_sample.toml` 指定的主機掛載來源**：
 
    ```bash
-   ls isaac_ws/src/model/usd/robot/openbase/openbase.usda
+   ls "${WS_PATH}/sim_asset/usd/robot/guiritter/openbase/openbase.usda"
    ```
 
    這個流程使用單一 `base_link` 剛體。若需要製作 USD，請使用 [asset_converter](https://github.com/ycpss91255-lab/asset_converter)。
@@ -163,7 +163,7 @@ Server 欄填 `localhost`（**不加** `:8011` 或任何 port 後綴）。Click 
 在 kit GUI：
 
 1. **File → Open**
-2. 路徑輸入：`/home/<user>/work/src/model/usd/robot/openbase/openbase.usda`
+2. 路徑輸入：`/home/<user>/models/sim_asset/usd/robot/guiritter/openbase/openbase.usda`
 3. 載入完 viewport 應該看到 OpenBase 模型（一塊圓形平台 STL mesh）
 
 > 如果 viewport 黑暗 / 看不到物體：Stage 應該已經有 mesh prim 但沒燈光。先做 Step 3.1 + 3.2 補燈跟地板。

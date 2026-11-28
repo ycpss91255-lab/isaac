@@ -166,7 +166,7 @@
       <span class="source">來源　<a href="../../framework/isaac_devkit/scene.py">framework/isaac_devkit/scene.py</a> · <a href="../../src/scene/sensor_test_bench.yaml">src/scene/sensor_test_bench.yaml</a> · <a href="#adr-0020">ADR-0020</a> · <a href="#adr-0026">ADR-0026</a></span>
     </figcaption>
   </figure>
-  <p><code>load_scene()</code> 讀取一份 YAML，檢查機器人與物件的模型、姿態和覆寫欄位。相對模型路徑依序在 <code>MODEL_PATH</code> 搜尋，未設定時使用 <code>&lt;repo_root&gt;/model/usd/</code>。轉接器將角度制 RPY 換成 <code>(w, x, y, z)</code> 四元數，並依 <code>count</code> 與 <code>spacing</code> 展開物件實例。</p>
+  <p><code>load_scene()</code> 讀取一份 YAML，檢查機器人與物件的模型、姿態和覆寫欄位。相對模型路徑依序在 <code>MODEL_PATH</code> 以冒號分隔的掛載目錄下查找；未設定或為空字串時會拋出 <code>ValueError</code>。轉接器將角度制 RPY 換成 <code>(w, x, y, z)</code> 四元數，並依 <code>count</code> 與 <code>spacing</code> 展開物件實例。</p>
   <p>執行時使用 Isaac Sim Core Experimental 的 USD backend，依序建立選用的 <code>/World/ground</code>、光源 <code>/World/light</code>、機器人 <code>/World/Robot</code> 及 <code>/World/Objects/</code> 下的實例。模型以 <code>add_reference_to_stage()</code> 引用；<code>spawn_overrides</code> 可指定 <code>visible</code>、<code>labels</code>、<code>taxonomy</code> 等允許欄位。模型就位後，<code>build_scene()</code> 才逐一讀取感測器 YAML 並呼叫 <code>setup_sensor()</code>。</p>
 </section>
 
