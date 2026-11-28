@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **GPU 整合測試依檔案列出 Kit 啟動與測試耗時（isaac#527）。** 計時範圍僅限 `test/integration/pytest/`，`test/integration/no_ros/` 的 GPU 測試檔案尚未納入。每次建立 `SimulationApp` 時計時，共用 fixture 的啟動時間只計一次。pytest 摘要列出各檔與總計的秒數，可用 `KIT_TIMING_JSON` 指定 JSON 報表路徑。新增 4 項 hosted 測試，基準由 1047 提高至 1051（core 888 → 892）。此 PR 僅提供量測工具，驗收項目仍在 #527 追蹤，尚待完成。
 - **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
 - **新增 standalone smoke 就緒訊息的回歸測試（isaac#562）。** 模擬第一次檢查未找到 `READY`，而探針在存活檢查前已輸出 `READY` 並結束的情況。測試要求腳本回報 `PASS probe.py`。Hosted 基準由 1039 增至 1040，core 組由 887 增至 888。
 - **加強 GPU 工作流程的容器清理測試（isaac#408）。** 驗證 `core-gpu` 依序呼叫六個腳本替身，並確認新增的 Docker 呼叫會被攔截。分別改動腳本與工作流程的專案前綴，驗證兩者不一致時會比對失敗。所有依執行編號設定 Compose 專案的入口腳本，其呼叫端都須傳入含執行編號與嘗試次數的清理篩選器。新增 5 項 core 案例，hosted 基準由 1018 增至 1023，core 由 874 增至 879。
@@ -15,6 +16,7 @@
 
 ### Changed
 - **串流 viewer 改用固定版本的公開映像（isaac#284）。** 本機缺少映像時，post-run hook 會從 GHCR 拉取 `0.3.0` 版，可用 `OWV_IMAGE` 覆寫。移除 `web_viewer` 子模組與 `.gitmodules`。
+- **縮減容器的預設權限（isaac#549）。** 預設關閉特權模式，移除整個 `/dev` 的映射、額外的 Linux capabilities 與 `seccomp:unconfined`，並改用容器自己的 PID 與 IPC 命名空間。串流仍使用主機網路。保留 `shm_size = "16g"` 為 Kit 媒體管線預留共享記憶體空間，使用預設的 64 MB 也通過了 stream-smoke。四語 README 說明如何在 `setup.local.toml` 為 GUI 或特殊裝置開放所需權限。
 - **預設相機設定通用化（isaac#136）。** 三種相機共用掛載點 `/World/Robot/carriage`、ROS topic 前綴 `/robot/camera` 與 frame ID 前綴 `robot_camera`。RViz 與無頭相機測試已同步。移除其餘堆高機文字殘留並新增掃描測試，應用模型與場景資產已移交 [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146)。
 - **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。

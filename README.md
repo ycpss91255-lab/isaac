@@ -100,7 +100,7 @@ Ctrl+C in an interactive `just docker exec` reaches the script. Its SIGINT handl
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-Do not use a bare `pkill -f <script>`. The containers run with `pid: host`, so that pattern also matches processes on the host and in other containers. To stop everything instead, `just docker stop` removes this checkout's containers, and with them any Kit running inside.
+Each container uses a private PID namespace, so `pkill` inside it sees only that container's processes. Avoid a bare `pkill -f <script>` because it can still match other processes in the same container. To stop everything in this checkout, use `just docker stop` to remove its containers and stop any Kit running inside.
 
 ### One image and one compose project per checkout
 
@@ -317,6 +317,27 @@ First headless launch spends 1–3 min compiling shaders; subsequent launches st
 ## Container user
 
 The container runs as a host-UID-aligned non-root user (`USER_NAME` from `.env`, UID 1000 by default). The user is added, by numeric gid, to the group of the base image's official account (probed from its `USER`, not hard-coded) so it can read `/isaac-sim/*` (mode `0750`). The MJCF importer and its UI grant this group write access to their `data` directories and the importer’s `data/mjcf` directory so the UI can export beside the source XML. Files written through `/home/${USER_NAME}/work` (mounted to `${WS_PATH}` on the host) keep their host owner — no `chown` dance.
+
+## Container permissions
+
+The defaults grant the minimum permissions needed for headless simulation and livestreaming. If your GUI or a special device needs more access, copy only the required settings below into `setup.local.toml`. To expose a single device, replace `/dev:/dev` with its mapping, such as `/dev/video0:/dev/video0`.
+
+```toml
+[security]
+privileged = true
+
+[[devices.bindings]]
+path = "/dev:/dev"
+
+[[security.cap_add]]
+cap = "SYS_ADMIN"
+
+[[security.cap_add]]
+cap = "NET_ADMIN"
+
+[[security.cap_add]]
+cap = "MKNOD"
+```
 
 ## EULA
 

@@ -1,6 +1,6 @@
 # TEST.md
 
-**239 tests** total (bats). Hosted pytest collects **1055 tests**.
+**239 tests** total (bats). Hosted pytest collects **1077 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,11 +8,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 888 | 40 | 1057 |
+| core | 129 | 906 | 40 | 1075 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 97 | 62 | 0 | 159 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 99 | 0 | 99 |
+| docs | 0 | 103 | 0 | 103 |
 
 The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
@@ -472,6 +472,9 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 
 | File | Collected | Scope |
 |------|:---------:|-------|
+| `test_kit_timing.py` | 4 | `core`. Checks that every Kit runner in `test/integration/pytest/` times its boot, each boot counts once, file durations add up to the suite total, and the JSON report matches the terminal rows (isaac#527). |
+| `test_container_min_privilege.py` | 14 | `core`. Checks privileged mode, host device bindings, three added capabilities, seccomp, PID and IPC isolation, shared memory size and host networking. Checks all four READMEs for stale claims about using the host PID namespace (isaac#549). |
+| `test_readme_container_permissions.py` | 4 | `docs`. Checks that each README explains the local privilege override in its container permissions section (isaac#549). |
 | `test_repository_purity.py` | 2 | `core` (#136). Reports tracked text lines containing `forklift` or `modela` outside the documented exceptions and checks the default camera mount paths and ROS topic prefixes. |
 | `test_operator_volumes.py` | 7 | `core`. Checks the pre-run hook’s advisory volume coverage against base’s TOML merge rules (isaac#528). |
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
@@ -549,6 +552,8 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 
 The GPU suite collects **40 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
 
+For `test/integration/pytest/`, the terminal summary prints a `[FILE-TIMING]` row per file and a `TOTAL` row. Each row splits elapsed time, including fixture setup and teardown, into Kit construction (`kit_boot_sec`) and the remaining time (`test_body_sec`). Set `KIT_TIMING_JSON` to a file path to save the same measurements.
+
 | Test | Description |
 |------|-------------|
 | `test_camera_headless.py::test_camera_custom_yaml_creates_prims_headless` | 從 `custom.yaml` 建立相機，驗證 color、depth 兩個 USD Camera prim 的路徑、CUDA 與 Vulkan 初始化及正常結束標記。 |
@@ -563,6 +568,8 @@ The GPU suite collects **40 tests**, all inside the Isaac test container. `test/
 | `test_isaac_driver_integration.py` (1) | Exercises the driver lifecycle in Kit. |
 
 ### test/integration/no_ros/
+
+The `[FILE-TIMING]` report excludes the test files in this directory.
 
 [Suite files and purpose](../../test/integration/no_ros/README.md)
 

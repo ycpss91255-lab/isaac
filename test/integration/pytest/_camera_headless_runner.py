@@ -6,6 +6,8 @@ import os
 import sys
 from pathlib import Path
 
+from _kit_boot import time_kit_boot
+
 
 def _cuda_device_count() -> int:
     """Functional CUDA probe via the driver API (no torch dependency)."""
@@ -81,7 +83,8 @@ def _main() -> None:
             def shutdown(self) -> None:
                 print("[EXIT CLEAN]", flush=True)
 
-        _CameraSmokeDriver().run()
+        with time_kit_boot():
+            _CameraSmokeDriver().run()
     except Exception as exc:  # noqa: BLE001
         print(f"[RAISED] {type(exc).__name__}: {exc}", flush=True)
         raise
