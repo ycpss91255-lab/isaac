@@ -110,8 +110,11 @@ class TestResolveRepoRelativeUsd:
     def test_empty_string_raises(self):
         with pytest.raises(ValueError) as ei:
             id_mod.resolve_repo_relative_usd("", module_file=__file__)
-        assert "USD" in str(ei.value)
-        assert OMWR_MODEL in str(ei.value)
+        message = str(ei.value)
+        assert "USD" in message
+        assert "absolute path" in message
+        assert "<repo_root>/src" not in message
+        assert OMWR_MODEL not in message
 
     def test_subclass_forgot_to_set_usd_raises(self):
         # Mirrors the "subclass forgot to set USD" failure mode -- the

@@ -109,6 +109,13 @@ def full_scene(repo_root):
     return path
 
 
+def test_sensor_test_bench_robot_model_is_mount_relative():
+    repo_root = Path(__file__).resolve().parents[3]
+    scene_path = repo_root / "src/scene/sensor_test_bench.yaml"
+    scene = yaml.safe_load(scene_path.read_text(encoding="utf-8"))
+    assert scene["robot"]["model"] == "usd/robot/guiritter/openbase/openbase_l2.usda"
+
+
 class TestLoadScene:
     def test_loads_minimal_scene(self, minimal_scene, repo_root):
         scene = scene_builder.load_scene(minimal_scene, repo_root=repo_root)

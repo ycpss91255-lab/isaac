@@ -2,7 +2,7 @@
 # Minimal scene for sensor integration testing.
 
 robot:
-  model: "robot/openbase/openbase_l2.usda"
+  model: "usd/robot/guiritter/openbase/openbase_l2.usda"
   pose:
     xyz: [0, 0, 0]
     rpy: [0, 0, 0]

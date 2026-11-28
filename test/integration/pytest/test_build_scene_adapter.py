@@ -5,7 +5,8 @@ adapter. Core Experimental spawns the prims, which are then inspected on
 the live stage. Since #325 the scene is built in the runner around the official
 NVIDIA Jetbot (robot) and cube (``mobility: dynamic`` object) USDs,
 fetched through ``test/test_assets.py`` -- not repo-bundled scaffold
-assets.
+assets. The adapter is exercised with absolute paths and with robot and
+object paths relative to a temporary ``MODEL_PATH`` root.
 
 The Kit side runs in ``_build_scene_runner.py`` (one ``SimulationApp`` per
 process -- the singleton constraint); this module owns the subprocess
@@ -17,6 +18,7 @@ Runtime: inside the Isaac Sim devel-test container
 """
 
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -38,11 +40,7 @@ PYTHON_SH = "/isaac-sim/python.sh"
 RUN_TIMEOUT_SEC = 600
 
 
-@pytest.fixture(scope="module")
-def adapter_run():
-    """Spawn the Jetbot + cube scene via the framework adapter once."""
-    robot_usd = fetch_test_asset("jetbot")
-    object_usd = fetch_test_asset("nvidia_cube")
+def _run_adapter(robot_usd, object_usd, *extra_args):
     result = subprocess.run(
         [
             PYTHON_SH,
@@ -53,6 +51,7 @@ def adapter_run():
             str(robot_usd),
             "--object-usd",
             str(object_usd),
+            *extra_args,
         ],
         capture_output=True,
         text=True,
@@ -64,6 +63,54 @@ def adapter_run():
             f"\n--- stderr ---\n{result.stderr}\n"
         )
     return result
+
+
+@pytest.fixture(scope="module")
+def adapter_run():
+    """Spawn the Jetbot + cube scene via the framework adapter once."""
+    return _run_adapter(fetch_test_asset("jetbot"), fetch_test_asset("nvidia_cube"))
+
+
+@pytest.fixture(scope="module")
+def mount_root_run(tmp_path_factory):
+    root = tmp_path_factory.mktemp("sim_asset")
+    robot_rel = "usd/robot/test/jetbot.usd"
+    object_rel = "usd/prop/test/nvidia_cube.usd"
+    robot_usd = fetch_test_asset("jetbot")
+    object_usd = fetch_test_asset("nvidia_cube")
+    for source, relative_path in ((robot_usd, robot_rel), (object_usd, object_rel)):
+        destination = root / relative_path
+        destination.parent.mkdir(parents=True)
+        shutil.copy(source, destination)
+
+    result = _run_adapter(
+        robot_usd, object_usd,
+        "--model-path-root", str(root),
+        "--robot-rel", robot_rel,
+        "--object-rel", object_rel,
+    )
+    return result, root
+
+
+def test_mount_root_runner_clean_exit(mount_root_run):
+    result, _ = mount_root_run
+    assert result.returncode == 0, result.stderr
+    assert "[EXIT CLEAN]" in result.stdout
+
+
+def test_mount_root_spawns_robot_and_object(mount_root_run):
+    result, _ = mount_root_run
+    match = re.search(
+        r"\[ADAPTER OK\] ground=\w+ light=\w+ robot=True objects=(\d+)", result.stdout
+    )
+    assert match, result.stdout
+    assert int(match.group(1)) >= 1
+    assert "[ADAPTER CHASSIS] valid=True" in result.stdout.splitlines()
+
+
+def test_mount_root_reports_model_path(mount_root_run):
+    result, root = mount_root_run
+    assert f"[ADAPTER MODEL_PATH] root={root}" in result.stdout.splitlines()
 
 
 def test_adapter_runner_clean_exit(adapter_run):

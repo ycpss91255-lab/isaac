@@ -5,7 +5,7 @@ Subclass contract:
     from isaac_devkit.driver import IsaacDriver
 
     class MyDriver(IsaacDriver):
-        USD = "usd/robot/custom/omwr/omwr.usd"  # relative to <repo_root>/src
+        USD = "/path/in/container/to/robot.usda"  # absolute, e.g. under the sim_asset mount
 
         def setup(self, stage):
             self.stage = stage
@@ -138,19 +138,15 @@ def boot_extension_kit_args(extensions) -> list:
 
 
 def resolve_repo_relative_usd(usd_path: str, *, module_file: str) -> Path:
-    """Resolve a repo-relative USD path to an absolute ``Path``.
+    """Resolve the driver's USD path to an absolute ``Path``.
 
-    Subclasses declare ``USD = "usd/robot/custom/omwr/omwr.usd"``
-    when that asset is available under ``<repo_root>/src``. For an external
-    sim_asset mount, set ``USD`` to the absolute path inside the container.
-
-    Absolute paths are returned unchanged so that ad-hoc tests can point
-    at a fixture USD outside the repo without subclassing the resolver.
+    Set ``USD`` to an absolute path inside the container, for example under
+    the sim_asset mount. Relative paths resolve under ``<repo_root>/src``,
+    so use one only when the asset exists there.
     """
     if not usd_path:
         raise ValueError(
-            "Set the USD class attribute to an absolute path or a "
-            "path relative to <repo_root>/src (e.g. 'usd/robot/custom/omwr/omwr.usd')"
+            "Set the USD class attribute to an absolute path inside the container."
         )
     p = Path(usd_path)
     if p.is_absolute():
@@ -169,7 +165,7 @@ class IsaacDriver:
     """Lifecycle-only base class for Isaac Sim standalone drivers (ADR-0009).
 
     Class attributes:
-        ``USD`` -- repo-relative path to the USD that ``run()`` opens
+        ``USD`` -- path inside the container to the USD that ``run()`` opens
         after Kit boots. Deprecated in favor of ``SCENE`` (ADR-0017
         section 9). Set this for drivers that open a USD directly.
         ``SCENE`` -- repo-relative path to a scene YAML (ADR-0017 A7
