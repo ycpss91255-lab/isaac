@@ -1,5 +1,6 @@
 """Hosted tests for the GPU suite's timing report (isaac#527)."""
 
+import ast
 import json
 import os
 import re
@@ -125,3 +126,44 @@ def test_json_matches_terminal_rows(timing_run):
         assert data["total"][field] == pytest.approx(total[field], abs=0.01)
         for name, row in rows.items():
             assert data["files"][name][field] == pytest.approx(row[field], abs=0.01)
+
+
+def _calls_named(tree, name):
+    return [
+        node for node in ast.walk(tree) if isinstance(node, ast.Call)
+        and ast.unparse(node.func).split(".")[-1] == name
+    ]
+
+
+def test_every_kit_runner_uses_time_kit_boot():
+    """Guard test/integration/pytest/ runners. test/integration/no_ros/ is outside the report."""
+    for runner in sorted((_TEST_DIR / "integration" / "pytest").glob("_*_runner.py")):
+        tree = ast.parse(runner.read_text(), filename=str(runner))
+        boots = _calls_named(tree, "SimulationApp")
+        # Some drivers override run() and construct SimulationApp themselves.
+        # The other driver runners boot Kit inside the inherited run().
+        if not boots and any(
+            (isinstance(node, ast.Name) and node.id == "IsaacDriver")
+            or (isinstance(node, ast.Attribute) and node.attr == "IsaacDriver")
+            for node in ast.walk(tree)
+        ):
+            boots = _calls_named(tree, "run") or _calls_named(tree, "IsaacDriver")
+        if not boots:
+            continue
+
+        assert any(
+            isinstance(node, ast.ImportFrom) and node.module == "_kit_boot"
+            and any(name.name == "time_kit_boot" for name in node.names)
+            for node in ast.walk(tree)
+        ), f"{runner.name} must import time_kit_boot from _kit_boot"
+        timed_nodes = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.With) and any(
+                ast.unparse(item.context_expr) == "time_kit_boot()" for item in node.items
+            ):
+                for statement in node.body:
+                    timed_nodes.update(ast.walk(statement))
+        for boot in boots:
+            assert boot in timed_nodes, (
+                f"{runner.name}:{boot.lineno} must boot Kit inside with time_kit_boot()"
+            )

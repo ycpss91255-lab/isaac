@@ -92,8 +92,6 @@ exclude_also = [
     "def _imu_reader\\(",
     # output: Isaac-side reader factory.
     "def make_python_sources\\(",
-    # default_driver: Kit-side fresh-stage creation.
-    "def _new_stage\\(",
     # driver: SimulationApp startup and Kit lifecycle methods.
     "def run\\(",
     "def _open_stage\\(",
