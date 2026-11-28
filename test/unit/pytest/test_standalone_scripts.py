@@ -81,6 +81,18 @@ def test_periodic_timer_does_not_burst_after_a_stall():
     assert timer.due() is False
 
 
+def test_run_and_exit_turns_an_exception_into_exit_code_1(capsys):
+    helper = _load_helper()
+    codes = []
+
+    def _boom():
+        raise ModuleNotFoundError("No module named 'missing_extension'")
+
+    helper.run_and_exit(_boom, exit_fn=codes.append)
+    assert codes == [1]
+    assert "missing_extension" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("returned, expected", [(None, 0), (0, 0), (3, 3)])
 def test_run_and_exit_passes_main_return_code_through(returned, expected):
     helper = _load_helper()
