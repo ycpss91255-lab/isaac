@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
+
 ### Changed
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。
 - **串流來源產生器改用 Isaac Sim 的 `ViewportManager.set_camera_view`（isaac#535）。** 移除舊版視窗 API 與備援匯入，新增一項 hosted 測試驗證相機路徑、位置和對準目標（924 項，stream 55 項）。
@@ -20,7 +23,7 @@
   - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 35 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 847 例（core 706），Bats 共 219 例（core 115）。
 
 ### Fixed
-- **standalone smoke 使用可覆寫的 checkout 與容器腳本路徑（isaac#399）。** 預設使用腳本所在的 checkout，並在現行 `stream` 服務中從掛載的 checkout 讀取腳本。可用 `ISAAC_SMOKE_REPO_DIR` 與 `ISAAC_SMOKE_SCRIPT_DIR` 覆寫路徑。空矩陣會正常退出。Docker ShellCheck 納入此腳本，hosted 共 948 項（core 804）。
+- **standalone smoke 使用可覆寫的 checkout 與容器腳本路徑（isaac#399）。** 預設使用腳本所在的 checkout，並在現行 `stream` 服務中從掛載的 checkout 讀取腳本。可用 `ISAAC_SMOKE_REPO_DIR` 與 `ISAAC_SMOKE_SCRIPT_DIR` 覆寫路徑。空矩陣會正常退出。Docker ShellCheck 納入此腳本，hosted 共 955 項（core 811）。
 - **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 859 -> 863（core 716 -> 720）。
 
 - **補強驅動腳本的 `isaac_variant` 字串常值檢查（isaac#375）。** 改用 Python AST 解析 `src/script/*.py`，可偵測字典中的鍵值對、關鍵字引數與下標賦值。新增 6 個 core 測試案例，hosted pytest 從 853 增至 859 例（core 從 710 增至 716 例）。

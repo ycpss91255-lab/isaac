@@ -132,7 +132,7 @@ Isaac 不附範例模型。請使用 `sim_asset` 中的 USD 模型或 `asset_con
 2. 將模型掛載的 `source` 改成模型所在的目錄。唯讀掛載的目標保持為 `/home/${USER_NAME}/models/sim_asset`，讓場景在每台機器上都能解析相同的路徑。若新增模型掛載，請將對應的容器內路徑加入 `MODEL_PATH`，並以冒號分隔。
 3. 執行 `just docker run -t headless -d` 啟動容器。
 
-Base 套用本機設定時會取代整份 `[[volumes]]` 清單。請在本機設定檔中保留 `setup.toml` 的所有掛載，並在專案新增掛載時同步更新。
+Base 套用本機設定時會取代整份 `[[volumes]]` 清單。請在本機設定檔中保留 `setup.toml` 的所有掛載，並在專案新增掛載時同步更新。 `just docker run` 會在啟動容器前列出缺少的來源與目標配對，發出警告後繼續啟動。未宣告掛載清單的本機設定會繼承專案掛載。
 
 ## 連接 WebRTC livestream
 

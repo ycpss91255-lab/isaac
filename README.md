@@ -132,7 +132,7 @@ To validate a USD asset, use Isaac Sim’s [Asset Validation](https://docs.isaac
 2. Edit the model mount’s `source` to point to your models. Keep its read-only target at `/home/${USER_NAME}/models/sim_asset` so scenes resolve the same paths on every machine. If you add model mounts, add their container paths to `MODEL_PATH`, separated by colons.
 3. Start the container with `just docker run -t headless -d`.
 
-Base replaces the entire `[[volumes]]` list when it applies the local configuration. Keep every mount from `setup.toml` in your copy and update it whenever the repo adds a mount.
+Base replaces the entire `[[volumes]]` list when it applies the local configuration. Keep every mount from `setup.toml` in your copy and update it whenever the repo adds a mount. Before starting the container, `just docker run` warns about missing source and target pairs and continues startup. A local configuration without a volume list inherits the repository mounts.
 
 ## Connecting to the WebRTC livestream
 
