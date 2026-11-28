@@ -152,6 +152,7 @@ def _setup_imu(cfg, stage):
     """Create an IMU sensor and return its prim path.
 
     Validates that parent_prim has RigidBodyAPI (physical constraint).
+    In Isaac Sim 6.2, the IMU samples on each physics step.
     """
     from pxr import UsdPhysics
 
@@ -177,22 +178,19 @@ def _setup_imu(cfg, stage):
     mount_prim = stage.DefinePrim(mount_path, "Xform")
     set_xform_pose(mount_prim, cfg["mount"]["pose"])
 
-    import omni.kit.commands
-    frequency_hz = sensor.get("frequency_hz", 200)
-    sensor_period = 1.0 / frequency_hz if frequency_hz > 0 else 0.0
-    filter_cfg = sensor.get("filter", {})
+    _enable_extensions("isaacsim.sensors.experimental.physics")
 
-    omni.kit.commands.execute(
-        "IsaacSensorCreateImuSensor",
-        path="imu_sensor",
-        parent=mount_path,
-        sensor_period=sensor_period,
+    from isaacsim.sensors.experimental.physics import IMU
+
+    filter_cfg = sensor.get("filter", {})
+    imu = IMU.create(
+        f"{mount_path}/imu_sensor",
         linear_acceleration_filter_size=filter_cfg.get("linear_acceleration", 10),
         angular_velocity_filter_size=filter_cfg.get("angular_velocity", 10),
         orientation_filter_size=filter_cfg.get("orientation", 10),
     )
 
-    return f"{mount_path}/imu_sensor"
+    return str(imu.paths[0])
 
 
 # -- Camera framework (former camera_setup.py, ADR-0006) --

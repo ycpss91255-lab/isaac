@@ -8,6 +8,7 @@
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
+- **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。
 - **串流來源產生器改用 Isaac Sim 的 `ViewportManager.set_camera_view`（isaac#535）。** 移除舊版視窗 API 與備援匯入，新增一項 hosted 測試驗證相機路徑、位置和對準目標（924 項，stream 55 項）。
 - **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 119 -> 123（併入 main 後重算）。
@@ -26,7 +27,7 @@
 
 ### Fixed
 
-- **延長串流畫面驗證的重試時間（isaac#556）。** `VISUAL_E2E_TOTAL_TIMEOUT_S` 設定總等待秒數，預設為 600 秒。每次重試都重新載入檢視器，最多等候畫面 30 秒。驗證失敗時，主控台與 `result.json` 會記錄實際等待秒數及最後一幀的判定結果；若未取得畫面，則記為 `no frame`。新增 5 項 hosted 測試，總數由 988 增至 993，stream 由 55 增至 60。
+- **延長串流畫面驗證的重試時間（isaac#556）。** `VISUAL_E2E_TOTAL_TIMEOUT_S` 設定總等待秒數，預設為 600 秒。每次重試都重新載入檢視器，最多等候畫面 30 秒。驗證失敗時，主控台與 `result.json` 會記錄實際等待秒數及最後一幀的判定結果；若未取得畫面，則記為 `no frame`。失敗重試之間會退避 1 秒，且只記錄前 20 次嘗試（`attemptCount` 記總次數），避免連線被拒時空轉。新增 6 項 hosted 測試，總數由 989 增至 995，stream 由 55 增至 61。
 - **校正測試數量（isaac#416）。** 修正 `just cleanup-merged` 條目的 Bats 數量。TEST.md 的 hosted 總數集中在檔首，新增 2 個 core 測試防止舊數字與重複摘要再度出現。Hosted 基準由 986 提高至 988（core 842 → 844）。
 - **standalone smoke 使用可覆寫的 checkout 與容器腳本路徑（isaac#399）。** 預設使用腳本所在的 checkout，並在現行 `stream` 服務中從掛載的 checkout 讀取腳本。可用 `ISAAC_SMOKE_REPO_DIR` 與 `ISAAC_SMOKE_SCRIPT_DIR` 覆寫路徑。空矩陣會正常退出。Docker ShellCheck 納入此腳本，hosted 共 955 項（core 811）。
 - **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 859 -> 863（core 716 -> 720）。
