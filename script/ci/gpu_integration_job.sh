@@ -24,6 +24,10 @@ gpu_job_cache_dirs
 # co-hosted manual stream stack on this shared GPU host (owv#55). base's
 # self-test.yaml convention -- run_id + run_attempt: unique per re-run.
 gpu_job_group "GPU integration pytest + aggregate gate (M2)"
-BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}" \
-  ./test/assert_pytest_baseline.sh --gpu
+export BASELINE_PROJECT="isaac-baseline-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"
+./test/assert_pytest_baseline.sh --gpu
+gpu_job_endgroup
+
+gpu_job_group "Official Isaac Sim startuptests"
+./script/ci/official_startuptests.sh
 gpu_job_endgroup

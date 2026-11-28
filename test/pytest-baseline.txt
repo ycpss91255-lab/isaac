@@ -301,8 +301,8 @@
 #   809 -> 874, core 668 -> 733.
 # isaac#533 adds two core cases for the first line of the tracker PR body.
 # isaac#493 adds 6 PR scope and build cases (hosted 876 -> 882, core 735 -> 741).
-# isaac#276 removes ROS I/O and its host round-trip guards (882 -> 847, all core).
-HOSTED_UNIT_BASELINE = 847
+# isaac#276 removes ROS I/O and its host round-trip guards (882 -> 847, all core), then isaac#436 adds 3 (-> 850).
+HOSTED_UNIT_BASELINE = 850
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -345,8 +345,8 @@ HOSTED_UNIT_BASELINE = 847
 #   isaac#327: -14 +1 core (core 681 -> 668).
 #   isaac#442 adds 65 core cases (core 668 -> 733).
 #   isaac#493 adds 6 core cases (core 735 -> 741).
-#   isaac#276 removes 35 net core cases (741 -> 706).
-HOSTED_UNIT_BASELINE_CORE = 706
+#   isaac#276 removes 35 net core cases (741 -> 706), then isaac#436 adds 3 (-> 709).
+HOSTED_UNIT_BASELINE_CORE = 709
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 52
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -451,8 +451,8 @@ AGGREGATE_TARGET = 126
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
 #   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
 #   isaac#497 adds 9 stream smoke cases (stream 81 -> 90).
-#   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 223 -> 219).
-BATS_BASELINE_CORE = 115
+#   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 223 -> 219), then isaac#436 adds 5 (core 115 -> 120, total 224).
+BATS_BASELINE_CORE = 120
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13
