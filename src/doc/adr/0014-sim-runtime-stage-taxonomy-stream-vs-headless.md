@@ -28,7 +28,7 @@ ADR-0005 and ADR-0007 predate `#28` and this ADR; their `-t standalone` / `-t he
 | old `headless` (`runheadless.sh`, auto WebRTC) | `headless-stream` | `stream` |
 | `gui` (X11) | removed | removed (use `stream` + WebRTC client) |
 
-The entrypoint *pattern* those ADRs establish (Python-driven `SimulationApp`, livestream-on-demand via the custom `isaacsim.exp.base.python.streaming.kit` experience) is unchanged -- only the target name it lands on moves to `stream`.
+The entrypoint *pattern* those ADRs establish (Python-driven `SimulationApp`, livestream-on-demand via the custom `isaacsim.exp.base.python.streaming.kit` experience) is unchanged -- only the target name it lands on moves to `stream`. The custom experience was later superseded by isaac#484 (see ADR-0007).
 
 ## GPU for CI tests is blocked upstream
 

@@ -11,7 +11,7 @@ def to_u8_buffer(arr) -> array.array:
     """Return the raw bytes of *arr* as ``array.array('B')``.
 
     Uses the buffer protocol, which is much faster than building a
-    ``bytes`` object per element for rclpy-style ``uint8[]`` fields.
+    ``bytes`` object per element for ``uint8[]`` fields.
     ``cast("B")`` makes a float32 depth image come out as 4 bytes per
     pixel instead of one entry per element.
 

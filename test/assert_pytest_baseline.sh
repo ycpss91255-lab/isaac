@@ -24,11 +24,11 @@
 #          AGGREGATE_TARGET (the PRD 126 parity floor).
 #     The hosted leg is re-derived from the baseline file (no second
 #     container run); only the GPU collected/passed counts come from the
-#     live GPU run.
+#     in-container pytest report.
 #
 # Usage:
 #   test/assert_pytest_baseline.sh           # hosted-unit (M1 gate)
-#   test/assert_pytest_baseline.sh --gpu     # GPU aggregate (M2 gate)
+#   test/assert_pytest_baseline.sh --gpu     # in-container GPU suite and M2 aggregate
 #   test/assert_pytest_baseline.sh --group <g>
 #       hosted-unit for ONE scope group (isaac#434): runs `pytest -m <g>` and
 #       checks that group against its own floor HOSTED_UNIT_BASELINE_<G>. The
@@ -126,18 +126,6 @@ if [[ "${MODE}" == "gpu" ]]; then
   # guards against (#131 CI fix).
   GPU_PYTEST="${GPU_PYTEST_PATH:-test/integration/pytest/}"
   GPU_JUNIT="${GPU_JUNIT_PATH:-test/.gpu-pytest-report.xml}"
-  # ROS 2 domain isolation. The example runner's /cmd_vel round-trip uses
-  # network=host (the compose default), so on a shared self-hosted runner
-  # it shares the default domain 0 with other nodes using that domain
-  # on the host, including leaked sibling ros:humble containers from the
-  # cross-container test that keep publishing /cmd_vel (0.37/0.19). The
-  # example runner's io.latest('/cmd_vel') then picks up that foreign
-  # traffic, breaking the "latest() is None before publish" check and the
-  # round-trip value assertion (it sees 0.37, not its own 0.42). Pass an
-  # explicit ROS_DOMAIN_ID into the in-container pytest process via the
-  # `env` wrapper so the example runner subprocess inherits it. CI passes
-  # a per-run value via GPU_ROS_DOMAIN_ID. Local runs default to 0.
-  #
   # Isolated compose project (owv#55 second axis; first axis was isaac#239).
   # This is a foreground run.sh with no --no-rm, so run.sh installs its EXIT
   # trap _app_cleanup, which runs a PROJECT-WIDE
@@ -170,7 +158,6 @@ if [[ "${MODE}" == "gpu" ]]; then
   fi
   "${REPO_ROOT}/script/run.sh" -t test -- \
     env PYTHONDONTWRITEBYTECODE=1 PYTHONPYCACHEPREFIX=/tmp/gpu-pycache \
-    ROS_DOMAIN_ID="${GPU_ROS_DOMAIN_ID:-0}" \
     /isaac-sim/python.sh -m pytest \
     "${GPU_PYTEST}" \
     -p no:cacheprovider \
@@ -200,71 +187,6 @@ PY
   passed=$(( total - failures - errors - skipped ))
   echo "in-container gpu-integration: collected=${total} passed=${passed} " \
     "skipped=${skipped} failures=${failures} errors=${errors}"
-
-  # Host cross-container round-trip leg (isaac#132, PRD Pre-Publish item
-  # 1). It spawns sibling ros:humble containers running the example/ros2/
-  # ament nodes, so it CANNOT run inside the Isaac container (no docker
-  # socket) -- it runs here on the self-hosted GPU host (which has docker
-  # + the built isaac:test image). Its collected/passed counts are summed
-  # into the GPU-integration totals below. -p no:cacheprovider keeps the
-  # mounted tree clean. A host without pytest, a missing report, or a
-  # leg with no passing test FAILS the job (isaac#460): the leg must really
-  # run, it cannot vanish behind the in-container count.
-  XC_PYTEST="${XC_PYTEST_PATH:-${REPO_ROOT}/test/integration/pytest/test_cross_container_roundtrip.py}"
-  XC_REPORT="${REPO_ROOT}/test/.xc-pytest-report.xml"
-  rm -f "${XC_REPORT}"
-  xc_total=0; xc_failures=0; xc_errors=0; xc_skipped=0
-  if python3 -m pytest --version >/dev/null 2>&1; then
-    set +e
-    python3 -m pytest "${XC_PYTEST}" -p no:cacheprovider \
-      --junitxml="${XC_REPORT}"
-    set -e
-    if [[ -f "${XC_REPORT}" ]]; then
-      read -r xc_total xc_failures xc_errors xc_skipped < <(
-        python3 - "${XC_REPORT}" <<'PY'
-import sys
-import xml.etree.ElementTree as ET
-
-root = ET.parse(sys.argv[1]).getroot()
-suite = root if root.tag == "testsuite" else root.find("testsuite")
-attrs = suite.attrib if suite is not None else {}
-print(attrs.get("tests", 0), attrs.get("failures", 0),
-      attrs.get("errors", 0), attrs.get("skipped", 0))
-PY
-      )
-    else
-      echo "error: host cross-container pytest produced no JUnit report " \
-        "(${XC_REPORT}); the leg did not run -- GPU job not green" \
-        "(isaac#460)" >&2
-      exit 1
-    fi
-  else
-    echo "error: host python3 has no pytest; the cross-container leg " \
-      "cannot run -- GPU job not green (isaac#460)" >&2
-    exit 1
-  fi
-  xc_passed=$(( xc_total - xc_failures - xc_errors - xc_skipped ))
-  echo "host cross-container: collected=${xc_total} passed=${xc_passed} " \
-    "skipped=${xc_skipped} failures=${xc_failures} errors=${xc_errors}"
-
-  # The host leg must contribute at least one passing test: an all-skipped
-  # or empty leg would otherwise vanish silently behind the in-container
-  # count (isaac#460).
-  if (( xc_passed < 1 )); then
-    echo "error: host cross-container leg passed ${xc_passed} tests " \
-      "(need >= 1) -- it did not really run; GPU job not green (isaac#460)" >&2
-    exit 1
-  fi
-
-  # Fold the host leg into the GPU-integration aggregate.
-  total=$(( total + xc_total ))
-  passed=$(( passed + xc_passed ))
-  failures=$(( failures + xc_failures ))
-  errors=$(( errors + xc_errors ))
-  skipped=$(( skipped + xc_skipped ))
-  echo "gpu-integration (in-container + host xc): collected=${total} " \
-    "passed=${passed} skipped=${skipped} failures=${failures} " \
-    "errors=${errors}"
 
   if (( failures > 0 || errors > 0 )); then
     echo "error: GPU integration suite has failures/errors -- not green" >&2

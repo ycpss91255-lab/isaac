@@ -256,7 +256,7 @@ forklift 應用邏輯開發 / ros1_bridge 反向搬遷 / per-layer 獨立 GPU in
 ## Pre-Publish Checklist（三角色 review 第二輪驗收殘留）
 三輪 grill + 兩輪 agent review 後，critical gaps（RD C1-C6 / PM C1-C7 / QA C1-C6）大致全關。publish 前補完以下殘留：
 
-1. **A7 sibling ROS2 CI 路由**：ament pkg（py+cmake）走 hosted `ros:humble`（`docker run --rm`）做 **ament_lint + colcon build**；Isaac↔ament 的 cross-container round-trip（node 真的收到 sim topic）併進 example GPU integration 的 cmd_vel round-trip + camera_echo 斷言，不另起 sibling 容器 CI job。
+1. **A7 sibling ROS2 CI 路由**：ament pkg（py+cmake）走 hosted `ros:humble`（`docker run --rm`）做 **ament_lint + colcon build**；Isaac↔ament 的跨容器往返測試隨 ROS I/O 移至 `isaac_ros_io`（isaac#276）。
 2. **C6 ratchet enforcement vector**：committed `coverage-baseline`（數值檔）→ `pytest --cov-fail-under=<baseline>`；每 PR 不得低於 baseline，調升 baseline 才算 ratchet，CI step 強制。非口頭。
 3. **C1 lidar/imu pure-schema 測試**：除 stub-raises 外，補一條 pure-side 測試斷言 lidar/imu catalog YAML **驗證通過 + 解析出預期 prim-path 字串**（證明「形狀鎖死」的 locked shape 真的 parse）。
 4. **MVP cut-line（locked，已收斂編號）**：**MVP = Issue 1,2,3,4,4-int,5,6,6b**（smoke + ADR + 框架 + example + GPU integration + scaffold + onboarding = 可消費 base repo = M2 完成點 = 切 v1.0.0）。原「#4-int 外部 gated」前提已消除（base v0.41.0 已 release，PR #124 已 merge），#4-int 回歸 MVP，外部相依已清、僅 blocked-by #4。P1 = Issue 7a/7b/8（forklift 搬遷 + 清 base；M3 純淨度為 P1 metric，因 depends on forklift 抽離）。

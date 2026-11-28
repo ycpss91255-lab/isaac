@@ -1,25 +1,14 @@
-"""Unit tests for isaac_devkit.sensors (layer b) -- the OmniGraph wiring
-dispatcher after the three-layer split.
-
-Tests cover:
-  - setup_sensor delegates to sensor_prim.load_config (back-compat path)
-  - setup_sensor skips ROS graph when ros config is None
-  - _enable_extensions unchanged behaviour (via fake_kit fixture from
-    test_sensor_setup.py)
-  - setup_sensors still raises NotImplementedError
-  - backward-compatible re-exports (load_config, get_category,
-    validate_camera) remain accessible via the sensors module
-"""
+"""Hosted checks for sensor config compatibility and USD prim creation."""
 
 import sys
-import types
 from pathlib import Path
+from unittest.mock import Mock, call
 
 import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "framework"))
-from isaac_devkit import sensors as sensor_setup
+from isaac_devkit import sensor_prim, sensors as sensor_setup
 
 pytestmark = pytest.mark.core
 
@@ -85,66 +74,27 @@ class TestLoadConfigRosOptionalViaBackcompat:
         assert loaded["ros"] is not None
 
 
-# ---------- _enable_extensions (unchanged) ----------
+@pytest.mark.parametrize("with_ros", [False, True])
+def test_custom_camera_dispatch_returns_mount_and_creates_camera_prims(monkeypatch, with_ros):
+    config = Path(__file__).resolve().parents[3] / "src/config/camera/custom.yaml"
+    cfg = sensor_setup.load_config(config)
+    if not with_ros:
+        cfg["ros"] = None
 
+    stage = Mock()
+    stage.GetPrimAtPath.return_value.IsValid.return_value = True
+    enabled = []
+    monkeypatch.setattr(sensor_setup, "_enable_extensions", lambda *names: enabled.extend(names))
+    monkeypatch.setattr(sensor_prim, "set_xform_pose", Mock())
+    monkeypatch.setattr(sensor_prim, "set_camera_intrinsics", Mock())
+    monkeypatch.setitem(sys.modules, "omni.graph.core", None)
+    monkeypatch.setitem(sys.modules, "isaac_devkit.sensor_ros", None)
 
-class _FakeExtManager:
-    """Records Kit extension-manager calls."""
-
-    def __init__(self, enabled=()):
-        self.enabled = set(enabled)
-        self.immediate_calls = []
-
-    def is_extension_enabled(self, name):
-        return name in self.enabled
-
-    def set_extension_enabled_immediate(self, name, value):
-        self.immediate_calls.append((name, value))
-        if value:
-            self.enabled.add(name)
-        return True
-
-
-@pytest.fixture
-def fake_kit(monkeypatch):
-    """Install fake ``omni.kit.app``."""
-    mgr = _FakeExtManager()
-    omni_pkg = types.ModuleType("omni")
-    omni_pkg.__path__ = []
-    kit_pkg = types.ModuleType("omni.kit")
-    kit_pkg.__path__ = []
-    app_mod = types.ModuleType("omni.kit.app")
-
-    class _App:
-        def get_extension_manager(self):
-            return mgr
-
-    app_mod.get_app = lambda: _App()
-    omni_pkg.kit = kit_pkg
-    kit_pkg.app = app_mod
-    monkeypatch.setitem(sys.modules, "omni", omni_pkg)
-    monkeypatch.setitem(sys.modules, "omni.kit", kit_pkg)
-    monkeypatch.setitem(sys.modules, "omni.kit.app", app_mod)
-    for name in ("isaacsim.core.utils", "isaacsim.core.utils.extensions"):
-        monkeypatch.setitem(sys.modules, name, None)
-    return mgr
-
-
-class TestEnableExtensions:
-    """_enable_extensions unchanged from the original sensors module."""
-
-    def test_enables_missing_extension_via_ext_manager(self, fake_kit):
-        sensor_setup._enable_extensions("isaacsim.ros2.bridge")
-        assert fake_kit.immediate_calls == [("isaacsim.ros2.bridge", True)]
-
-    def test_skips_already_enabled_extension(self, fake_kit):
-        fake_kit.enabled.add("isaacsim.ros2.bridge")
-        sensor_setup._enable_extensions("isaacsim.ros2.bridge")
-        assert fake_kit.immediate_calls == []
-
-    def test_failed_enable_raises(self, fake_kit, monkeypatch):
-        monkeypatch.setattr(
-            fake_kit, "set_extension_enabled_immediate", lambda *_a: False,
-        )
-        with pytest.raises(RuntimeError, match="isaacsim.ros2.bridge"):
-            sensor_setup._enable_extensions("isaacsim.ros2.bridge")
+    mount = sensor_setup.setup_sensor(cfg, stage)
+    assert mount.startswith(cfg["mount"]["parent_prim"] + "/")
+    assert stage.DefinePrim.call_args_list == [
+        call(mount, "Xform"),
+        call(f"{mount}/color", "Camera"),
+        call(f"{mount}/depth", "Camera"),
+    ]
+    assert "isaacsim.ros2.bridge" not in enabled

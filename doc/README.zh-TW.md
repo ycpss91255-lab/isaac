@@ -26,13 +26,13 @@ NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；為何不�
 ./script/init_isaac_dirs.sh             # 首次必跑，會執行 ./script/setup.sh apply，並建好 10 個 host-owned cache 目錄
 ```
 
-> cache 目錄必須在 container mount 之**前**就存在，且 owner 是你。否則 docker daemon 會以 **root** 身份建立它們，Kit 就無法寫入自己的 cache，接著無法註冊 ROS 2 OmniGraph node（`[Errno 13] ... kit/cache/ogn_generated`），而且仍然以 exit 0 結束。`init_isaac_dirs.sh` 會建立這些目錄，pre-run hook 也會在每次 `just docker run` 之前再跑一次。如果目錄已經是 root 所有，腳本會停下並印出 `chown` 修正指令。
+> cache 目錄必須在 container mount 之**前**就存在，且 owner 是你。否則 docker daemon 會以 **root** 身份建立它們，Kit 就無法寫入自己的 cache。`init_isaac_dirs.sh` 會建立這些目錄，pre-run hook 也會在每次 `just docker run` 之前再跑一次。如果目錄已經是 root 所有，腳本會停下並印出 `chown` 修正指令。
 
 接著**只選一條**路徑。各 stage 互相獨立：只 build 你要跑的那個 stage。走 headless 路徑之前**不需要**先 build devel。
 
 | 你想要 | Build | Run |
 |---|---|---|
-| 跑一個場景並看它的 ROS 2 topic（建議從這裡開始） | `just docker build -t headless` | `just docker run -t headless -d`，接著看下方「Headless：啟動 Isaac 並跑一個場景」 |
+| 執行無介面場景 | `just docker build -t headless` | `just docker run -t headless -d`，接著看下方「Headless：啟動 Isaac 並跑一個場景」 |
 | 一個用來開發的互動 shell | `just docker build`（devel） | `just docker run` |
 | 透過 WebRTC 看模擬畫面 | `just docker build -t stream` | `just docker run -t stream -d`，接著看「連接 WebRTC livestream」 |
 
@@ -56,12 +56,10 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh path/to/your_scene.py'
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
 just docker stop
 ```
-
-使用 ROS 2 場景時，請讓場景與 ROS 2 用戶端使用同一個未被占用的 `ROS_DOMAIN_ID`（此處為 `77`）。
 
 Kit 會把 session log 寫到 host 端的 `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log`。追最新一份：
 
@@ -234,43 +232,11 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 必要條件：NVIDIA GPU runtime（`--gpus all`）做 NVENC 編碼、`--network=host`、非 localhost client 需要 `PUBLIC_IP`。`ISAAC_SIGNAL_PORT` 可選（預設 `49100`）。driver 也接受 `--public-ip` / `--port` / `--run-seconds N`（`N>0` 界定 smoke run；預設永久執行）。
 
-## ROS I/O
+## 驅動程式設定
 
-映像檔本身不提供 ROS 整合。將 `ISAAC_IO_PLUGIN` 設為外部插件的 `module:function` 即可啟用 ROS I/O。
+`IsaacDriver` 啟動時預設只啟用 `isaacsim.core.nodes`。要接入 ROS 2，將 `ISAAC_IO_PLUGIN` 設為外部插件的 `module:function`，並透過 `ISAAC_KIT_EXTRA_ARGS` 啟用插件所需的 Kit 擴充套件。感測器設定仍接受 YAML 的 `ros:` 欄位，建立後回傳 USD prim 或掛載路徑。
 
-### 驗證跨容器 DDS
-
-跑 `just docker run -t stream -d`並用 WebRTC client 或瀏覽器 viewer 連線後，打開 Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（即 repo 的 `src/script/`，mount 在 container 內的位置）→ Run。腳本會自動按 Play（publisher 只在 timeline 播放時才發），開始往 `/isaac/test` 發 `std_msgs/String "hello N"`。
-
-從同一台 host 的另一個 terminal：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic list &&
-             ros2 topic echo /isaac/test --once'
-```
-
-預期：topic list 出現 `/isaac/test`，`echo` 印出 hello message。
-
-反向（host → Isaac）測試：在 Script Editor 跑 `ros2_test_sub.py`，從旁邊容器發訊息：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic pub /host/test std_msgs/String "{data: hello-from-host}" --once'
-```
-
-Kit terminal 應印出 `[ros2_test_sub] /host/test <- 'hello-from-host'`。
-
-> 跑 jazzy-aligned 的 Isaac instance 時，把兩端都換成 `ros:jazzy` + `/opt/ros/jazzy/setup.bash` — 兩端 distro 必須一致，IDL hash 才能對齊。
-
-### Standalone Python workflow（Script Editor 替代方案）
-
-`src/script/` 同時放 M1 / M2 demo 的 in-kit Script Editor 版本與 standalone 版本。standalone 版本透過 `SimulationApp` 啟動自己的 Kit，並依 stage 的 `ISAAC_LIVESTREAM` 決定模式（`headless` 為 0、`stream` 為 2）。每支 standalone 腳本都接受 `--run-seconds N`，遇到任何錯誤會以 exit 1 結束（以前是 exit 0）。
-
-
-#### 額外 Kit 參數（`ISAAC_KIT_EXTRA_ARGS`）
+### 額外 Kit 參數（`ISAAC_KIT_EXTRA_ARGS`）
 
 `IsaacDriver.run` 會讀取 `ISAAC_KIT_EXTRA_ARGS`，以空白切開後接在啟動 Kit 的既有參數（內建 boot 參數）之後。未設定、空字串或只有空白時行為不變。只有 `IsaacDriver` 會讀這個變數；`stream_source_producer` 與 `src/script/` 底下的腳本不支援。
 
@@ -281,7 +247,7 @@ export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
 ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver.py
 ```
 
-#### 啟動插件（`ISAAC_IO_PLUGIN`）
+### 啟動插件（`ISAAC_IO_PLUGIN`）
 
 `IsaacDriver.run` 會讀取 `ISAAC_IO_PLUGIN`（`module:function`）。在 stage 建好之後、timeline play 之前，import 該 module 並呼叫一次 `function(stage, robot_prim, config)`。`config` 是 opaque dict（目前含 `usd_path` 與 `robot_prim`，即 stage 的 default prim 路徑）。未設定或空字串時不呼叫、也不 import 任何 ROS 模組。格式錯誤、module 無法 import、找不到 function，各自在啟動時失敗並指出原因。只有 `IsaacDriver.run` 支援；`stream_source_producer` 與 `src/script/` 下的腳本不支援。
 
@@ -291,24 +257,6 @@ export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
 # 或寫成同一行：
 ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 ```
-
-| In-kit（Script Editor → File → Open → Run） | Standalone（`just docker exec -t headless /isaac-sim/python.sh src/script/<name>`） | 6.2.0 驗證結果（headless） |
-|---|---|---|
-| `ros2_test_pub.py` | `ros2_test_pub_standalone.py`：每秒發布一次 `/isaac/test` | `ros2 topic hz` 1.000 |
-| `ros2_test_sub.py` | `ros2_test_sub_standalone.py`：印出每則 `/host/test` 訊息 | 3/3 收到 |
-
-使用 pattern：
-
-```bash
-just docker run -t headless -d
-./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh src/script/<name>_standalone.py'
-# stop it (see "Stopping a driver script"):
-./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
-just docker stop                           # cleanup
-```
-
-共用 host 上 ROS domain 0 可能有其他 `/cmd_vel` publisher，它們也會讓 OpenBase 移動。請給你的執行一個私有 domain，例如 `bash -c 'ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh ...'`，旁邊的 container 也要帶同樣的 `-e ROS_DOMAIN_ID=77`。
 
 ### Python 輸出 API（isaac#365）
 
@@ -383,11 +331,11 @@ just docker run -t test -- /isaac-sim/python.sh -m pytest --cov=<pkg> test/
 
 系統的 `python3` 無法安裝這些套件（Isaac base image 的 PEP 668 擋 `pip`）— 一律走 `/isaac-sim/python.sh -m pytest ...`，不要用 `pytest ...`。
 
-GPU integration test（需要 Isaac Sim 真的開機，例如 camera → ROS 2 headless smoke，#127）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
+GPU integration test（需要 Isaac Sim 真的開機，例如 headless 相機 prim 測試，#127）走 `test` compose service；該 service 的 NVIDIA GPU reservation 來自 `setup.toml` 的 `["stage:devel-test"]` override（`"deploy.gpu_mode" = "force"`，base #493）：
 
 ```bash
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
-    test/integration/pytest/test_camera_ros2_headless.py
+    test/integration/pytest/test_camera_headless.py
 ```
 
-判定標準是 stdout marker 行（`[BOOT OK]` / `[CAMERA FRAME OK]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 會呼叫 `_exit(0)`。詳見 [doc/test/TEST.md](test/TEST.md)。
+判定標準是 stdout marker 行（`[BOOT OK]` / `[CAMERA PRIM]` / `[EXIT CLEAN]`），不是 return code — Kit 的 `app.close` 會呼叫 `_exit(0)`。詳見 [doc/test/TEST.md](test/TEST.md)。

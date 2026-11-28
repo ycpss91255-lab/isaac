@@ -160,7 +160,7 @@ def test_stream_script_change_is_stream(cg):
 @pytest.mark.parametrize(
     "path, groups",
     [
-        ("apps/isaacsim.exp.base.python.streaming.kit", {"stream"}),
+        ("script/ci/producer_smoke.sh", {"stream"}),
         ("src/script/standalone_livestream_smoke.py", {"stream"}),
         ("script/entrypoint.sh", set(ALL)),
         ("script/hooks/pre/run.sh", set(ALL)),
@@ -176,11 +176,11 @@ def test_each_stream_smoke_input_selects_stream_for_a_pr(cg, path, groups):
 @pytest.mark.parametrize(
     "path, groups",
     [
-        ("apps/another.kit", {"stream"}),
+        ("script/ci/stream_smoke_lib.sh", {"stream"}),
         ("script/hooks/pre/build.sh", set(ALL)),
     ],
 )
-def test_scope_rules_cover_other_experiences_and_pre_hooks(cg, path, groups):
+def test_scope_rules_cover_smoke_helpers_and_pre_hooks(cg, path, groups):
     assert cg.classify(path) == groups
 
 
@@ -221,6 +221,10 @@ def test_gui_and_headless_scripts(cg):
 
 def test_unknown_path_is_core_never_nothing(cg):
     assert _pr(cg, "some/new/dir/file.txt") == ["core", "docs"]
+
+
+def test_apps_directory_files_fall_back_to_core(cg):
+    assert cg.classify("apps/x.kit") == {"core"}
 
 
 @pytest.mark.parametrize(
