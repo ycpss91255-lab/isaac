@@ -449,6 +449,7 @@ COPY --chmod=0755 script/ci/headless_smoke.sh /smoke_test/headless_smoke.sh
 # step order and env scoping are checked on every build against stubs --
 # no docker, no GPU.
 COPY --chmod=0755 script/ci/gpu_job_lib.sh script/ci/gpu_integration_job.sh \
+     script/ci/official_startuptests.sh script/ci/startuptests_in_container.sh \
      script/ci/stream_smoke_job.sh script/ci/headless_smoke_job.sh \
      /smoke_test/
 # [base #440] Scripts under test by the migrated specs: the livestream

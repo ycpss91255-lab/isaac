@@ -10,6 +10,7 @@
 - **移除隨附的模擬範例（isaac#327）。** 四種語言的 README 改指向 Isaac Sim 官方範例。Removed the bundled simulation driver, models, scene and sensor configuration. Replacing its 14 core tests with one removal guard lowers the hosted floor from 822 to 809 and the core floor from 681 to 668.
 
 ### Fixed
+- 官方 `startuptests` 會在容器結束前，將 `$HOME/.nvidia-omniverse/logs/` 下各個 Kit app 的記錄複製到 `artifacts/startuptests/kit-logs/`。即使 `run_tests.py` 回傳 0，只要 JUnit 報告的 `failures` 或 `errors` 大於 0，或報告無法解析，`core-gpu` 就會失敗。`docker run` 回傳非零時沿用原結束碼。成功或失敗都會保留報告與 Kit log（isaac#436）。
 - **修正 Isaac Sim 更新 PR 內文首行顯示的舊版號（isaac#533）。** 首行使用測試清單實際比較的舊版號：指定 `--current-version` 時使用該值，否則使用 Dockerfile 的 `BASE_IMAGE` 版號。
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。
 - **OutputHub GPU 測試實機驗證（isaac#384）。** `test_output_hub_gpu.py` 在 GPU 容器實跑 4 passed / 0 skipped（RGB uint8、depth float32、joint、IMU 四個 callback 皆觸發），確認 `IMU.create(...)` 與 IMU reader 在 runtime 可用；`GPU_INTEGRATION_BASELINE` 與實際 collected 數量相符，不需調高。僅更新 `TEST.md` 與 baseline 註解。
@@ -26,6 +27,7 @@
 - **GPU job 的 host 端跨容器測試不再能「沒跑也通過」（isaac#460）。** `assert_pytest_baseline.sh --gpu` 原本在 host 沒有 pytest 時只印警告、沒產生 JUnit 報告時計數維持 0，容器內那一輪自己就達到 `GPU_INTEGRATION_BASELINE`，所以跨容器測試消失時 GPU job 仍是綠的。現在 host 沒有 pytest、沒有報告、或該輪通過數 < 1 都直接失敗。新增 `assert_pytest_baseline_hostxc_spec.bats`（4 個，core）。Bats core 110 -> 114。
 
 ### Added
+- **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 882 -> 885（core 741 -> 744），bats core 119 -> 124（gpu_job_scripts_spec 11 -> 16）。
 - **新增 PhysX 與 Newton 的時間軸 GPU 回歸測試（isaac#447）。** 每個引擎只啟動一次 `IsaacDriver`，供車輪位移、時間軸設定與更新頻率三項測試共用。新增的案例檢查 60 Hz 限速與固定時間步進已啟用、循環播放已關閉，並要求模擬時間單調遞增、每模擬秒更新 60 次（容許 ±15%）、實際吞吐量少於 69 次每秒 (僅上限，用來偵測 60 Hz 限速被移除)。GPU core 由 35 增至 39 項。
 - **新增 PR 路徑分組與建置條件的回歸測試（isaac#493）。** 自 #434、#491 起，純文件 PR 已會略過映像建置、各組單元測試與 GPU 工作。本次新增六個案例，涵蓋純文件、混合路徑及工作流程變更，並將排程版本監控工作流程 `base-version-monitor.yaml` 歸入文件組，由 `docs-unit` 繼續檢查工作流程命名。
 - **GUI stage 設定與 PR 人工驗證規則（isaac#428）。** `setup.toml` 明確關閉 `producer` stage 的 GUI。在 `["stage:producer"]` 新增 `"gui.mode" = "off"` 後，產生的 `compose.yaml` 將 `producer` 從 `extends: {service: devel}` 改為完整列出 `args`、`env_file`、`privileged`、`cap_add`、`volumes`、`devices` 與 GPU `deploy` 設定，僅 `target`、`image`、`profiles`、`restart`、`tty` 與 `devel` 不同，其餘設定等價，功能不變，`headless` 與 `stream` 區塊不變，`gui` 則新增 `DISPLAY`、`WAYLAND_DISPLAY`、`XDG_RUNTIME_DIR`、`XAUTHORITY`、`group_add` 與 `/tmp/.X11-unix` 掛載。PR 範本新增截圖勾選項，`CONTRIBUTING.md` 說明合併前的人工驗證規則、機器標示與 Xvfb 實測結果。靜態測試核對各 service 的 GUI 宣告及兩份文件。Bats core 從 108 增至 115。
