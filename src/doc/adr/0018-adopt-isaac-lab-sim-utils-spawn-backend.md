@@ -229,3 +229,5 @@ stays mounted) is unchanged; the API surface it rides on moved in Isaac Lab 3.0:
 
 See ADR-0020's 2026-08-28 update for the `UrdfConverterCfg` field/API changes in Isaac Lab 3.0,
 and the CHANGELOG `[Unreleased]` migration entry for the full environment delta.
+
+> Note (#567): Isaac reads materials from USD. Define them in URDF/sim_asset so asset_converter writes them into the asset. [Issue #567](https://github.com/ycpss91255-lab/isaac/issues/567)

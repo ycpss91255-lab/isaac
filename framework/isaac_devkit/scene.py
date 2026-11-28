@@ -76,6 +76,8 @@ def _validate_scene(scene, source):
             raise ValueError(f"{source}: objects[{i}] needs 'model'")
         if "pose" not in obj:
             raise ValueError(f"{source}: objects[{i}] needs 'pose'")
+        for key in obj:
+            _reject_material_key(key)
         _spawn_options(obj.get("spawn_overrides", {}), "usd")
 
 
@@ -182,10 +184,7 @@ def generate_instances(entry):
     """Expand a single object entry into N instances with spacing applied.
 
     Returns a list of dicts, each with 'model', 'pose', and optionally
-    'variant'. Curated extras the adapter forwards (``mobility``,
-    ``spawn_overrides``, ``material``) are carried through unchanged so a
-    multi-instance object behaves like its single-instance form. The
-    original entry is not modified.
+    'variant', 'mobility', and 'spawn_overrides' from the original entry.
     """
     count = entry.get("count", 1)
     spacing = entry.get("spacing", [0, 0, 0])
@@ -207,7 +206,7 @@ def generate_instances(entry):
         }
         if variant is not None:
             inst["variant"] = variant
-        for key in ("mobility", "spawn_overrides", "material"):
+        for key in ("mobility", "spawn_overrides"):
             if key in entry:
                 inst[key] = entry[key]
         instances.append(inst)
@@ -259,45 +258,13 @@ def rpy_to_quat(rpy_deg):
     return (w, x, y, z)
 
 
-def _material_diffuse_for(entry, repo_root):
-    """Return an (r, g, b) diffuse color for an entry, or None.
-
-    The entry may carry a ``material`` key pointing to a material YAML
-    (repo-relative) plus an optional ``variant`` selection. We reuse the
-    pure ``materials.material_cfg_from_yaml`` mapper (#153) and take the
-    first declared diffuse color for the spawn-time PreviewSurfaceMaterial.
-    """
-    material_rel = entry.get("material")
-    if not material_rel:
-        return None
-
-    from isaac_devkit.materials import (
-        load_material_config,
-        material_cfg_from_yaml,
-    )
-
-    material_path = Path(repo_root) / material_rel
-    cfg = load_material_config(material_path)
-    variant = entry.get("variant")
-    if isinstance(variant, dict):
-        # A variant dict (e.g. {"color": "blue"}) selects by its value.
-        variant = next(iter(variant.values()), None)
-    spawn_cfg = material_cfg_from_yaml(cfg, variant=variant)
-    for props in spawn_cfg.values():
-        if "diffuse_color" in props:
-            return tuple(props["diffuse_color"])
-    return None
-
-
-def _usd_spec(prim_path, entry, usd_abs, repo_root, mobility=None):
+def _usd_spec(prim_path, entry, usd_abs, mobility=None):
     """Build a "usd" SpawnSpec from a curated entry + resolved USD path.
 
     Curated -> kwargs: ``model`` -> ``usd_path`` (the absolute path str),
     ``pose.xyz`` -> ``translation``, ``pose.rpy`` (deg) -> ``orientation``
     quaternion, ``variant`` -> ``variants`` kwarg (structurally-distinct
-    variant selection, ADR-0018 decision 7), and an optional material
-    diffuse color recorded under ``visual_material_diffuse``.
-
+    variant selection, ADR-0018 decision 7).
     """
     pose = entry["pose"]
     kwargs = {"usd_path": str(usd_abs)}
@@ -305,10 +272,6 @@ def _usd_spec(prim_path, entry, usd_abs, repo_root, mobility=None):
     variant = entry.get("variant")
     if variant is not None:
         kwargs["variants"] = variant
-
-    diffuse = _material_diffuse_for(entry, repo_root)
-    if diffuse is not None:
-        kwargs["visual_material_diffuse"] = diffuse
 
     kwargs.update(_spawn_options(entry.get("spawn_overrides", {}), "usd"))
 
@@ -378,9 +341,7 @@ def to_spawn_specs(scene, repo_root):
 
     robot = scene["robot"]
     robot_usd = resolve_model_path(robot["model"], repo_root)
-    specs.append(
-        _usd_spec("/World/Robot", robot, robot_usd, repo_root)
-    )
+    specs.append(_usd_spec("/World/Robot", robot, robot_usd))
 
     for idx, obj_entry in enumerate(scene.get("objects", [])):
         instances = generate_instances(obj_entry)
@@ -393,7 +354,6 @@ def to_spawn_specs(scene, repo_root):
                     prim_path,
                     inst,
                     obj_usd,
-                    repo_root,
                     mobility=inst.get("mobility"),
                 )
             )
@@ -409,6 +369,13 @@ _SPAWN_OPTIONS = {
 }
 
 
+def _reject_material_key(key):
+    if isinstance(key, str) and key.startswith(("material", "visual_material")):
+        raise ValueError(
+            f"{key}: configure materials in URDF/sim_asset so asset_converter writes them into USD"
+        )
+
+
 def _spawn_options(options, kind):
     """Validate the small scene-specific set of spawn options."""
     if not isinstance(options, dict):
@@ -420,6 +387,7 @@ def _spawn_options(options, kind):
             raise ValueError(
                 f"{key}: configure physics in sim_asset so asset_converter writes it into USD"
             )
+        _reject_material_key(key)
         if key not in _SHARED_SPAWN_OPTIONS and key not in _SPAWN_OPTIONS[kind]:
             raise ValueError(f"Unsupported {kind} spawn override: {key}")
     return dict(options)
@@ -485,12 +453,6 @@ def _spawn(spec):
         )
         if spec.mobility in {"dynamic", "static"}:
             _apply_mobility(path, dynamic=spec.mobility == "dynamic")
-        if "visual_material_diffuse" in options:
-            from isaacsim.core.experimental.materials import PreviewSurfaceMaterial
-
-            material = PreviewSurfaceMaterial(f"{path}/material")
-            material.set_input_values("diffuseColor", options["visual_material_diffuse"])
-            prim.apply_visual_materials(material)
     if visible is not None:
         prim.set_visibilities(visible)
     if labels is not None:

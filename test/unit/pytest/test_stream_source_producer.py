@@ -74,6 +74,21 @@ def test_driver_file_exists():
     assert _DRIVER.is_file(), f"missing producer driver at {_DRIVER}"
 
 
+def test_producer_does_not_author_or_bind_materials():
+    source = _DRIVER.read_text(encoding="utf-8")
+    for term in ("UsdShade", "UsdPreviewSurface", "MaterialBindingAPI"):
+        assert term not in source, term
+
+
+def test_checkerboard_tiles_use_display_color():
+    source = _DRIVER.read_text(encoding="utf-8")
+    assert "/World/Ground/tile_" in source
+    assert re.search(
+        r"""(?:Create|Get)DisplayColor(?:Attr|Primvar)\(|["'](?:primvars:)?displayColor["']""",
+        source,
+    ), "checkerboard tiles need a displayColor primvar"
+
+
 def test_hosted_import_leaves_sys_modules_isaac_free():
     _load_module()
     leaked = _leaked_isaac_modules()
