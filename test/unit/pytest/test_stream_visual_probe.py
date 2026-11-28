@@ -48,6 +48,21 @@ def test_total_budget_defaults_to_600_seconds_and_reads_the_environment():
     ), "default VISUAL_E2E_TOTAL_TIMEOUT_S to 600 seconds"
 
 
+def test_probe_container_forwards_the_total_timeout():
+    driver = (_PROBE.parents[1] / "stream_visual_e2e.sh").read_text()
+    run = re.search(
+        r'^docker run (?P<options>[^\n]*?)\s+"?mcr\.microsoft\.com/playwright:',
+        driver.replace("\\\n", ""), re.MULTILINE,
+    )
+    assert run, "locate the Playwright probe container"
+    name = "VISUAL_E2E_TOTAL_TIMEOUT_S"
+    # Bare -e inherits the host value and leaves the probe's 600 second default in effect when unset.
+    assert re.search(
+        rf'(?:^|\s)-e\s+(?P<quote>"?){name}(?:=\$\{{{name}:-600\}})?(?P=quote)(?:\s|$)',
+        run["options"],
+    ), f"forward {name} to the Playwright probe container"
+
+
 def test_total_deadline_bounds_the_navigation_retry_loop():
     probe = _probe()
     retry = _navigation_loop(probe)

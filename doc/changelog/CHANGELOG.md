@@ -27,7 +27,7 @@
 
 ### Fixed
 
-- **延長串流畫面驗證的重試時間（isaac#556）。** `VISUAL_E2E_TOTAL_TIMEOUT_S` 設定總等待秒數，預設為 600 秒。每次重試都重新載入檢視器，最多等候畫面 30 秒。驗證失敗時，主控台與 `result.json` 會記錄實際等待秒數及最後一幀的判定結果；若未取得畫面，則記為 `no frame`。失敗重試之間會退避 1 秒，且只記錄前 20 次嘗試（`attemptCount` 記總次數），避免連線被拒時空轉。新增 6 項 hosted 測試，總數由 989 增至 995，stream 由 55 增至 61。
+- **延長串流畫面驗證的重試時間（isaac#556）。** 驗證腳本會將 `VISUAL_E2E_TOTAL_TIMEOUT_S` 傳入 Playwright 探測容器，設定總等待秒數，預設為 600 秒。每次重試都重新載入檢視器，最多等候畫面 30 秒。驗證失敗時，主控台與 `result.json` 會記錄實際等待秒數及最後一幀的判定結果；若未取得畫面，則記為 `no frame`。失敗重試之間會退避 1 秒，且只記錄前 20 次嘗試（`attemptCount` 記總次數），避免連線被拒時空轉。新增 7 項 hosted 測試，總數由 989 增至 996，stream 由 55 增至 62。
 - **校正測試數量（isaac#416）。** 修正 `just cleanup-merged` 條目的 Bats 數量。TEST.md 的 hosted 總數集中在檔首，新增 2 個 core 測試防止舊數字與重複摘要再度出現。Hosted 基準由 986 提高至 988（core 842 → 844）。
 - **standalone smoke 使用可覆寫的 checkout 與容器腳本路徑（isaac#399）。** 預設使用腳本所在的 checkout，並在現行 `stream` 服務中從掛載的 checkout 讀取腳本。可用 `ISAAC_SMOKE_REPO_DIR` 與 `ISAAC_SMOKE_SCRIPT_DIR` 覆寫路徑。空矩陣會正常退出。Docker ShellCheck 納入此腳本，hosted 共 955 項（core 811）。
 - **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 859 -> 863（core 716 -> 720）。
