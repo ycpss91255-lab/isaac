@@ -4,7 +4,7 @@
 
 可复用的 NVIDIA Isaac Sim 6.2.0 基础仓库，提供基于 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) 构建的 Docker 开发环境。
 
-下游项目将本仓库固定为 Git 子模块，从 [framework/isaac_devkit/](../framework/isaac_devkit/) 导入共享 Python 框架。[src/](../src/README.md) 保留可运行示例和应用资产，位于下游框架契约之外。
+下游项目将本仓库固定为 Git 子模块，从 [framework/isaac_devkit/](../framework/isaac_devkit/) 导入共享 Python 框架。[src/](../src/README.md) 提供驱动脚本和传感器配置，位于下游框架契约之外。
 
 场景生成与 articulation drive 默认值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。资产物理参数在 sim_asset 中配置，由 asset_converter 写入 USD。`IsaacDriver` 通过 `isaacsim.SimulationApp` 启动 Kit。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
 
@@ -333,6 +333,8 @@ stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromi
 
 `core-gpu` 作业依次运行 Isaac Sim 官方 `asset` 和 `deprecated` Python 测试，并将两份 JUnit 报告上传至 `official-tests` 制品。
 
+`core-official-nativepython` 作业按 core 变更范围运行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 
 ## Python 测试工具链（devel-test 阶段）
@@ -355,6 +357,8 @@ GPU integration test（需要 Isaac Sim 真正启动，例如 headless 相机 pr
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
+
+CI 的 `core-gpu` 作业也会运行 Isaac Sim 官方 `core` 和 `sensors` Python 测试。触发条件、产物和已知例外见[测试指南](test/TEST.md#official-isaac-sim-python-buckets-438-440)。
 
 对 `test/integration/` 运行 pytest，即可执行 GPU 集成测试与 [无 ROS 验证](../test/integration/no_ros/README.md)。
 

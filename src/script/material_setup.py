@@ -3,8 +3,7 @@
 The material-setup code moved to ``isaac_devkit.materials`` when the
 framework was extracted into ``framework/isaac_devkit/`` (ADR-0017).
 This module re-exports the public surface so the existing ``src/script``
-entry points keep importing ``material_setup`` unchanged until they
-migrate with the forklift application content (#136).
+entry points keep importing ``material_setup`` unchanged.
 
 New code should import ``isaac_devkit.materials`` directly.
 """
