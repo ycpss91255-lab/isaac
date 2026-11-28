@@ -3,7 +3,9 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const out = process.env.OUT_DIR ?? '/out';
-const maxAttempts = 4;
+const budgetMs = Number(process.env.VISUAL_E2E_TOTAL_TIMEOUT_S ?? 600) * 1000;
+const start = Date.now();
+const deadline = start + budgetMs;
 const result = { pass: false, attempts: [] };
 mkdirSync(out, { recursive: true });
 
@@ -52,6 +54,7 @@ function capture() {
 }
 
 let browser, context, page;
+let lastFrameVerdict = 'no frame';
 try {
   browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required',
     '--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
@@ -59,15 +62,16 @@ try {
   await context.tracing.start({ screenshots: true, snapshots: true });
   await context.addInitScript(observePeer);
   page = await context.newPage();
-  for (let n = 1; n <= maxAttempts && !result.pass; n++) {
+  for (let n = 1; Date.now() < deadline && !result.pass; n++) {
     const samples = [];
     let attemptError;
     try {
-      await page.goto(process.env.BASE_URL, { waitUntil: 'domcontentloaded' });
+      await page.goto(process.env.BASE_URL, { waitUntil: 'domcontentloaded',
+        timeout: Math.max(1, Math.min(30000, deadline - Date.now())) });
       let previous = await page.evaluate(frames);
-      const deadline = Date.now() + 30000;
-      while (Date.now() < deadline) {
-        await page.waitForTimeout(1000);
+      const attemptDeadline = Math.min(Date.now() + 30000, deadline);
+      while (Date.now() < attemptDeadline) {
+        await page.waitForTimeout(Math.min(1000, attemptDeadline - Date.now()));
         const current = await page.evaluate(frames);
         if (previous > 0 && current > previous) {
           const frame = await page.evaluate(capture);
@@ -76,6 +80,7 @@ try {
               ['/probe/verdict.py', JSON.stringify(frame.rtc)],
               { input: Buffer.from(frame.rgba, 'base64'), encoding: 'utf8' }));
             samples.push({ frames: current, ...frame.rtc, height: frame.height, ...verdict });
+            lastFrameVerdict = verdict;
             writeFileSync(`${out}/video_frame.png`, Buffer.from(frame.image, 'base64'));
             result.pass = verdict.pass;
             if (result.pass || samples.length >= 6) break;
@@ -93,6 +98,11 @@ try {
 } catch (error) {
   result.error = String(error);
 } finally {
+  if (!result.pass) {
+    result.totalWaitSeconds = (Date.now() - start) / 1000;
+    result.lastFrameVerdict = lastFrameVerdict;
+    console.log(`Waited ${result.totalWaitSeconds}s. Last frame verdict: ${JSON.stringify(lastFrameVerdict)}`);
+  }
   writeFileSync(`${out}/result.json`, JSON.stringify(result, null, 2));
   try {
     await page?.screenshot({ path: `${out}/frame.png` });

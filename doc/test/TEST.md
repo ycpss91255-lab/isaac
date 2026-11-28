@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **988 tests**.
+**233 tests** total (bats). Hosted pytest collects **993 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -10,7 +10,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 129 | 844 | 36 | 1009 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 91 | 55 | 0 | 146 |
+| stream | 91 | 60 | 0 | 151 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 83 | 0 | 83 |
 
@@ -469,7 +469,7 @@ The hosted suite runs without Isaac Sim. isaac#416 adds two core checks for the 
 | `test_ci_gate.py` | 10 | `core`. The required-check summary job (isaac#434), `script/ci/gate_result.py`: success and skipped jobs pass; failure or cancelled fails; `changes` not succeeding fails even when everything else is skipped (nothing was checked); empty needs fails; CLI exit codes 0 / 1 / 2. |
 | `test_stream_visual_job.py` | 11 | Per-run ports, the shared viewer image default, producer and client startup, failure artifacts and teardown. |
 | `test_stream_visual_scene.py` | 3 | Kit startup, known scene content and recovery after a stage replacement. |
-| `test_stream_visual_probe.py` | 2 | Browser frame sampling, fresh navigation on retry and diagnostic capture. |
+| `test_stream_visual_probe.py` | 7 | Checks browser frame sampling, fresh navigation within a configurable total timeout (600 seconds by default), 30-second polling windows, diagnostic artifacts, and failure logs with elapsed time and the last frame verdict. |
 | `test_stream_visual_verdict.py` | 12 | Pixel statistics, known-colour thresholds and WebRTC requirements. |
 | `test_stream_visual_wiring.py` | 5 | 驗證 stream 組觸發條件、GPU 工作流程、失敗時的產物上傳、必要檢查，以及容器清理篩選器只命中同一次執行與嘗試的容器。 |
 | `test_main_workflow_scope.py` | 28 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
