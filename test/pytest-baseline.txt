@@ -324,7 +324,7 @@
 # isaac#408 再新增 5 項 GPU 工作流程清理測試（hosted 1018 → 1023，core 874 → 879）。
 # isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
 # isaac#336: USD driver and launcher (+12 core) and per-module import guards (+2 core) (hosted 1004 -> 1018, core 860 -> 874).
-HOSTED_UNIT_BASELINE = 1023
+HOSTED_UNIT_BASELINE = 1031
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -382,7 +382,8 @@ HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#289 adds 24 docs cases (docs 44 -> 68).
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
-HOSTED_UNIT_BASELINE_DOCS = 83
+#   isaac#284 adds 8 docs cases for the published viewer image (docs 83 -> 91).
+HOSTED_UNIT_BASELINE_DOCS = 91
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/). NOT enforced at M1 (a skipped GPU job is
@@ -488,8 +489,9 @@ AGGREGATE_TARGET = 126
 #   isaac#474 adds six UID matrix cases (core 120 -> 126).
 #   isaac#429 adds four GPU baseline guard cases (core 126 -> 130).
 # isaac#480 replaces two package pin checks with one standalone Python smoke.
+# isaac#284 adds three stream post-run cases for the pinned viewer pull (stream 91 -> 94).
 BATS_BASELINE_CORE = 129
 BATS_BASELINE_GUI = 0
-BATS_BASELINE_STREAM = 91
+BATS_BASELINE_STREAM = 94
 BATS_BASELINE_HEADLESS = 13
 BATS_BASELINE_DOCS = 0

@@ -12,6 +12,7 @@
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
+- **串流 viewer 改用固定版本的公開映像（isaac#284）。** 本機缺少映像時，post-run hook 會從 GHCR 拉取 `0.3.0` 版，可用 `OWV_IMAGE` 覆寫。移除 `web_viewer` 子模組與 `.gitmodules`。
 - **預設相機設定通用化（isaac#136）。** 三種相機共用掛載點 `/World/Robot/carriage`、ROS topic 前綴 `/robot/camera` 與 frame ID 前綴 `robot_camera`。RViz 與無頭相機測試已同步。移除其餘堆高機文字殘留並新增掃描測試，應用模型與場景資產已移交 [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146)。
 - **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。

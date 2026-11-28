@@ -158,11 +158,10 @@ Isaac Sim 6.2.0 uses the NVCF (`omni.services.livestream.nvcf`) livestream proto
 
 ### Browser-based viewer (omniverse_web_viewer)
 
-The [`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo provides a browser-based client as a sidecar container. Bundled as a submodule at `web_viewer/` in this repo.
+The [`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo provides a browser-based client as a sidecar container. The post-run hook pulls the pinned image `ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0` if it is missing locally.
 
 ```bash
-# First time: init submodules + create per-host config
-git submodule update --init --recursive web_viewer
+# First time: create the per-host config
 cp config/host.yaml.example config/host.yaml
 # Edit config/host.yaml: set network.public_ip to this host's LAN IP
 
@@ -189,7 +188,7 @@ just docker stop
 
 `config/host.yaml` is gitignored and per-machine. Its `network.public_ip` is mounted into both the Isaac container (read by `runheadless-host-config.sh` for the Kit `publicEndpointAddress` arg) and the web-viewer container (read by entrypoint for `SIGNALING_SERVER`).
 
-The post-run hook also passes `network.public_ip` to the viewer container as `SIGNALING_SERVER` env -- defense in depth so the viewer still gets the right host IP if its locally cached image was built before `omniverse_web_viewer#12` (the entrypoint that reads `/etc/host.yaml`). Rebuild `owv:runtime` after the `web_viewer/` submodule pointer bumps to pick up newer entrypoint changes.
+To use a different viewer version, set `OWV_IMAGE=ghcr.io/ycpss91255-lab/omniverse_web_viewer:<tag>` in the environment or the `.env` overlay when running `just docker run -t stream -d`.
 
 Requirements: Chrome or Chromium (Firefox incompatible). One interactive client per running Isaac Sim.
 

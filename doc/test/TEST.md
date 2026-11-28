@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1023 tests**.
+**236 tests** total (bats). Hosted pytest collects **1031 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -10,9 +10,9 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 129 | 879 | 40 | 1048 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 91 | 55 | 0 | 146 |
+| stream | 94 | 55 | 0 | 149 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 83 | 0 | 83 |
+| docs | 0 | 91 | 0 | 91 |
 
 The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
@@ -103,9 +103,9 @@ Single builder of the Isaac livestream Kit invocation (`script/runheadless-host-
 | `runheadless: invalid public_ip -> rc 1 (shared parser rejects)` | Garbage in host.yaml fails fast via the shared `resolve_public_ip`. |
 | `runheadless: forwards extra args after the built kit-args` | Trailing `"$@"` (e.g. a scene USD) is appended after the constructed args. |
 
-## test/bats/smoke/post_run_hook_spec.bats (19)
+## test/bats/smoke/post_run_hook_spec.bats (22)
 
-Post-run hook (`script/hooks/post/run.sh`, base #440): on `run.sh -t stream -d`, copies host.yaml into the Isaac container and starts the per-project `${USER_NAME}-${IMAGE_NAME}-owv<suffix>` web-viewer (#237, isaac#238). The WebRTC livestream ports are sourced from `host.yaml` (#231), not hardcoded. base v0.42.0 removed `--instance` / `INSTANCE_SUFFIX` (base#666); the viewer suffix is now derived from the resolved `PROJECT_NAME` (empty when it equals the default `${DOCKER_HUB_USER}-${IMAGE_NAME}` -> byte-identical to today's names, `-<remainder>` for any distinct project; owv#55). A distinct `PROJECT_NAME` is the internal isolation seam for CI/tooling (a distinct compose project + per-project viewer name, so a CI actor never reaps a co-hosted manual stack), not a return of user-facing same-repo multi-instance, which ADR-0019 removed as a feature. The Isaac stream container name is base-fixed by `compose.yaml` `container_name` (no suffix; residual co-host collision filed as base#920), so the `docker cp` target is that fixed name. Exercised via `POST_RUN_DRYRUN=1`.
+Post-run hook (`script/hooks/post/run.sh`, base #440): on `run.sh -t stream -d`, copies host.yaml into the Isaac container and starts the per-project `${USER_NAME}-${IMAGE_NAME}-owv<suffix>` web-viewer (#237, isaac#238). The WebRTC livestream ports are sourced from `host.yaml` (#231), not hardcoded. base v0.42.0 removed `--instance` / `INSTANCE_SUFFIX` (base#666); the viewer suffix is now derived from the resolved `PROJECT_NAME` (empty when it equals the default `${DOCKER_HUB_USER}-${IMAGE_NAME}` -> byte-identical to today's names, `-<remainder>` for any distinct project; owv#55). A distinct `PROJECT_NAME` is the internal isolation seam for CI/tooling (a distinct compose project + per-project viewer name, so a CI actor never reaps a co-hosted manual stack), not a return of user-facing same-repo multi-instance, which ADR-0019 removed as a feature. The Isaac stream container name is base-fixed by `compose.yaml` `container_name` (no suffix; residual co-host collision filed as base#920), so the `docker cp` target is that fixed name. The tests use `POST_RUN_DRYRUN=1` for the launch plan and a Docker stub for image selection.
 
 | Test | Description |
 |------|-------------|
@@ -123,9 +123,12 @@ Post-run hook (`script/hooks/post/run.sh`, base #440): on `run.sh -t stream -d`,
 | `post-run: viewer container name derives from IMAGE_NAME (per-stack)` | The viewer name is `${USER_NAME}-${IMAGE_NAME}-owv<suffix>` (here, default project, `alice-isaac-owv`): `docker rm -f alice-isaac-owv` precedes `docker run --name alice-isaac-owv` (idempotent); the default project carries an empty suffix, while a distinct `PROJECT_NAME` appends `-<remainder>` (see the distinct-PROJECT_NAME test below, isaac#238/owv#55); two isolated stacks no longer collide (#237). |
 | `post-run: host.yaml present is copied into the default Isaac container` | A present host.yaml is `docker cp`'d to the default Isaac container `${USER_NAME}-${IMAGE_NAME}-stream` at `/etc/host.yaml` (no `-<instance>` suffix). |
 | `post-run: invalid host.yaml aborts with rc 1` | Garbage in host.yaml fails the hook (validated on the host first). |
-| `post-run: identity is read from .env.generated, not .env (base A2 model)` | With `.env` absent, identity comes from `.env.generated`: container name is `alice-isaac-stream` (no leading dash) and the viewer image is `alice/...` (not `local/...`). |
+| `post-run: identity is read from .env.generated, not .env (base A2 model)` | With only `.env.generated`, the hook targets `alice-isaac-stream` and runs the pinned published viewer image. |
 | `post-run: .env overlays .env.generated identity (user override wins)` | `.env` (sourced second) overrides `.env.generated`: a `USER_NAME=bob` overlay yields `bob-isaac-stream`. |
-| `post-run: viewer image is omniverse_web_viewer:runtime, not stale owv:runtime (#121)` | Viewer `docker run` uses `${DOCKER_HUB_USER:-local}/omniverse_web_viewer:runtime` (owv renamed serve->runtime, #123); regression guard that the old short stale `owv:runtime` is not launched. |
+| `post-run: dry-run plans the pinned published viewer image (#121, #284)` | The plan shows a pull and a run of the pinned 0.3.0 image. |
+| `post-run: a missing viewer image is pulled before it runs (#284)` | A failed image inspection triggers a pull before the viewer starts. |
+| `post-run: a locally present viewer image runs without a pull (#284)` | A successful inspection lets the viewer start directly from the cached image. |
+| `post-run: OWV_IMAGE overrides the image inspected, pulled and run (#284)` | All three operations use the image selected by `OWV_IMAGE`. |
 | `post-run: a distinct PROJECT_NAME suffixes the viewer; the Isaac cp target stays base-fixed (owv#55, isaac#238)` | With `PROJECT_NAME=alice-isaac-demo` in `.env.generated` (a distinct project a CI actor pins), the viewer is `alice-isaac-owv-demo` (rm + `--name`) and the `docker cp` target stays the base-fixed `alice-isaac-stream`; guards that a per-project-suffixed `alice-isaac-stream-demo:` cp target never appears. base v0.42.0 removed `INSTANCE_SUFFIX` (base#666); the residual co-host collision on the fixed stream name is base#920. |
 | `post-run: ISAAC_STREAM_CONTAINER retargets the Isaac cp (per-run smoke name, isaac#291)` | With `ISAAC_STREAM_CONTAINER=alice-isaac-stream-isaac-smoke-7-1` (what the nightly smoke exports after renaming its stream container), both `docker cp` targets -- `/etc/host.yaml` and `/etc/isaac/livestream-ports.env` -- are that container; the base-fixed `alice-isaac-stream` is never a cp target. |
 
@@ -513,6 +516,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_track_isaac_sim_run.py` | 20 | `core`. Offline `run()` flow with faked registry, git and gh: same version opens nothing, new version opens a PR and an inventory issue, an existing branch, PR or issue opens nothing, `--dry-run` writes nothing, and main.yaml is dispatched after the PR is created (isaac#442). |
 | `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only the upstream release trackers `base-version-monitor.yaml` and `bot-isaac-sim-version.yaml` may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
 | `test_workflow_pins.py` | 23 | 核對六個 GPU 呼叫端（`main.yaml`、`ci-stream-smoke.yaml`、`ci-headless-smoke.yaml`、`ci-stream-visual-e2e.yaml`、`ci-official-native-python.yaml`、`publish-stream-source.yaml`）、共用版本標籤與 Dependabot 註解。11 個參數案例涵蓋 `v0.4.0` 版本下限、數字排序與無效標籤。檢查依執行編號設定 Compose 專案的入口腳本，其作業須傳入含執行編號與嘗試次數的清理篩選器。`core-gpu` 案例驗證六個替身的呼叫順序、攔截新增的 Docker 指令，並比對篩選器與實際專案名稱。單獨改動腳本或篩選器前綴均須比對失敗（isaac#344、#403、#408）。 |
+| `test_owv_published_image.py` | 8 | `docs`. Checks viewer submodule removal, script image tags, the hook’s release pin and published-image override instructions in all four READMEs (isaac#284). |
 | `test_readme_cleanup_text.py` | 4 | `docs`. One case per README language (isaac#381) checks the inline force-removal warning, the compose project label lookup, the nominal per-tag size and when shared layers can be reclaimed. |
 | `test_stream_source_producer.py` | 22 | Hosted import/CLI-contract for the deterministic WebRTC stream-source producer driver `src/script/stream_source_producer.py` (isaac#223 / owv#48 / isaac#173): the module imports on a non-Isaac host without pulling `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (every Isaac import function-local), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env vars (the `docker run -e` container contract) with an explicit flag overriding the env, and `python stream_source_producer.py --help` exits 0 on a bare host (argparse exits before any Isaac import). Loads the driver by file path and mocks the rendering manager to verify the camera path, eye and target (isaac#535). No Isaac runtime or GPU is required. Four checks from isaac#484 cover the official experience path in both streaming scripts, removal of the repo's `apps/` directory, and removal of the Dockerfile copy step. |
 | `test_xc_compose_project_isolation.py` | 4 | Hosted guard for the isaac-side root cause of `ycpss91255-lab/omniverse_web_viewer#55`: the cross-container round-trip's default `COMPOSE_PROJECT` is the dedicated `xc-isaac-roundtrip` (not the `${DOCKER_HUB_USER}-${IMAGE_NAME}` stream-stack project, e.g. `<user>-isaac`), so its project-level teardown can never reach a co-hosted manual `stream` container; asserts the dedicated literal, the isolation intent (distinct from any `${user}-${image}` derivation, which would still coincide), and that the `XC_COMPOSE_PROJECT` env override still wins. Loads the integration module by file path with env cleaned -- pure, no docker/GPU. |

@@ -158,11 +158,10 @@ Isaac Sim 6.2.0 用 NVCF（`omni.services.livestream.nvcf`）livestream 协议�
 
 ### Browser-based viewer (omniverse_web_viewer)
 
-[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo 提供浏览器 client，以 sidecar 容器运行。作为 submodule 放在本 repo 的 `web_viewer/`。
+[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo 提供浏览器 client，以 sidecar 容器运行。如果本机没有固定版本的镜像 `ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0`，post-run hook 会自动拉取。
 
 ```bash
-# 首次：初始化 submodule + 创建 per-host config
-git submodule update --init --recursive web_viewer
+# 首次运行时创建本机配置
 cp config/host.yaml.example config/host.yaml
 # 编辑 config/host.yaml：把 network.public_ip 填这台机器的 LAN IP
 
@@ -189,7 +188,7 @@ just docker stop
 
 `config/host.yaml` 是 gitignored、per-machine。它的 `network.public_ip` 会 mount 进两个 container：Isaac 端由 `runheadless-host-config.sh` 读取并转成 Kit `publicEndpointAddress` 参数；web-viewer 端由 entrypoint 读取设成 `SIGNALING_SERVER`。
 
-post-run hook 同时也把 `network.public_ip` 当 `SIGNALING_SERVER` env 传给 viewer container — defense in depth，当本机 cache 的 viewer image 早于 `omniverse_web_viewer#12`（读 `/etc/host.yaml` 的 entrypoint）时仍能拿到正确 host IP。`web_viewer/` submodule pointer 升级后请手动 rebuild `owv:runtime` 拉取新 entrypoint。
+如需切换 viewer 版本，请在运行 `just docker run -t stream -d` 时，在环境变量或 `.env` 中设置 `OWV_IMAGE=ghcr.io/ycpss91255-lab/omniverse_web_viewer:<tag>`。
 
 要求：Chrome 或 Chromium（Firefox 不兼容）。每个运行中的 Isaac Sim 只能有一个交互式 client。
 
