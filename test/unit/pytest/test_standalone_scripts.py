@@ -1,7 +1,6 @@
 """Hosted tests for the pure helpers in standalone_common.py."""
 
 import importlib.util
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -13,7 +12,6 @@ pytestmark = pytest.mark.core
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SCRIPT_DIR = _REPO_ROOT / "src" / "script"
 _HELPER = _SCRIPT_DIR / "standalone_common.py"
-_HARD_CODED_HOME = re.compile(r"/home/[^/\s<>]+/")
 
 _ISAAC_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab", "carb", "rclpy")
 
@@ -103,7 +101,7 @@ def test_run_and_exit_passes_main_return_code_through(returned, expected):
 
 def test_standalone_smoke_has_no_hard_coded_workspace():
     source = (_SCRIPT_DIR / "test" / "standalone_smoke.sh").read_text(encoding="utf-8")
-    assert not _HARD_CODED_HOME.search(source)
+    assert "/home/" not in source
 
 
 @pytest.mark.parametrize("script, entry", [

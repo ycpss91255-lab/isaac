@@ -6,11 +6,15 @@
 
 ## 使い方
 
+チェックアウトのルートで実行します。
+
 ```bash
-./isaac_ws/src/script/test/standalone_smoke.sh
+./src/script/test/standalone_smoke.sh
 ```
 
 各ケースにはスクリプトのファイル名、起動完了を示す正規表現、タイムアウト秒数を指定します。
+
+設定済みのケースを実行するときは、スクリプトが属するチェックアウトと `stream` サービスを使います。別のチェックアウトを使うには、justfile のあるディレクトリを `ISAAC_SMOKE_REPO_DIR` に指定します。コンテナにマウントしたチェックアウトからの相対パス `src/script` は、`ISAAC_SMOKE_SCRIPT_DIR` で上書きできます。
 
 ## Exit codes
 
@@ -18,4 +22,4 @@
 |-----:|------|
 | 0 | 選択した全 case が PASS |
 | 1 | 1 件以上 FAIL |
-| 2 | 不明なオプション、または Pre-flight 失敗(docker dir が無い / standalone container 起動不可)|
+| 2 | 不明なオプション、または事前確認の失敗（チェックアウトを利用できないか、stream コンテナを起動できない） |

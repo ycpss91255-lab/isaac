@@ -321,6 +321,7 @@ COPY .base/dist/script/docker/lib /lint/lib
 # the COPY brings them into /lint/ so ShellCheck catches issues at
 # build time.
 #COPY script/docker/*.sh /lint/
+COPY src/script/test/standalone_smoke.sh /lint/standalone_smoke.sh
 RUN shellcheck -S warning /lint/*.sh /lint/lib/*.sh
 # [base #440] Repo-local run/stop hooks live under script/hooks/{pre,post}/
 # (nested, so the flat /lint/*.sh glob above misses them). Lint them here.

@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Smoke test for isaac_ws/src/script/*_standalone.py
+# Smoke test for standalone Python scripts in src/script.
 #
-# For each standalone script: launch via just docker exec -t standalone, watch
+# For each standalone script: launch via just docker exec -T -t stream, watch
 # stdout for the script's "ready marker" phrase, kill once seen. If the
 # marker doesn't appear within TIMEOUT, the case fails.
 #
 # Exit codes:
 #   0 = all selected cases PASS
 #   1 = at least one FAIL
-#   2 = unknown flag or pre-flight failure (docker dir missing / standalone container won't start)
+#   2 = unknown flag or pre-flight failure (checkout unavailable or stream container won't start)
 #
 # Flags:
 #   --only <name>  Run a single case by script basename (substring match).
 #   -h, --help     Print usage.
 #
+# Environment overrides:
+#   ISAAC_SMOKE_REPO_DIR    Host checkout containing the justfile (default: this script's checkout).
+#   ISAAC_SMOKE_SCRIPT_DIR  Script directory in the container (default: src/script,
+#                           relative to the mounted checkout workdir).
 
 set -uo pipefail
-
-DOCKER_DIR="${HOME}/workspace/coreSAM_ws/isaac_ws/src/docker"
-SCRIPT_PATH_IN_CONTAINER="${HOME}/work/src/script"
-CONTAINER="$(id -un)-isaac-standalone"
 
 # Smoke matrix: <basename>|<grep-marker>|<timeout-sec>
 CASES=(
@@ -44,17 +44,19 @@ if (( ${#CASES[@]} == 0 )); then
   exit 0
 fi
 
-# Pre-flight ---------------------------------------------------------
-if [[ ! -d "$DOCKER_DIR" ]]; then
-  echo "FAIL: docker dir missing: $DOCKER_DIR" >&2
+# Resolve the host checkout independently of the caller's working directory.
+repo_dir="${ISAAC_SMOKE_REPO_DIR:-$(dirname -- "${BASH_SOURCE[0]}")/../../..}"
+SCRIPT_PATH_IN_CONTAINER="${ISAAC_SMOKE_SCRIPT_DIR:-src/script}"
+if ! cd -- "$repo_dir" || [[ ! -f justfile ]]; then
+  echo "FAIL: checkout containing justfile unavailable: $repo_dir" >&2
   exit 2
 fi
 
-# Bring standalone up if needed (no-op if already running)
-if ! docker ps --format '{{.Names}}' | grep -qx "$CONTAINER"; then
-  echo "[smoke] starting standalone container..."
-  "$DOCKER_DIR/run.sh" -t standalone -d >/dev/null 2>&1 || {
-    echo "FAIL: just docker run -t standalone -d failed" >&2
+# Reuse the stream service in this checkout's Compose project if running.
+if ! just docker exec -T -t stream true >/dev/null 2>&1; then
+  echo "[smoke] starting stream container..."
+  just docker run -t stream -d || {
+    echo "FAIL: just docker run -t stream -d failed" >&2
     exit 2
   }
   sleep 3
@@ -66,12 +68,13 @@ fi
 _run_case() {
   local script="$1" marker="$2" timeout="$3"
 
+  local script_path="$SCRIPT_PATH_IN_CONTAINER/$script"
   local tmp
   tmp="$(mktemp)"
 
   # Launch script in background; capture stdout+stderr to tmp.
-  "$DOCKER_DIR/exec.sh" -t standalone /isaac-sim/python.sh \
-    "$SCRIPT_PATH_IN_CONTAINER/$script" > "$tmp" 2>&1 &
+  just docker exec -T -t stream /isaac-sim/python.sh \
+    "$script_path" > "$tmp" 2>&1 &
   local exec_pid=$!
 
   local elapsed=0 result="FAIL"
@@ -88,12 +91,13 @@ _run_case() {
     elapsed=$(( elapsed + 1 ))
   done
 
-  # Cleanup: kill local exec wrapper + remote python.sh inside container.
-  # docker exec doesn't propagate SIGTERM to the remote process, so kill
-  # remote explicitly too.
+  # Compose does not forward SIGTERM to the remote process. Match both the
+  # Isaac launcher and its Python child, escaping the configurable path.
+  local script_pattern
+  script_pattern="$(sed 's/[][\.^$*+?(){}|]/\\&/g' <<< "$script_path")"
   kill -TERM "$exec_pid" 2>/dev/null
-  docker exec "$CONTAINER" bash -c \
-    'pkill -TERM -f /isaac-sim/python.sh' 2>/dev/null
+  just docker exec -T -t stream pkill -TERM -f -- \
+    "(^| )/isaac-sim/(python[.]sh|kit/python/bin/python3) ${script_pattern}$" >/dev/null 2>&1
   wait "$exec_pid" 2>/dev/null
 
   if [[ "$result" == "FAIL" ]]; then
