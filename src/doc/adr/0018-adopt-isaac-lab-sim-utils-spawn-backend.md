@@ -2,6 +2,12 @@
 
 Status: Superseded by ADR-0026 (2026-11-27)
 
+**#478 修訂（2026-11-28）。** 場景生成改用 Isaac Sim Core Experimental。
+`spawn_overrides` 從 raw passthrough 收斂為明確允許的選項，例如 `visible`、
+`labels` 與 `taxonomy`。資產物理參數統一在 sim_asset 設定，由 asset_converter
+寫入 USD。場景的 `mobility` 繼續決定是否套用剛體與碰撞 schema。
+升級 Isaac Sim 時應核對映像內的 Experimental API 簽名與行為。
+
 The M2 MVP (#146) shipped the `isaac_devkit` scene layer built on **raw `pxr.Usd`**:
 `scene.build_scene` spawns ground / lights / robot / object prims with `stage.DefinePrim` +
 `GetReferences().AddReference` + variant selection, and `model_import.import_urdf` wraps the

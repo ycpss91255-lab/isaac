@@ -1,9 +1,8 @@
 """L1 adapter GPU test (#152, ADR-0018 decisions 1 + 3).
 
 Dedicated GPU coverage for the new ``isaac_devkit.scene.build_scene``
-adapter: a scene is spawned through ``to_isaaclab_cfg`` -> ``sim_utils``
-cfg -> ``cfg.func()`` and the spawned prims are asserted on the live
-stage. Since #325 the scene is built in the runner around the official
+adapter. Core Experimental spawns the prims, which are then inspected on
+the live stage. Since #325 the scene is built in the runner around the official
 NVIDIA Jetbot (robot) and cube (``mobility: dynamic`` object) USDs,
 fetched through ``test/test_assets.py`` -- not repo-bundled scaffold
 assets.
@@ -13,7 +12,7 @@ process -- the singleton constraint); this module owns the subprocess
 invocation and marker assertions. ``pxr`` is not importable in the bare
 pytest process, so the runner emits marker lines parsed here.
 
-Runtime: inside the Isaac Sim / Isaac Lab devel-test container
+Runtime: inside the Isaac Sim devel-test container
 (``/isaac-sim/python.sh -m pytest``).
 """
 
@@ -79,7 +78,7 @@ def test_adapter_spawns_ground_light_robot(adapter_run):
 
     Also asserts /World/Robot/chassis RESOLVES through the adapter
     reference: the Jetbot USD carries a defaultPrim (/jetbot), so the
-    UsdFileCfg reference pulls in the referenced robot content and its
+    USD reference pulls in the referenced robot content and its
     articulation body lands at /World/Robot/chassis (the Jetbot has no
     base_link).
     """
@@ -105,8 +104,7 @@ def test_adapter_spawns_mobility_dynamic_object(adapter_run):
     """A mobility: dynamic object spawns AND carries RigidBodyAPI.
 
     The scene marks the official NVIDIA cube ``mobility: dynamic``; the
-    adapter spawns it with ``UsdFileCfg`` and then DEFINES the physics
-    schema post-spawn (``_apply_mobility_physics``). The cube USD has a
+    adapter references it and applies the rigid body schema via ``RigidPrim``. The cube USD has a
     defaultPrim, so the reference resolves and ``UsdPhysics.RigidBodyAPI``
     lands on a real prim (``rigidbody=True``).
     """
@@ -147,3 +145,16 @@ def test_adapter_spawns_with_identity_orientation(adapter_run):
             "scene says rpy [0,0,0] so this must be identity. (0,1,0,0) means "
             "the (w,x,y,z) quaternion reached the spawner as (x,y,z,w)."
         )
+
+
+
+def test_adapter_preserves_collision_schemas(adapter_run):
+    colliders = dict(re.findall(r"\[ADAPTER COLLIDER\] path=(\S+) schemas=(\S+)", adapter_run.stdout))
+    ground = "/World/ground/geometry/mesh"
+    assert set(colliders[ground].split(",")) == {"PhysicsCollisionAPI"}
+    objects = [schemas for path, schemas in colliders.items() if path.startswith("/World/Objects/")]
+    assert objects
+    for schemas in objects:
+        assert set(schemas.split(",")) == {
+            "PhysicsCollisionAPI", "PhysicsMassAPI", "PhysicsRigidBodyAPI", "PhysxRigidBodyAPI",
+        }

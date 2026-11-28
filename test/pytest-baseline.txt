@@ -308,7 +308,8 @@
 # isaac#429: hosted 903 -> 921 and core 760 -> 778.
 # isaac#536: add two core removal guards.
 # isaac#535 adds one stream camera API case (hosted 923 -> 924, stream 54 -> 55).
-HOSTED_UNIT_BASELINE = 924
+# isaac#478: hosted 924 -> 946 and core 780 -> 802.
+HOSTED_UNIT_BASELINE = 946
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -316,7 +317,7 @@ HOSTED_UNIT_BASELINE = 924
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 924。
+#   以下五組的測試數量下限合計為 946。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -359,7 +360,7 @@ HOSTED_UNIT_BASELINE = 924
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 780
+HOSTED_UNIT_BASELINE_CORE = 802
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -444,7 +445,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 # isaac#276 removes two in-container ROS cases and two host round-trip cases.
 #   The 35 remaining cases all run in the Isaac test container.
 #   isaac#429 keeps all 35 cases and moves two I/O checks to no_ros/.
-GPU_INTEGRATION_BASELINE = 35
+# isaac#478: pin the collision schema contract on the live stage.
+GPU_INTEGRATION_BASELINE = 36
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
