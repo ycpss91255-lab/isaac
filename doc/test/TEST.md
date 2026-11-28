@@ -1,6 +1,6 @@
 # TEST.md
 
-**239 tests** total (bats). Hosted pytest collects **1092 tests**.
+**251 tests** total (bats). Hosted pytest collects **1092 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 921 | 42 | 1092 |
+| core | 141 | 921 | 42 | 1104 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 97 | 62 | 0 | 159 |
 | headless | 13 | 6 | 0 | 19 |
@@ -318,9 +318,9 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `guard: no .env.generated yet -> nothing to check, passes` | No resolved identity means nothing to refuse. |
 | `pre hooks: build/run/stop refuse a shared checkout and pass an isolated one` | The real baked hooks exit non-zero on the shared identity and zero on an isolated one. |
 
-## test/bats/smoke/gpu_job_scripts_spec.bats (16)
+## test/bats/smoke/gpu_job_scripts_spec.bats (28)
 
-Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. The Docker stub executes the mounted startup script with a temporary home directory. Its fixture `run_tests.py` writes JUnit to `/tmp/r.xml` and a Kit log under `$HOME/.nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)/6.2/`. The spec runs without Docker or a GPU.
+Behavioral guard for the self-hosted GPU job scripts (`gpu_integration_job.sh`, `stream_smoke_job.sh`, and `stream_visual_e2e_job.sh`). These jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. The Docker stub executes the mounted startup script with a temporary home directory. Its fixture `run_tests.py` writes JUnit to `/tmp/r.xml` and a Kit log under `$HOME/.nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)/6.2/`. The spec runs without Docker or a GPU.
 
 | Test | Description |
 |------|-------------|
@@ -336,10 +336,22 @@ Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration
 | `gpu_job_cache_dirs makes the workspace world-writable (rootless Docker)` | Creates a restricted-permission file and directory, runs the integration job, and asserts both are widened to include other-read-write (and execute for directories) by the `chmod -R a+rwX` at the end of `gpu_job_cache_dirs`. On a rootless Docker daemon the container's non-root user maps to a host subuid, so the mounted workspace must be world-writable. |
 | `stream smoke job: a failed smoke fails the job and prints the full kit log` | A failing smoke exits with its status and prints the kit log. |
 | `stream smoke job: a failed smoke with no kit log still fails with the smoke's status` | A failing smoke with no log file still exits with the smoke's exit code. |
-| `gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag` | `isaac-sim/kit/cache` and `isaac-sim/nvidia/computecache` become symlinks into `<ISAAC_CI_CACHE_ROOT>/<BASE_IMAGE tag>/{kit-cache,computecache}`, outside the workspace; old workspace contents are dropped (isaac#260). |
-| `gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag` | An explicit `ISAAC_CI_CACHE_KEY` selects the persistent cache directory instead of the Dockerfile tag. |
-| `gpu integration job: both caches survive workspace cleanup between runs` | Files in the persistent cache dirs remain after the workspace `isaac-sim/` is wiped and the job runs again. |
-| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | Mounts are writable when the baseline stub runs; state dirs (`kit/data`, `ov/*`, ...) stay real workspace dirs, not links, so state starts cold. |
+| `gpu integration job: replaces existing cache dirs with run links keyed by BASE_IMAGE and first GPU driver` | Both workspace mounts resolve to the run directory for the image tag and first reported driver. The initial run starts empty. |
+| `gpu integration job: sanitizes the BASE_IMAGE override and still includes the driver` | The sanitized override replaces the image tag in the key and keeps the driver suffix. |
+| `gpu integration job: a failed nvidia-smi query uses nodriver` | A failed query selects the `nodriver` key. |
+| `gpu integration job: both caches survive workspace cleanup between runs` | Both caches carry writes from a successful job into the next run after workspace cleanup. |
+| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | The baseline sees writable cache mounts and ordinary workspace directories for Kit data, logs and other state. |
+| `warm job sees a writable copy of each seeded cache and leaves the live seed untouched` | Both mounted copies contain the seed files with widened permissions. Writes through either mount leave the live seed intact. |
+| `successful visual stream job promotes the whole run directory and removes the old seed` | The visual job holds the exclusive seed lock during both renames. The new seed has the run directory’s inode and the previous seed is removed. |
+| `failed smoke job deletes only its run and preserves both seed caches byte for byte` | The smoke job returns its workload’s exit code and removes only its own run directory. |
+| `SIGTERM after cache writes cancels the job and preserves both seed caches byte for byte` | SIGTERM after writes causes a nonzero exit. Both seed trees and a different run survive. |
+| `tag ref type uses an empty cold cache` | A tag event starts empty and discards the run, including any residue from a previous attempt. |
+| `tag ref path uses an empty cold cache` | A `refs/tags/` ref selects cold mode even without the ref type. |
+| `ISAAC_CI_COLD_CACHE=1 uses an empty cold cache` | The explicit environment override starts with empty caches and preserves the seed. |
+| `workflow_dispatch final acceptance uses an empty cold cache` | A manual dispatch with `inputs.final_acceptance` set to `true` selects cold mode. |
+| `job startup removes day-old runs and preserves recent runs` | Startup removes a 25-hour-old run and keeps a 23-hour-old run. |
+| `retention keeps exactly the current key and the most recent other key` | Pruning keeps the current key and the newest other key even when other keys have future timestamps. |
+| `concurrent successful jobs use separate runs and publish one complete seed` | Two overlapping jobs see the original seed. Both caches in the final seed come from the same successful job. |
 
 ## test/bats/smoke/cleanup_merged_worktree_spec.bats (14)
 

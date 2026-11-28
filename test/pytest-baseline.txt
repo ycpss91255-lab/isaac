@@ -504,7 +504,8 @@ AGGREGATE_TARGET = 126
 #   isaac#429 adds four GPU baseline guard cases (core 126 -> 130).
 # isaac#480 replaces two package pin checks with one standalone Python smoke.
 # isaac#284 adds three stream post-run cases for the pinned viewer pull (stream 91 -> 94).
-BATS_BASELINE_CORE = 129
+# isaac#260 revision 1 adds 12 cache lifecycle cases (core 129 -> 141).
+BATS_BASELINE_CORE = 141
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 97
 BATS_BASELINE_HEADLESS = 13

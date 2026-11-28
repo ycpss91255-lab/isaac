@@ -306,6 +306,10 @@ out.step(sim_time_seconds)
 | `isaac-sim/nvidia/computecache` | `/home/${USER_NAME}/.nv/ComputeCache` | CUDA compute cache |
 | `isaac-sim/documents` | `/home/${USER_NAME}/Documents` | User Documents（USD scenes 等）|
 
+自托管 GPU CI 会为每次运行挂载独立的 Kit 和 CUDA 计算缓存。Runner 将缓存种子保存在 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/seed`。缓存键由 Dockerfile 的 `BASE_IMAGE` 标签（可用 `ISAAC_CI_CACHE_KEY` 覆盖）和 NVIDIA 驱动版本组成，无法获取驱动版本时使用 `nodriver`。
+
+常规作业会将种子复制到同级的 `run-<GITHUB_RUN_ID>-<GITHUB_RUN_ATTEMPT>`。作业成功时加锁并替换种子，失败或取消时丢弃副本。发布标签、手动勾选 **final_acceptance** 或设置 `ISAAC_CI_COLD_CACHE=1` 都会使用空缓存，结束后直接丢弃。Runner 会清理超过一天的残留运行目录，并保留最近使用的两组缓存键。
+
 2026-05-21 以前的 layout（`cache/{kit,ov,pip,glcache,computecache}`、flat `logs/`、flat `data/`)会在升版后第一次跑 `./script/init_isaac_dirs.sh` 自动 migrate 到新的 namespaced path(issue #21 fix-A）。已累积的 shader / pip / compute cache 透过 mv 保留。
 
 当 `isaac-sim/documents/Kit/shared/screenshots` 尚不存在时，Kit 会以 mode 000 创建它。`init_isaac_dirs.sh` 会预先以 0755 创建，并修复已是 mode 000 的目录。

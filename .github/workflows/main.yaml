@@ -30,6 +30,11 @@ on:
     types: [checks_requested]
   workflow_dispatch:
     inputs:
+      final_acceptance:
+        description: 最終驗收時使用空的 GPU 快取
+        required: false
+        default: false
+        type: boolean
       groups:
         description: >-
           Scope groups to run: all, or a comma list of core, gui, stream,

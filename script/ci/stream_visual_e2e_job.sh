@@ -7,4 +7,4 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 gpu_job_apply_and_pin_ws_path
 gpu_job_build stream
 gpu_job_cache_dirs
-exec bash script/ci/stream_visual_e2e.sh
+bash script/ci/stream_visual_e2e.sh
