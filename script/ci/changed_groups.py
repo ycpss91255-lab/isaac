@@ -74,11 +74,9 @@ _DOCS = (
     ".github/workflows/base-version-monitor.yaml",
 )
 
-# Stage-specific files include Kit experiences and the standalone stream smoke
-# script. Tests carry their own group declaration.
+# Stage-specific files select their group. Tests carry their own group declaration.
 _PATH_RULES = (
     ("stream", (
-        "apps/*",
         "script/ci/stream_smoke*",
         "script/ci/stream_visual_e2e*.sh",
         "script/ci/visual_e2e/*",

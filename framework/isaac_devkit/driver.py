@@ -85,9 +85,7 @@ def parse_livestream_env(env_value: Optional[str]) -> Dict[str, Any]:
       ``headless`` Docker stage where Kit boots without a window or
       WebRTC publisher.
     - ``"1"`` -> native streaming. Kit's legacy streaming protocol.
-    - ``"2"`` -> WebRTC streaming, raytraced lighting. Pairs with the
-      ``stream`` Docker stage and ADR-0007's custom Kit
-      experience (`isaacsim.exp.base.python.streaming.kit`).
+    - ``"2"`` -> WebRTC streaming with raytraced lighting.
 
     Raising on unknown values rather than silently defaulting catches
     typos in compose / .env files at boot time instead of producing a
