@@ -77,7 +77,7 @@ _tag_at_least_min() {
 @test "every gpu-self-hosted.yml caller meets the minimum release tag" {
   local f minimum refs ref
   minimum=$(_gpu_reusable_min_tag)
-  for f in main.yaml ci-stream-smoke.yaml ci-headless-smoke.yaml publish-stream-source.yaml; do
+  for f in main.yaml ci-stream-smoke.yaml ci-headless-smoke.yaml ci-official-native-python.yaml publish-stream-source.yaml; do
     grep -Fq 'gpu-self-hosted.yml@' "${WORKFLOW_DIR}/${f}" \
       || { echo "missing gpu-self-hosted.yml reference in ${f}"; return 1; }
   done

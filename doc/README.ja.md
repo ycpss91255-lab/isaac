@@ -319,6 +319,8 @@ stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージ
 
 `core-gpu` ジョブは Isaac Sim 公式の `asset` と `deprecated` の Python テストを順に実行し、両方の JUnit レポートを `official-tests` アーティファクトに保存します。
 
+core の変更範囲に応じて起動する `core-official-nativepython` ジョブは、NVIDIA 公式の standalone Python テスト一式と livestream、hello_world のサンプルを実行します。ローカル実行手順と成果物は [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437) を参照してください。
+
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 
 ## Python テストツールキット（devel-test ステージ）
