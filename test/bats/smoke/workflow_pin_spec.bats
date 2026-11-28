@@ -132,6 +132,7 @@ print(job["uses"] if field == "uses" else job["with"][field])
   printf '#!/usr/bin/env bash\necho "${BASELINE_PROJECT}" > "${OBSERVED}"\n' \
     > "${fake}/test/assert_pytest_baseline.sh"
   printf '#!/usr/bin/env bash\ntrue\n' > "${fake}/script/ci/official_startuptests.sh"
+  cp "${fake}/script/ci/official_startuptests.sh" "${fake}/script/ci/official_pythontests.sh"
   chmod +x "${fake}"/script/*.sh "${fake}"/script/ci/*.sh "${fake}"/test/*.sh
 
   ISAAC_CI_CACHE_ROOT="${fake}/ci-cache" GITHUB_WORKSPACE="${fake}" GITHUB_RUN_ID=111 GITHUB_RUN_ATTEMPT=2 \

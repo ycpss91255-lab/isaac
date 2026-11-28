@@ -317,6 +317,8 @@ container 不回報 health 狀態（`HEALTHCHECK NONE`）。NGC base image 的 h
 
 stream 組的 `stream-visual-e2e` GPU job 會啟動 stream stage，驗證 Chromium 持續收到能看見紅色測試方塊的影格。
 
+`core-gpu` 工作依序執行 Isaac Sim 官方 `asset` 與 `deprecated` Python 測試，並將兩份 JUnit 報告上傳至 `official-tests` 產物。
+
 Workflow 與 job 的命名規則見 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 檢查。
 
 ## Python 測試工具鏈（devel-test 階段）

@@ -317,6 +317,8 @@ Every test belongs to exactly one scope group (`core`, `gui`, `stream`, `headles
 
 The stream group’s `stream-visual-e2e` GPU job boots the stream stage and checks that Chromium receives advancing frames showing the red test cube.
 
+The `core-gpu` job runs the official Isaac Sim `asset` and `deprecated` Python test buckets in sequence. Both JUnit reports are included in the `official-tests` artifact.
+
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 
 ## Python testing toolkit (devel-test stage)

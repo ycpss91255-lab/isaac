@@ -317,6 +317,8 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 
 stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージを起動し、赤いテスト用キューブが映ったフレームを Chromium が継続して受信できることを確認します。
 
+`core-gpu` ジョブは Isaac Sim 公式の `asset` と `deprecated` の Python テストを順に実行し、両方の JUnit レポートを `official-tests` アーティファクトに保存します。
+
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 
 ## Python テストツールキット（devel-test ステージ）

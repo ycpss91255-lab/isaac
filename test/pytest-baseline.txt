@@ -313,7 +313,8 @@
 # isaac#528 adds 7 core cases for operator volume coverage (hosted 944 -> 951).
 # isaac#399: 4 core cases for smoke paths, empty matrix and Docker lint coverage.
 # Hosted 951 -> 955, core 807 -> 811.
-HOSTED_UNIT_BASELINE = 955
+# isaac#440: official Python buckets add 9 core cases (hosted 955 -> 964, core 811 -> 820).
+HOSTED_UNIT_BASELINE = 964
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -321,7 +322,7 @@ HOSTED_UNIT_BASELINE = 955
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 955。
+#   以下五組的測試數量下限合計為 964。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -364,7 +365,7 @@ HOSTED_UNIT_BASELINE = 955
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 811
+HOSTED_UNIT_BASELINE_CORE = 820
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
