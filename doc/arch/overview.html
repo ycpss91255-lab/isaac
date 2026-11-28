@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>isaac 架構總覽</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:wght@400;600;700&amp;family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f3ef;
+      --surface: #fff;
+      --text-1: #1c1917;
+      --text-2: #57534e;
+      --border: #d6d3d1;
+      --arrow: #78716c;
+      --infra: #1b4965;
+      --infra-fill: #ebf4fa;
+      --svc: #92400e;
+      --svc-fill: #fffbeb;
+      --gen: #166534;
+      --gen-fill: #f0fdf4;
+      --overlay: #6d28d9;
+      --overlay-fill: #f5f3ff;
+      --serif: 'Source Serif 4', Georgia, serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #1a1d23; --surface: #22262e; --text-1: #e7e5e4; --text-2: #b8b4b0;
+        --border: #454a53; --arrow: #a8a29e;
+        --infra: #7dd3fc; --infra-fill: #0f2a3e; --svc: #fcd34d; --svc-fill: #2a1d06;
+        --gen: #4ade80; --gen-fill: #071f14; --overlay: #c4b5fd; --overlay-fill: #1e1340;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1a1d23; --surface: #22262e; --text-1: #e7e5e4; --text-2: #b8b4b0;
+      --border: #454a53; --arrow: #a8a29e;
+      --infra: #7dd3fc; --infra-fill: #0f2a3e; --svc: #fcd34d; --svc-fill: #2a1d06;
+      --gen: #4ade80; --gen-fill: #071f14; --overlay: #c4b5fd; --overlay-fill: #1e1340;
+    }
+    body {
+      margin: 0 auto; max-width: 60rem; padding: 2.5rem 1.25rem 5rem;
+      font: 1rem/1.75 'Inter', system-ui, sans-serif;
+      background: var(--bg); color: var(--text-1);
+    }
+    h1, h2 { font-family: var(--serif); line-height: 1.4; }
+    h1 { margin: 0; font-size: 2rem; }
+    h2 { margin: 2.75rem 0 .65rem; padding-bottom: .4rem; border-bottom: 1px solid var(--border); font-size: 1.4rem; }
+    .num { margin-right: .3em; color: var(--text-2); font-weight: 400; }
+    p { margin: .75rem 0; }
+    a { color: var(--infra); text-underline-offset: .18em; }
+    code { font: .9em var(--mono); overflow-wrap: anywhere; }
+    figure { margin: 1.2rem 0; }
+    .diagram, .table-wrap { overflow-x: auto; }
+    .diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+    svg { display: block; width: 100%; min-width: 36rem; height: auto; }
+    svg text { font: 15px var(--mono); fill: var(--text-1); text-anchor: middle; }
+    svg .note { font: 13px 'Inter', system-ui, sans-serif; fill: var(--text-2); }
+    svg rect { rx: 5px; }
+    .infra { fill: var(--infra-fill); stroke: var(--infra); }
+    .svc { fill: var(--svc-fill); stroke: var(--svc); }
+    .gen { fill: var(--gen-fill); stroke: var(--gen); }
+    .overlay { fill: var(--overlay-fill); stroke: var(--overlay); }
+    .edge { fill: none; stroke: var(--arrow); stroke-width: 1.5; marker-end: url(#arrow); }
+    figcaption { margin: .45rem 0; font-size: .9rem; }
+    .source { display: block; color: var(--text-2); font-size: .82rem; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { padding: .55rem .7rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+    th { border-bottom-width: 2px; }
+    td:first-child { font-family: var(--mono); white-space: nowrap; }
+    td:nth-child(2) { min-width: 8em; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>isaac 架構總覽</h1>
+  <p>isaac 提供 Isaac Sim 執行環境與共用 Python 框架。下游專案提供場景、已轉換的 USD 模型與控制程式，即可在同一套環境播放模擬、取得感測資料與執行測試。</p>
+</header>
+<main>
+<section id="modules">
+  <h2><span class="num">1.</span> 模組邊界與依賴方向</h2>
+  <p>下游可以用 Git submodule 引入 isaac。<code>framework/isaac_devkit/</code> 封裝可重用的場景、感測器與 driver 邏輯；<code>src/</code> 放可執行腳本、設定檔與相容入口。例如舊腳本仍可匯入 <code>scene_builder</code>，它從 <code>isaac_devkit.scene</code> 重新匯出函式。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 148" role="img" aria-label="下游應用與 src 腳本匯入 isaac_devkit，框架在操作 stage 時才載入 Isaac Sim">
+        <defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--arrow)"/></marker></defs>
+        <rect class="overlay" x="20" y="18" width="212" height="44"/>
+        <text x="126" y="46">下游 Python 應用</text>
+        <rect class="overlay" x="20" y="85" width="212" height="44"/>
+        <text x="126" y="113">src/script/ 相容入口</text>
+        <path class="edge" d="M232 40 H259 V61 H287"/>
+        <path class="edge" d="M232 107 H259 V86 H287"/>
+        <rect class="svc" x="290" y="38" width="240" height="72"/>
+        <text x="410" y="70">isaac_devkit</text>
+        <text class="note" x="410" y="93">scene · sensors · driver · output</text>
+        <path class="edge" d="M530 74 H592"/>
+        <rect class="infra" x="596" y="38" width="204" height="72"/>
+        <text x="698" y="70">Isaac Sim / Kit</text>
+        <text class="note" x="698" y="93">模擬執行時載入</text>
+      </svg>
+    </div>
+    <figcaption>箭頭從呼叫端指向依賴。框架把 Isaac API 的匯入留在函式內，hosted 測試可直接匯入 Python 模組並驗證設定。
+      <span class="source">來源　<a href="../../src/script/scene_builder.py">src/script/scene_builder.py</a> · <a href="../../framework/isaac_devkit/__init__.py">framework/isaac_devkit/__init__.py</a> · <a href="#adr-0017">ADR-0017</a></span>
+    </figcaption>
+  </figure>
+  <p><code>scene</code> 組合環境與模型，<code>materials</code> 讀取材質設定，<code>usd_model</code> 處理 USD 結構摘要與關節 drive。感測器由 <code>sensor_prim</code> 載入、驗證設定並提供 prim 工具，<code>sensors.setup_sensor()</code> 則依 camera、LiDAR、IMU 類型建立 prim。容器啟動與 viewer 的生命週期由頂層 <code>script/</code> 管理。</p>
+</section>
+
+<section id="interface">
+  <h2><span class="num">2.</span> Python 對外介面與 I/O 外掛</h2>
+  <p>ADR-0023 將 Python 定為框架唯一的對外程式介面。<code>ISAAC_OUTPUT_MODE</code> 的預設值與唯一合法值都是 <code>python</code>。應用以 <code>setup_output()</code> 建立輸出，註冊 callback，並在每次 <code>app.update()</code> 後呼叫 <code>Output.step(stamp)</code>。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 106" role="img" aria-label="資料從 Isaac 讀取器經 OutputHub 傳至訂閱指定資料類型的 Python callback">
+        <rect class="infra" x="20" y="20" width="224" height="66"/>
+        <text x="132" y="48">output_python</text>
+        <text class="note" x="132" y="70">相機、關節與 IMU 讀取器</text>
+        <path class="edge" d="M244 53 H293"/>
+        <rect class="svc" x="297" y="20" width="225" height="66"/>
+        <text x="409" y="48">OutputHub.emit()</text>
+        <text class="note" x="409" y="70">依 kind 讀取並整理資料</text>
+        <path class="edge" d="M522 53 H571"/>
+        <rect class="overlay" x="575" y="20" width="225" height="66"/>
+        <text x="687" y="48">callback(frame)</text>
+        <text class="note" x="687" y="70">name · kind · stamp · data</text>
+      </svg>
+    </div>
+    <figcaption>箭頭表示每一個模擬步驟的資料流。只有該類型有訂閱者時，hub 才呼叫讀取器，將 RGB、深度、關節狀態或 IMU 資料交給訂閱者。
+      <span class="source">來源　<a href="../../framework/isaac_devkit/output.py">output.py</a> · <a href="../../framework/isaac_devkit/output_hub.py">output_hub.py</a> · <a href="../../framework/isaac_devkit/output_mode.py">output_mode.py</a> · <a href="#adr-0023">ADR-0023</a></span>
+    </figcaption>
+  </figure>
+  <p>ROS 2 是可替換的下游使用者。需要 ROS I/O 時，由外部 <code>isaac_ros_io</code> 提供實作，使用者以 <code>ISAAC_IO_PLUGIN=module:function</code> 指定進入點。Driver 在播放前呼叫 <code>plugin(stage, robot_prim, config)</code>；未設定時直接繼續。早期 ADR 中的 <code>isaac_ros2</code> 與 <code>ros_io</code> 是歷史設計，目前框架只依賴這個 Python 呼叫契約。</p>
+</section>
+
+<section id="spawn">
+  <h2><span class="num">3.</span> 從 CAD 資產到 USD 場景</h2>
+  <p>模型匯入的交付格式是 USD。SolidWorks 匯出 URDF 後，由 <code>asset_converter</code> 轉換。模型的質量、碰撞與物理材質在 <code>sim_asset</code> 端設定，再由轉換器寫入 USD。ADR-0020 說明轉換保真度，例如有凹槽的零件可用多個 box 表示碰撞形狀，以保留實際間隙。早期 <code>model_import</code> 的 URDF 匯入職責已依 ADR-0026 移到轉換器，isaac 也已移除 Isaac Lab 依賴。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 183" role="img" aria-label="上游由 SolidWorks 與 URDF 產生 USD。isaac 結合 USD 和場景 YAML，轉成 SpawnSpec 後寫入 stage">
+        <rect class="overlay" x="20" y="16" width="210" height="54"/>
+        <text x="125" y="49">SolidWorks → URDF</text>
+        <path class="edge" d="M230 43 H278"/>
+        <rect class="overlay" x="282" y="16" width="230" height="54"/>
+        <text x="397" y="49">asset_converter</text>
+        <path class="edge" d="M512 43 H560"/>
+        <rect class="gen" x="564" y="16" width="236" height="54"/>
+        <text x="682" y="49">模型 USD</text>
+        <path class="edge" d="M682 70 V107"/>
+        <rect class="svc" x="20" y="111" width="210" height="55"/>
+        <text x="125" y="144">load_scene(YAML, …)</text>
+        <path class="edge" d="M230 138 H278"/>
+        <rect class="svc" x="282" y="111" width="230" height="55"/>
+        <text x="397" y="136">to_spawn_specs()</text>
+        <text class="note" x="397" y="155">解析路徑與姿態</text>
+        <path class="edge" d="M512 138 H560"/>
+        <rect class="infra" x="564" y="111" width="236" height="55"/>
+        <text x="682" y="136">_spawn(spec)</text>
+        <text class="note" x="682" y="155">在 stage 上引用 USD</text>
+      </svg>
+    </div>
+    <figcaption>上排是離線資產轉換。下排顯示 isaac 如何組裝場景。<code>build_scene()</code> 呼叫 <code>to_spawn_specs()</code> 產生有序的 <code>SpawnSpec</code>，再逐筆交給 <code>_spawn()</code>。
+      <span class="source">來源　<a href="../../framework/isaac_devkit/scene.py">framework/isaac_devkit/scene.py</a> · <a href="../../src/scene/sensor_test_bench.yaml">src/scene/sensor_test_bench.yaml</a> · <a href="#adr-0020">ADR-0020</a> · <a href="#adr-0026">ADR-0026</a></span>
+    </figcaption>
+  </figure>
+  <p><code>load_scene()</code> 讀取一份 YAML，檢查機器人與物件的模型、姿態和覆寫欄位。相對模型路徑依序在 <code>MODEL_PATH</code> 搜尋，未設定時使用 <code>&lt;repo_root&gt;/model/usd/</code>。轉接器將角度制 RPY 換成 <code>(w, x, y, z)</code> 四元數，並依 <code>count</code> 與 <code>spacing</code> 展開物件實例。</p>
+  <p>執行時使用 Isaac Sim Core Experimental 的 USD backend，依序建立選用的 <code>/World/ground</code>、光源 <code>/World/light</code>、機器人 <code>/World/Robot</code> 及 <code>/World/Objects/</code> 下的實例。模型以 <code>add_reference_to_stage()</code> 引用；<code>spawn_overrides</code> 可指定 <code>visible</code>、<code>labels</code>、<code>taxonomy</code> 等允許欄位。模型就位後，<code>build_scene()</code> 才逐一讀取感測器 YAML 並呼叫 <code>setup_sensor()</code>。</p>
+</section>
+
+<section id="driver">
+  <h2><span class="num">4.</span> 播放 USD 與 driver 生命週期</h2>
+  <p>已有完整場景 USD 時，可在執行中的 <code>headless</code> 容器使用 <code>just run scene &lt;usd&gt;</code>。這個入口以 <code>DefaultSceneDriver</code> 直接開啟 USD。加上 <code>--driver &lt;file.py&gt;</code> 可載入自訂的 <code>IsaacDriver</code> 子類別，例如在 <code>setup(stage)</code> 中呼叫上一節的場景組裝函式。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 160" role="img" aria-label="IsaacDriver 啟動 Kit、開啟 USD 並準備場景，呼叫選用外掛後播放 timeline，再執行 setup、main、shutdown，最後關閉 Kit">
+        <rect class="infra" x="20" y="16" width="230" height="54"/>
+        <text x="135" y="39">SimulationApp</text>
+        <text class="note" x="135" y="59">啟動 Kit、註冊訊號處理</text>
+        <path class="edge" d="M250 43 H292"/>
+        <rect class="svc" x="296" y="16" width="228" height="54"/>
+        <text x="410" y="39">open_stage(USD)</text>
+        <text class="note" x="410" y="59">等待 stage 就緒、補預設光源</text>
+        <path class="edge" d="M524 43 H566"/>
+        <rect class="overlay" x="570" y="16" width="230" height="54"/>
+        <text x="685" y="39">I/O plugin</text>
+        <text class="note" x="685" y="59">依環境設定呼叫一次</text>
+        <path class="edge" d="M685 70 V93"/>
+        <rect class="svc" x="570" y="97" width="230" height="44"/>
+        <text x="685" y="125">播放 timeline</text>
+        <path class="edge" d="M570 119 H528"/>
+        <rect class="overlay" x="296" y="97" width="228" height="44"/>
+        <text x="410" y="125">setup → main → shutdown</text>
+        <path class="edge" d="M296 119 H254"/>
+        <rect class="infra" x="20" y="97" width="230" height="44"/>
+        <text x="135" y="125">app.close()</text>
+      </svg>
+    </div>
+    <figcaption>基底類別負責 Kit 的生命週期，子類別掌控主迴圈。預設的 <code>main()</code> 持續呼叫 <code>app.update()</code>，直到 Kit 停止或收到結束訊號；<code>finally</code> 負責關閉應用程式。
+      <span class="source">來源　<a href="../../script/local/run/justfile.run">script/local/run/justfile.run</a> · <a href="../../framework/isaac_devkit/run_scene.py">run_scene.py</a> · <a href="../../framework/isaac_devkit/driver.py">driver.py</a> · <a href="#adr-0009">ADR-0009</a></span>
+    </figcaption>
+  </figure>
+</section>
+
+<section id="physics">
+  <h2><span class="num">5.</span> PhysX 的 L2、L3 與接觸規則</h2>
+  <p>本庫的 ADR-0008 指向已移出的決策，ADR-0017 保留兩個物理層級的定義。選擇層級時，先判斷物體的位置是由 driver 指定，還是由物理求解器依受力與關節約束算出。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 116" role="img" aria-label="L2 運動學剛體依指定目標移動，可單向推動由物理求解器控制的 L3 動態剛體">
+        <rect class="svc" x="20" y="19" width="246" height="78"/>
+        <text x="143" y="51">L2 · kinematic</text>
+        <text class="note" x="143" y="77">指定目標位置，可參與碰撞</text>
+        <path class="edge" d="M266 61 H550"/>
+        <text class="note" x="410" y="49">接觸時可推動</text>
+        <rect class="gen" x="554" y="19" width="246" height="78"/>
+        <text x="677" y="51">L3 · dynamic + joint</text>
+        <text class="note" x="677" y="77">力與關節約束決定運動</text>
+      </svg>
+    </div>
+    <figcaption>L2 物體可推動 L3 物體，其自身軌跡仍由 kinematic target 決定。PhysX 預設會回報 L2 與 L3 之間的接觸；L2 對 L2、L2 對靜態物體的接觸預設不回報。
+      <span class="source">來源　<a href="#adr-0008">ADR-0008</a> · <a href="../../src/doc/adr/0017-isaac-base-repo-convergence-contract.md#from-adr-0008-l2l3-physics-level-vocabulary-and-coexistence-rules">ADR-0017 的 PhysX 共存規則</a></span>
+    </figcaption>
+  </figure>
+  <p>L2 使用 <code>kinematicEnabled=true</code>，以 <code>set_kinematic_target</code> 驅動，讓接觸積分器處理碰撞。Articulation 的 link 須維持動態。場景 YAML 的 <code>mobility</code> 控制物件的 schema。指定 <code>static</code> 時套用碰撞 schema，指定 <code>dynamic</code> 時再套用剛體 schema。關節及其約束來自模型 USD。</p>
+</section>
+
+<section id="stages">
+  <h2><span class="num">6.</span> Docker stage 與執行用途</h2>
+  <p>Dockerfile 以 NVIDIA 官方 <code>nvcr.io/nvidia/isaac-sim:6.2.0.1</code> 為基礎，經 <code>sys → devel-base → devel</code> 建立共用層。ADR-0014 依是否需要 WebRTC viewer 區分 <code>stream</code> 和 <code>headless</code>。目前 Dockerfile 另外提供桌面 <code>gui</code>、測試工具和串流來源映像。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 184" role="img" aria-label="devel 衍生 gui、headless、devel-test 與 stream，stream 再衍生 producer">
+        <rect class="infra" x="298" y="12" width="224" height="36"/>
+        <text x="410" y="36">devel</text>
+        <path class="edge" d="M410 48 V63 H110 V79"/>
+        <path class="edge" d="M410 63 H310 V79"/>
+        <path class="edge" d="M410 63 H510 V79"/>
+        <path class="edge" d="M410 63 H710 V79"/>
+        <rect class="svc" x="18" y="83" width="184" height="54"/>
+        <text x="110" y="106">gui</text>
+        <text class="note" x="110" y="126">X11 桌面</text>
+        <rect class="svc" x="218" y="83" width="184" height="54"/>
+        <text x="310" y="106">headless</text>
+        <text class="note" x="310" y="126">批次模擬、推論</text>
+        <rect class="overlay" x="418" y="83" width="184" height="54"/>
+        <text x="510" y="106">devel-test</text>
+        <text class="note" x="510" y="126">CI 測試工具</text>
+        <rect class="svc" x="618" y="83" width="184" height="54"/>
+        <text x="710" y="106">stream</text>
+        <text class="note" x="710" y="126">WebRTC 觀察</text>
+        <path class="edge" d="M710 137 V154"/>
+        <text x="710" y="174">producer</text>
+      </svg>
+    </div>
+    <figcaption>箭頭代表 Dockerfile 的 <code>FROM</code> 關係。<code>devel-test</code> 與各執行 stage 共用 <code>devel</code>，另裝 Bats 與 pytest 等測試工具。<code>producer</code> 從 <code>stream</code> 建立，啟動時執行固定的串流來源腳本。
+      <span class="source">來源　<a href="../../Dockerfile">Dockerfile</a> · <a href="../../setup.toml">setup.toml</a> · <a href="../../script/hooks/post/run.sh">script/hooks/post/run.sh</a> · <a href="#adr-0014">ADR-0014</a></span>
+    </figcaption>
+  </figure>
+  <p><code>headless</code> 與 <code>stream</code> 啟動後都會等待使用者執行 driver。前者設定 <code>ISAAC_LIVESTREAM=0</code>，後者設定 <code>2</code>。串流冒煙腳本與 <code>producer</code> 均選用 NVIDIA 的 <code>isaacsim.exp.full.streaming.kit</code>。以 <code>just docker run -t stream -d</code> 啟動時，post-run hook 預設也會啟動 web-viewer；之後可在同一個容器啟動 Kit，讓瀏覽器連線觀察。</p>
+</section>
+
+<section id="ci">
+  <h2><span class="num">7.</span> CI 的五個測試群組與合併條件</h2>
+  <p><code>changes</code> 依 PR 修改的路徑選出 <code>core</code>、<code>gui</code>、<code>stream</code>、<code>headless</code>、<code>docs</code>。共用層變更會選取全部群組，單改文件時只選 <code>docs</code>。推送至 main、發行 tag 與 merge queue 均執行全部群組。pytest 模組以 <code>pytestmark</code>、Bats spec 以 <code>file_tags</code> 宣告所屬群組；每個測試只屬於一組。</p>
+  <figure>
+    <div class="diagram">
+      <svg viewBox="0 0 820 160" role="img" aria-label="changes 選定範圍後，hosted runner 執行單元測試與檢查，self-hosted GPU 執行選到的整合和冒煙測試，gate 彙整結果">
+        <rect class="overlay" x="20" y="52" width="162" height="56"/>
+        <text x="101" y="77">changes</text>
+        <text class="note" x="101" y="98">依範圍選取工作</text>
+        <path class="edge" d="M182 80 H210 V41 H238"/>
+        <path class="edge" d="M210 80 V119 H238"/>
+        <rect class="infra" x="242" y="12" width="352" height="59"/>
+        <text x="418" y="38">GitHub-hosted</text>
+        <text class="note" x="418" y="58">單元測試、lint、建置與 Bats</text>
+        <rect class="svc" x="242" y="89" width="352" height="59"/>
+        <text x="418" y="115">Self-hosted GPU</text>
+        <text class="note" x="418" y="135">Kit 整合、官方測試、串流與無頭冒煙測試</text>
+        <path class="edge" d="M594 41 H622 V68 H651"/>
+        <path class="edge" d="M594 119 H622 V92 H651"/>
+        <rect class="gen" x="655" y="52" width="145" height="56"/>
+        <text x="727" y="77">gate</text>
+        <text class="note" x="727" y="98">唯一必要檢查</text>
+      </svg>
+    </div>
+    <figcaption>CI 依所需硬體分工。<code>gate</code> 以 <code>always()</code> 彙整上游結果。<code>changes</code> 必須成功，其他工作可成功或跳過；任何失敗或取消都會擋下合併。
+      <span class="source">來源　<a href="../../.github/workflows/main.yaml">.github/workflows/main.yaml</a> · <a href="../../script/ci/changed_groups.py">changed_groups.py</a> · <a href="../../script/ci/scope_groups.py">scope_groups.py</a> · <a href="../../script/ci/gate_result.py">gate_result.py</a> · <a href="../test/TEST.md">doc/test/TEST.md</a> · <a href="#adr-0011">ADR-0011</a></span>
+    </figcaption>
+  </figure>
+  <p>Hosted 的 <code>docs-unit</code> 每次執行；<code>core-unit</code> 與 <code>stream-unit</code> 依範圍執行。<code>core-build</code> 建置選定的 stage 並執行對應 Bats。<code>gui</code> 目前只有建置範圍，尚無專屬 runtime 測試。</p>
+  <p>來自同一儲存庫的 PR 可依範圍觸發 GPU 工作。<code>core-gpu</code> 驗證模擬整合與官方測試，<code>core-official-nativepython</code> 驗證 standalone Python；兩者都先等 <code>core-unit</code>。<code>stream-smoke</code> 與 <code>stream-visual-e2e</code> 在 <code>stream-unit</code> 後檢查連線與畫面；<code>headless-smoke</code> 確認容器能持續執行。</p>
+</section>
+
+<section id="decisions">
+  <h2><span class="num">8.</span> ADR 交叉引用</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th scope="col">ADR</th><th scope="col">Relation</th><th scope="col">Impact</th></tr></thead>
+      <tbody>
+        <tr id="adr-0005">
+          <td><a href="../../src/doc/adr/0005-standalone-with-livestream-as-default-dev-entrypoint.md">ADR-0005</a></td>
+          <td><a href="#driver">§4 獨立執行</a></td>
+          <td>由 Python 腳本啟動 Kit，開發者可經 WebRTC 連線觀察正在執行的模擬。</td>
+        </tr>
+        <tr id="adr-0006">
+          <td><a href="../../src/doc/adr/0006-per-sensor-yaml-camera-config.md">ADR-0006</a></td>
+          <td><a href="#modules">§1 感測器設定</a></td>
+          <td>原決策移至 isaac_physics_test，通用契約見 ADR-0017。場景可逐一引用感測器 YAML。</td>
+        </tr>
+        <tr id="adr-0007">
+          <td><a href="../../src/doc/adr/0007-custom-streaming-experience-for-simulationapp.md">ADR-0007</a></td>
+          <td><a href="#stages">§6 串流設定（已取代）</a></td>
+          <td>自訂 Kit experience 已移除。串流冒煙腳本與 producer 改用 NVIDIA 的 full streaming experience。</td>
+        </tr>
+        <tr id="adr-0008">
+          <td><a href="../../src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md">ADR-0008</a></td>
+          <td><a href="#physics">§5 物理層級</a></td>
+          <td>保留原決策的移轉指引。ADR-0017 重述 L2、L3 的驅動方式、單向施力與接觸回報。</td>
+        </tr>
+        <tr id="adr-0009">
+          <td><a href="../../src/doc/adr/0009-isaac-driver-base-class-lifecycle-only-pattern.md">ADR-0009</a></td>
+          <td><a href="#driver">§4 生命週期</a></td>
+          <td>基底類別管理 Kit 啟動與關閉，子類別可覆寫 main() 來控制每個模擬步驟。</td>
+        </tr>
+        <tr id="adr-0010">
+          <td><a href="../../src/doc/adr/0010-isaac-dev-kit-standardized-development-environment.md">ADR-0010</a></td>
+          <td><a href="#modules">§1 開發套件</a></td>
+          <td>早期四層開發環境的原文已移出。ADR-0017 將通用功能整理為下游可匯入的框架。</td>
+        </tr>
+        <tr id="adr-0011">
+          <td><a href="../../src/doc/adr/0011-ci-architecture-with-self-hosted-gpu-runner.md">ADR-0011</a></td>
+          <td><a href="#ci">§7 CI 分層</a></td>
+          <td>Hosted 與 GPU runner 分別驗證純程式邏輯和實際模擬；現行工作流程依範圍執行並由 gate 彙整。</td>
+        </tr>
+        <tr id="adr-0012">
+          <td><a href="../../src/doc/adr/0012-research-org-split-dual-org-runners.md">ADR-0012</a></td>
+          <td><a href="#ci">§7 Runner 歸屬</a></td>
+          <td>記錄組織層級的雙 runner 拓撲與存取邊界。儲存庫整併後的配置見 ADR-0011 與 ADR-0017 的修訂。</td>
+        </tr>
+        <tr id="adr-0013">
+          <td><a href="../../src/doc/adr/0013-test-repo-ownership-and-tool-sublayer.md">ADR-0013</a></td>
+          <td><a href="#ci">§7 測試配置</a></td>
+          <td>整併後 pytest 保留 unit、integration 分層；Bats 冒煙測試的位置後由 ADR-0022 調整。</td>
+        </tr>
+        <tr id="adr-0014">
+          <td><a href="../../src/doc/adr/0014-sim-runtime-stage-taxonomy-stream-vs-headless.md">ADR-0014</a></td>
+          <td><a href="#stages">§6 執行與測試</a></td>
+          <td>stream 提供 WebRTC 觀察，headless 用於批次執行，devel-test 裝入 CI 所需工具。</td>
+        </tr>
+        <tr id="adr-0015">
+          <td><a href="../../src/doc/adr/0015-cross-subnet-ros2-viewing-tcp-dds.md">ADR-0015</a></td>
+          <td><a href="#interface">§2 ROS 2 下游</a></td>
+          <td>跨子網 Fast DDS TCP 的設定與 RGB-D 檢視操作已交由 isaac_ros_io 維護。</td>
+        </tr>
+        <tr id="adr-0016">
+          <td><a href="../../src/doc/adr/0016-base-native-per-instance-via-run-instance-and-hooks.md">ADR-0016</a></td>
+          <td><a href="#stages">§6 容器 hooks</a></td>
+          <td>沿用 base 的 run/stop hooks 管理主機設定與 viewer。當時的同庫多實例機制後由 ADR-0019 移除。</td>
+        </tr>
+        <tr id="adr-0017">
+          <td><a href="../../src/doc/adr/0017-isaac-base-repo-convergence-contract.md">ADR-0017</a></td>
+          <td><a href="#modules">§1 框架契約</a></td>
+          <td>確立共用框架、場景與感測器設定及 host 可匯入的約束。對外 I/O 與模型匯入邊界分別由 ADR-0023、ADR-0026 更新。</td>
+        </tr>
+        <tr id="adr-0018">
+          <td><a href="../../src/doc/adr/0018-adopt-isaac-lab-sim-utils-spawn-backend.md">ADR-0018</a></td>
+          <td><a href="#spawn">§3 生成後端（已取代）</a></td>
+          <td>ADR-0026 取代 Isaac Lab sim_utils 與 AppLauncher。現行後端以 Core Experimental 建立場景，以 SimulationApp 啟動 Kit。</td>
+        </tr>
+        <tr id="adr-0019">
+          <td><a href="../../src/doc/adr/0019-remove-same-repo-multi-instance.md">ADR-0019</a></td>
+          <td><a href="#stages">§6 實例範圍</a></td>
+          <td>移除單一 checkout 內的多實例啟動選項，預設串流流程啟動一套模擬與對應的 viewer。</td>
+        </tr>
+        <tr id="adr-0020">
+          <td><a href="../../src/doc/adr/0020-urdf-usd-ingestion-fidelity.md">ADR-0020</a></td>
+          <td><a href="#spawn">§3 資產保真度</a></td>
+          <td>記錄 URDF 轉換時的網格、碰撞幾何與關節參數處理原則；轉換工作現由 asset_converter 負責。</td>
+        </tr>
+        <tr id="adr-0022">
+          <td><a href="../../src/doc/adr/0022-conform-bats-smoke-to-base-canonical-layout.md">ADR-0022</a></td>
+          <td><a href="#ci">§7 Bats 目錄</a></td>
+          <td>Bats 冒煙測試集中到 test/bats/smoke/，與 base 的建置與發行流程共用目錄慣例。</td>
+        </tr>
+        <tr id="adr-0023">
+          <td><a href="../../src/doc/adr/0023-python-sole-external-interface.md">ADR-0023</a></td>
+          <td><a href="#interface">§2 對外契約</a></td>
+          <td>Python 是唯一對外程式介面；ROS 2 等下游可替換，框架可獨立於中介軟體使用。</td>
+        </tr>
+        <tr id="adr-0024">
+          <td><a href="../../src/doc/adr/0024-sensor-three-layer-split.md">ADR-0024</a></td>
+          <td><a href="#modules">§1 感測器分工</a></td>
+          <td>將設定與 prim 工具、建立感測器的分派邏輯及 ROS 發布拆開。現行框架保留前兩者，ROS I/O 交由下游。</td>
+        </tr>
+        <tr id="adr-0025">
+          <td><a href="../../src/doc/adr/0025-output-mode-ros-or-python.md">ADR-0025</a></td>
+          <td><a href="#interface">§2 輸出模式（已取代）</a></td>
+          <td>原訂的 ros／python 雙模式已撤回。現行輸出只接受 python，ROS I/O 透過 ISAAC_IO_PLUGIN 接入。</td>
+        </tr>
+        <tr id="adr-0026">
+          <td><a href="../../src/doc/adr/0026-drop-isaac-lab-dependency.md">ADR-0026</a></td>
+          <td><a href="#spawn">§3 USD 輸入邊界</a></td>
+          <td>isaac 維持官方 Isaac Sim 基底，移除 Isaac Lab 依賴，只接收 asset_converter 轉好的 USD。</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</main>
+</body>
+</html>
