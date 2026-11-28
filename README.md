@@ -126,6 +126,8 @@ Available GPU memory sets the practical instance count. On a 32607 MiB card, eac
 
 Isaac ships no example models. Use USD models from `sim_asset` or the output of `asset_converter`.
 
+To validate a USD asset, use Isaac Sim’s [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html) tool.
+
 1. Run `cp setup.isaac_sample.toml setup.local.toml` to create the gitignored local configuration. If you already have a local configuration, merge the sample into it to keep your checkout settings.
 2. Edit the model mount’s `source` to point to your models. Keep its read-only target at `/home/${USER_NAME}/models/sim_asset` so scenes resolve the same paths on every machine. If you add model mounts, add their container paths to `MODEL_PATH`, separated by colons.
 3. Start the container with `just docker run -t headless -d`.

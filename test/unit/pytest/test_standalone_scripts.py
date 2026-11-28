@@ -2,6 +2,7 @@
 
 import importlib.util
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -85,11 +86,11 @@ def test_run_and_exit_turns_an_exception_into_exit_code_1(capsys):
     codes = []
 
     def _boom():
-        raise ModuleNotFoundError("No module named 'omni.isaac.dynamic_control'")
+        raise ModuleNotFoundError("No module named 'missing_extension'")
 
     helper.run_and_exit(_boom, exit_fn=codes.append)
     assert codes == [1]
-    assert "omni.isaac.dynamic_control" in capsys.readouterr().err
+    assert "missing_extension" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("returned, expected", [(None, 0), (0, 0), (3, 3)])
@@ -117,3 +118,19 @@ def test_standalone_sensor_shims_expose_devkit_prim_setup(script, entry, monkeyp
     shim = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(shim)
     assert getattr(shim, entry) is getattr(sensors, entry)
+
+
+def test_usd_inspector_is_retired():
+    assert not (_SCRIPT_DIR / "inspect_usd.py").exists()
+
+
+def test_python_sources_do_not_reference_removed_control_extension():
+    removed_extension = "dynamic" + "_control"
+    result = subprocess.run(
+        ["git", "grep", "-nF", removed_extension, "--", "*.py"],
+        cwd=_REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
