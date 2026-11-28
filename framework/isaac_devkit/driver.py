@@ -5,7 +5,7 @@ Subclass contract:
     from isaac_devkit.driver import IsaacDriver
 
     class MyDriver(IsaacDriver):
-        USD = "model/usd/robot/openbase/openbase.usd"  # repo-relative
+        USD = "model/usd/robot/camera_bot/camera_bot.usd"  # repo-relative
 
         def setup(self, stage):
             self.stage = stage
@@ -140,7 +140,7 @@ def boot_extension_kit_args(extensions) -> list:
 def resolve_repo_relative_usd(usd_path: str, *, module_file: str) -> Path:
     """Resolve a repo-relative USD path to an absolute ``Path``.
 
-    Subclasses declare ``USD = "model/usd/robot/openbase/openbase.usd"``
+    Subclasses declare ``USD = "model/usd/robot/camera_bot/camera_bot.usd"``
     so that the path travels with the repo and does not bake in a
     container mount point. The resolution uses the module's filesystem
     location: ``framework/isaac_devkit/driver.py`` lives two levels under
@@ -157,7 +157,7 @@ def resolve_repo_relative_usd(usd_path: str, *, module_file: str) -> Path:
     if not usd_path:
         raise ValueError(
             "USD class attribute is required; subclass must set it to a "
-            "repo-relative path (e.g. 'model/usd/robot/openbase/openbase.usd')"
+            "repo-relative path (e.g. 'model/usd/robot/camera_bot/camera_bot.usd')"
         )
     p = Path(usd_path)
     if p.is_absolute():
@@ -179,8 +179,7 @@ class IsaacDriver:
     Class attributes:
         ``USD`` -- repo-relative path to the USD that ``run()`` opens
         after Kit boots. Deprecated in favor of ``SCENE`` (ADR-0017
-        section 9); kept functional for the existing drivers until the
-        forklift migration (#136). Subclass must set this for now.
+        section 9). Set this for drivers that open a USD directly.
         ``SCENE`` -- repo-relative path to a scene YAML (ADR-0017 A7
         contract surface). Used by scene-based drivers.
 
