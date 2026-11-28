@@ -7,8 +7,8 @@
 #      Isaac container at /etc/host.yaml (so the user's subsequent
 #      `exec` -- driver script or runheadless-host-config.sh -- reads the
 #      right public_ip);
-#   2. starts the web-viewer :runtime container (stream-only) on the
-#      default WebRTC signaling + serve ports.
+#   2. pulls the published viewer image if absent and starts the viewer
+#      in stream-only mode on the configured signaling and serve ports.
 #
 # Naming: the Isaac container is ${USER_NAME}-${IMAGE_NAME}-stream and the
 # viewer is the symmetric ${USER_NAME}-${IMAGE_NAME}-owv, so two isolated
@@ -50,7 +50,7 @@ done
 
 repo_root="${FILE_PATH:-$(pwd -P)}"
 
-# Identity vars for container naming + viewer image. Under the base A2
+# Identity vars for container naming. Under the base A2
 # model these live in .env.generated (USER_NAME / IMAGE_NAME /
 # DOCKER_HUB_USER, resolved by setup.sh); .env is the user overlay layered
 # on top. Source .generated FIRST, then .env so user edits win.
@@ -78,7 +78,8 @@ fi
 # isaac-owned, per-project.
 isaac_container="${ISAAC_STREAM_CONTAINER:-${USER_NAME}-${IMAGE_NAME}-stream}"
 wv_container="${USER_NAME}-${IMAGE_NAME}-owv${_viewer_suffix}"
-wv_image="${DOCKER_HUB_USER:-local}/omniverse_web_viewer:runtime"
+# Pin the published release for reproducible launches. Set OWV_IMAGE to override it.
+wv_image="${OWV_IMAGE:-ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0}"
 host_yaml="${repo_root}/config/host.yaml"
 
 _docker() {
@@ -130,8 +131,12 @@ if [ "${#isaac_env[@]}" -gt 0 ] && [ -f "${host_yaml}" ]; then
   rm -f "${isaac_env_file}"
 fi
 
-# 4. web-viewer (idempotent: drop a stale container first). Ports come from
-# host.yaml with the documented omit-fallbacks; MEDIA_PORT is passed only
+# 4. Ensure the viewer image is available before replacing a stale viewer.
+if [[ "${POST_RUN_DRYRUN:-0}" == 1 ]] || ! docker image inspect "${wv_image}" >/dev/null 2>&1; then
+  _docker pull "${wv_image}"
+fi
+
+# Ports come from host.yaml with the documented defaults. MEDIA_PORT is passed only
 # when pinned (closes the un-wired media link, PRD-viewer-architecture:94).
 if [ "${POST_RUN_DRYRUN:-0}" = "1" ]; then
   printf 'docker rm -f %s\n' "${wv_container}"

@@ -24,7 +24,7 @@ ALLOWED_FILES = {
 def repository_files():
     if (ROOT / ".git").exists():
         names = subprocess.check_output(
-            ["git", "ls-files", "-z", "--", ".", ":!.base", ":!web_viewer"], cwd=ROOT
+            ["git", "ls-files", "-z", "--", ".", ":!.base"], cwd=ROOT
         )
         for name in names.split(b"\0"):
             if name:
@@ -34,7 +34,7 @@ def repository_files():
     for directory, subdirs, names in os.walk(ROOT):
         relative = Path(directory).relative_to(ROOT)
         if relative == Path("."):
-            subdirs[:] = [name for name in subdirs if name not in {".base", "web_viewer"}]
+            subdirs[:] = [name for name in subdirs if name not in {".base"}]
         for name in names:
             yield relative / name
 

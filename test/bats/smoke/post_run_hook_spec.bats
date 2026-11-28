@@ -18,9 +18,8 @@
 # Gate: only acts on the stream stage WITH -d/--detach. Anything else
 # (headless, foreground, a driver CMD) is a no-op.
 #
-# Exercised via POST_RUN_DRYRUN=1, which prints the planned docker
-# commands instead of executing them. Baked into /smoke_test/ as
-# post_run_hook.sh by the devel-test stage.
+# Check the dry-run plan and exercise image selection with a docker stub.
+# The devel-test stage copies the hook to /smoke_test/post_run_hook.sh.
 
 bats_require_minimum_version 1.5.0
 
@@ -30,6 +29,8 @@ setup() {
   REPO="$(mktemp -d)"
   export FILE_PATH="${REPO}"
   export POST_RUN_DRYRUN=1
+  unset OWV_IMAGE
+  PINNED_IMAGE="ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0"
   export HOST_YAML_LIB="${BATS_TEST_DIRNAME}/host_yaml.sh"
   # The default-project case must be byte-identical to today's names. Clear
   # any ambient PROJECT_NAME so the default tests never see a viewer suffix
@@ -216,8 +217,7 @@ teardown() {
   # .env.generated; .env may be absent entirely. The hook must still
   # resolve identity from .env.generated. With an EMPTY USER_NAME the
   # Isaac container name becomes "-isaac-stream" (leading dash, which
-  # `docker cp` parses as a flag and dies) and the viewer image becomes
-  # "local/..." -- the two S7 live-run defects this fix closes.
+  # `docker cp` parses as a flag and dies).
   rm -f "${REPO}/.env"
   printf 'network:\n  public_ip: "127.0.0.1"\n' > "${REPO}/config/host.yaml"
   run --separate-stderr "${HOOK}" -t stream -d
@@ -225,9 +225,7 @@ teardown() {
   # Container name uses USER_NAME from .env.generated -- crucially NO leading dash.
   echo "${output}" | grep -qE 'docker cp .*alice-isaac-stream:/etc/host.yaml'
   ! echo "${output}" | grep -qE 'docker cp .*[ ]-isaac-stream:'
-  # Viewer image uses DOCKER_HUB_USER from .env.generated, not the local fallback.
-  echo "${output}" | grep -qE 'docker run .*alice/omniverse_web_viewer:runtime'
-  ! echo "${output}" | grep -qE 'docker run .*local/omniverse_web_viewer:runtime'
+  [ "$(awk '/^docker run / {print $NF}' <<< "${output}")" = "${PINNED_IMAGE}" ]
 }
 
 @test "post-run: .env overlays .env.generated identity (user override wins)" {
@@ -240,12 +238,53 @@ teardown() {
   echo "${output}" | grep -qE 'docker cp .*bob-isaac-stream:/etc/host.yaml'
 }
 
-@test "post-run: viewer image is omniverse_web_viewer:runtime, not stale owv:runtime (#121)" {
+@test "post-run: dry-run plans the pinned published viewer image (#121, #284)" {
   run --separate-stderr "${HOOK}" -t stream -d
   [ "$status" -eq 0 ]
-  # Image follows the compose naming ${DOCKER_HUB_USER:-local}/omniverse_web_viewer:runtime
-  # (owv renamed the serve image to :runtime; #123 tracks the hook switch).
-  echo "${output}" | grep -qE 'docker run .*alice/omniverse_web_viewer:runtime'
-  # Regression guard (#121): the old short stale image name must not be launched.
-  ! echo "${output}" | grep -qE 'owv:runtime'
+  grep -Fxq "docker pull ${PINNED_IMAGE}" <<< "${output}"
+  [ "$(awk '/^docker run / {print $NF}' <<< "${output}")" = "${PINNED_IMAGE}" ]
+  run grep -E 'owv:runtime|omniverse_web_viewer:(runtime|latest)' <<< "${output}"
+  [ "$status" -eq 1 ]
+}
+
+run_with_docker_stub() {
+  unset POST_RUN_DRYRUN
+  export INSPECT_STATUS="$1"
+  export DOCKER_LOG="${REPO}/docker.log"
+  mkdir -p "${REPO}/bin"
+  cat > "${REPO}/bin/docker" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${DOCKER_LOG}"
+if [[ "$1" == image && "$2" == inspect ]]; then
+  exit "${INSPECT_STATUS}"
+fi
+STUB
+  chmod +x "${REPO}/bin/docker"
+  export PATH="${REPO}/bin:${PATH}"
+  run --separate-stderr "${HOOK}" -t stream -d
+  [ "$status" -eq 0 ]
+}
+
+assert_viewer_calls() {
+  # Keep image operations in order and strip container options from run.
+  diff -u <(printf '%s\n' "$@") <(awk '
+    $1 == "image" && $2 == "inspect" || $1 == "pull" {print}
+    $1 == "run" {print "run", $NF}
+  ' "${DOCKER_LOG}")
+}
+
+@test "post-run: a missing viewer image is pulled before it runs (#284)" {
+  run_with_docker_stub 1
+  assert_viewer_calls "image inspect ${PINNED_IMAGE}" "pull ${PINNED_IMAGE}" "run ${PINNED_IMAGE}"
+}
+
+@test "post-run: a locally present viewer image runs without a pull (#284)" {
+  run_with_docker_stub 0
+  assert_viewer_calls "image inspect ${PINNED_IMAGE}" "run ${PINNED_IMAGE}"
+}
+
+@test "post-run: OWV_IMAGE overrides the image inspected, pulled and run (#284)" {
+  export OWV_IMAGE="ghcr.io/ycpss91255-lab/omniverse_web_viewer:9.9.9"
+  run_with_docker_stub 1
+  assert_viewer_calls "image inspect ${OWV_IMAGE}" "pull ${OWV_IMAGE}" "run ${OWV_IMAGE}"
 }
