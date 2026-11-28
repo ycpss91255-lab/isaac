@@ -9,6 +9,8 @@
 
 ### Removed
 
+- **精簡 Isaac Sim 執行映像（isaac#480）。** 移除額外安裝的 Isaac Lab、CUDA 13 PyTorch、建置工具與 NumPy 還原步驟。沿用 NVIDIA 隨附的套件及 Newton 元件。新增 standalone Python 冒煙檢查，確認 Isaac Lab、torch 和 xacro 均未安裝。Hosted 基準為 944（core 800），Bats 基準為 233（core 129）。
+
 - **移除自訂 USD 檢視腳本（isaac#536）。** Isaac Sim 6.2.0.1 已移除腳本依賴的擴充。若要驗證 USD 資產，請使用官方 [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html)。加入兩項回歸檢查，防止腳本或 Python 引用重新加入。Hosted 共 923 項（core 780）。
 
 - **移除本 repo 的 ROS 2 冒煙腳本、檢視工具及跨容器測試配套（isaac#429）。** 移除退役腳本與操作文件的引用，將兩項 I/O 外掛反向測試集中於 `test/integration/no_ros/`，並保留 #276 的無頭相機 USD prim 測試。Hosted 共 921 項（core 778、gui 0、stream 54、headless 6、docs 83），較 main 增加 18 項 core。Bats 共 234 項（core 130、gui 0、stream 91、headless 13、docs 0），較 main 增加 4 項 GPU gate 檢查。GPU 收集下限為 35 項，均在 Isaac 測試容器內執行。
