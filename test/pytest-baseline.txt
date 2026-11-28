@@ -315,13 +315,15 @@
 # Hosted 951 -> 955, core 807 -> 811.
 # isaac#438: Kit result gates add 2 core cases (hosted 964 -> 966, core 820 -> 822).
 # isaac#440: official Python buckets add 9 core cases (hosted 955 -> 964, core 811 -> 820).
+# isaac#137 adds nine core tests for the framework purity lint and CI wiring.
 # isaac#403 新增 13 項 GPU 工作流程版本與清理輸入測試（hosted 973 → 986，core 829 → 842）。
 # isaac#416: two core documentation checks (hosted 986 -> 988, core 842 -> 844).
 # isaac#520 新增 1 項 IMU 建立測試（hosted 988 → 989，core 844 → 845）。
 # isaac#437 adds eleven core cases for the scoped standalone workflow and runner (hosted 989 -> 1000, core 845 -> 856).
 # isaac#438 adds 2 Kit result validation tests (hosted 1000 -> 1002, core 856 -> 858).
-# isaac#408 新增 5 項 GPU 工作流程清理測試（hosted 1002 → 1007，core 858 → 863）。
-HOSTED_UNIT_BASELINE = 1007
+# isaac#408 再新增 5 項 GPU 工作流程清理測試（hosted 1004 → 1009，core 860 → 865）。
+# isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1009, core 858 -> 860).
+HOSTED_UNIT_BASELINE = 1009
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -372,7 +374,7 @@ HOSTED_UNIT_BASELINE = 1007
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 863
+HOSTED_UNIT_BASELINE_CORE = 865
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
