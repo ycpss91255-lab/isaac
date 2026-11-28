@@ -310,7 +310,8 @@
 # isaac#535 adds one stream camera API case (hosted 923 -> 924, stream 54 -> 55).
 # isaac#478: hosted 924 -> 946 and core 780 -> 802.
 # isaac#480 replaces four NumPy pin tests with two base-dependency guards.
-HOSTED_UNIT_BASELINE = 944
+# isaac#399: 4 core cases for smoke paths, empty matrix and Docker lint coverage.
+HOSTED_UNIT_BASELINE = 948
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -361,7 +362,7 @@ HOSTED_UNIT_BASELINE = 944
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 800
+HOSTED_UNIT_BASELINE_CORE = 804
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
