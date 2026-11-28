@@ -2,9 +2,9 @@
 
 Boots a headless Isaac scene inside the devel-test GPU container with the
 official Jetbot USD (``test/test_assets.py``), builds the python-mode
-output (RGB + depth camera, joint state, IMU) through ``setup_output``,
-steps the app and asserts every registered callback fired with the
-documented dtypes. Pass criterion is marker lines from
+output (RGB, depth, joint state, IMU and both lidars) through
+``setup_output``, steps the app and asserts every registered callback fired
+with the documented dtypes. Pass criterion is marker lines from
 ``_output_hub_runner.py`` (Kit's ``app.close`` swallows the exit code).
 
 Run inside the GPU test container::
@@ -78,3 +78,26 @@ def test_imu_callback_delivers_wxyz_orientation(runner_output):
     m = re.search(r"\[HUB IMU\] count=(\d+) orientation_len=(\d+)",
                   runner_output)
     assert m and int(m.group(1)) >= 1 and int(m.group(2)) == 4
+
+
+@requires_isaac
+def test_lidar_3d_callback_delivers_float32_points(runner_output):
+    marker = re.search(
+        r"^\[HUB LIDAR3D\] count=(\d+) dtype=float32 shape=(\d+)x3$",
+        runner_output, re.MULTILINE,
+    )
+    assert marker, runner_output[-1500:]
+    count, points = map(int, marker.groups())
+    assert count >= 1 and points >= 1
+
+
+@requires_isaac
+def test_lidar_2d_callback_delivers_paired_float32_vectors(runner_output):
+    marker = re.search(
+        r"^\[HUB LIDAR2D\] count=(\d+) dtype=float32 shape=(\d+) "
+        r"angles_dtype=float32 angles_shape=(\d+)$",
+        runner_output, re.MULTILINE,
+    )
+    assert marker, runner_output[-1500:]
+    count, ranges, angles = map(int, marker.groups())
+    assert count >= 1 and ranges == angles >= 1

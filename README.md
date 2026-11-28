@@ -158,11 +158,10 @@ Isaac Sim 6.2.0 uses the NVCF (`omni.services.livestream.nvcf`) livestream proto
 
 ### Browser-based viewer (omniverse_web_viewer)
 
-The [`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo provides a browser-based client as a sidecar container. Bundled as a submodule at `web_viewer/` in this repo.
+The [`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo provides a browser-based client as a sidecar container. The post-run hook pulls the pinned image `ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0` if it is missing locally.
 
 ```bash
-# First time: init submodules + create per-host config
-git submodule update --init --recursive web_viewer
+# First time: create the per-host config
 cp config/host.yaml.example config/host.yaml
 # Edit config/host.yaml: set network.public_ip to this host's LAN IP
 
@@ -189,7 +188,7 @@ just docker stop
 
 `config/host.yaml` is gitignored and per-machine. Its `network.public_ip` is mounted into both the Isaac container (read by `runheadless-host-config.sh` for the Kit `publicEndpointAddress` arg) and the web-viewer container (read by entrypoint for `SIGNALING_SERVER`).
 
-The post-run hook also passes `network.public_ip` to the viewer container as `SIGNALING_SERVER` env -- defense in depth so the viewer still gets the right host IP if its locally cached image was built before `omniverse_web_viewer#12` (the entrypoint that reads `/etc/host.yaml`). Rebuild `owv:runtime` after the `web_viewer/` submodule pointer bumps to pick up newer entrypoint changes.
+To use a different viewer version, set `OWV_IMAGE=ghcr.io/ycpss91255-lab/omniverse_web_viewer:<tag>` in the environment or the `.env` overlay when running `just docker run -t stream -d`.
 
 Requirements: Chrome or Chromium (Firefox incompatible). One interactive client per running Isaac Sim.
 
@@ -276,7 +275,7 @@ ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 
 ### Python output API (isaac#365)
 
-`isaac_devkit.output.setup_output` delivers simulation data to Python callbacks without ROS. Kinds: `rgb` (uint8 `(H, W, 3)`), `depth` (float32 `(H, W)`), `joint_state` (`names` / `positions` / `velocities` / `efforts`) and `imu` (`lin_acc` / `ang_vel` / `orientation`, order `w, x, y, z`). The GPU to CPU copy happens only for kinds that have a registered consumer. `ISAAC_OUTPUT_MODE` supports only `python` (the default). Any other value, including `ros`, raises `ValueError`. The `isaac_ros_io` plugin provides ROS output through `ISAAC_IO_PLUGIN` (ADR-0025 has been superseded).
+`isaac_devkit.output.setup_output` delivers simulation data to Python callbacks without ROS. Kinds: `rgb` (uint8 `(H, W, 3)`), `depth` (float32 `(H, W)`), `joint_state` (`names` / `positions` / `velocities` / `efforts`), `imu` (`lin_acc` / `ang_vel` / `orientation`, order `w, x, y, z`), `lidar_3d` (C-contiguous float32 `(N, 3)` XYZ points in meters), and `lidar_2d` (paired float32 `(N,)` vectors of `ranges` in meters and `angles` in radians). The GPU to CPU copy happens only for kinds that have a registered consumer. `ISAAC_OUTPUT_MODE` supports only `python` (the default). Any other value, including `ros`, raises `ValueError`. The `isaac_ros_io` plugin provides ROS output through `ISAAC_IO_PLUGIN` (ADR-0025 has been superseded).
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
