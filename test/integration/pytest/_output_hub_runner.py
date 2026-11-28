@@ -74,7 +74,7 @@ def _main():
     os.environ["ISAAC_LIVESTREAM"] = "0"
     os.environ["ISAAC_OUTPUT_MODE"] = "python"
     sys.path.insert(0, str(Path(args.repo_root).resolve() / "framework"))
-    from isaacsim import SimulationApp
+    from _kit_boot import time_kit_boot
 
     try:
         from isaac_devkit.output import (
@@ -87,13 +87,14 @@ def _main():
         )
         from isaac_devkit.sensors import load_config, setup_sensor
 
-        app = SimulationApp({
-            "headless": True,
-            "extra_args": [
-                "--enable", "isaacsim.core.nodes",
-                "--enable", "isaacsim.sensors.experimental.physics",
-            ],
-        })
+        with time_kit_boot() as SimulationApp:
+            app = SimulationApp({
+                "headless": True,
+                "extra_args": [
+                    "--enable", "isaacsim.core.nodes",
+                    "--enable", "isaacsim.sensors.experimental.physics",
+                ],
+            })
         import omni.timeline
         from isaacsim.sensors.experimental.physics import IMU
 

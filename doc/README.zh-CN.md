@@ -100,7 +100,7 @@ Kit 每次启动都会打印几种不影响运行的警告：
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-不要直接用 `pkill -f <script>`。容器以 `pid: host` 运行，这个 pattern 也会匹配到 host 与其他容器里的进程。若要全部停掉，`just docker stop` 会移除这个 checkout 的容器，连同里面运行的 Kit 一起。
+每个容器都有自己的 PID 命名空间，因此在容器里运行的 `pkill` 只能看到该容器里的进程。不要直接用 `pkill -f <script>`，因为这个 pattern 仍可能匹配到同一容器里的其他进程。若要全部停掉，用 `just docker stop` 移除这个 checkout 的容器，里面运行的 Kit 也会一起停止。
 
 ### 每个 checkout 一个 image 与一个 compose project
 
@@ -318,6 +318,27 @@ out.step(sim_time_seconds)
 ## 容器 User
 
 容器以对齐 host UID 的非 root user 跑（`USER_NAME` 从 `.env` 读取，默认 UID 1000）。该 user 以数字 gid 加进 base image 官方账号（从其 `USER` 探测，不写死）的 group，可读取 `/isaac-sim/*`（mode `0750`）。该组可写入 MJCF 导入器与 UI 的 `data` 目录，以及导入器的 `data/mjcf`，让 UI 能在输入 XML 旁导出 USD。通过 `/home/${USER_NAME}/work`（mount 到 host `${WS_PATH}`）写的文件保留 host 端 owner，无需 `chown`。
+
+## 容器权限
+
+默认配置仅授予无界面模拟和实时串流所需的最低权限。如果 GUI 或特殊设备需要额外权限，请从以下示例中选取所需的配置，添加到 `setup.local.toml`。如果只需开放单个设备，请将 `/dev:/dev` 改为该设备的路径映射，例如 `/dev/video0:/dev/video0`。
+
+```toml
+[security]
+privileged = true
+
+[[devices.bindings]]
+path = "/dev:/dev"
+
+[[security.cap_add]]
+cap = "SYS_ADMIN"
+
+[[security.cap_add]]
+cap = "NET_ADMIN"
+
+[[security.cap_add]]
+cap = "MKNOD"
+```
 
 ## EULA
 

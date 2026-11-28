@@ -28,6 +28,8 @@ value = "Asia/Taipei"
 
 [deploy]
 gpu_mode = "auto"
+# Isaac Sim's container example uses --gpus all.
+# https://docs.isaacsim.omniverse.nvidia.com/latest/installation/install_container.html
 gpu_count = "all"
 gpu_capabilities = "all"
 gpu_runtime = "auto"
@@ -36,30 +38,21 @@ gpu_runtime = "auto"
 mode = "off"
 
 [network]
+# The same guide requires host networking for WebRTC livestreaming.
 mode = "host"
-ipc = "host"
-pid = "host"
+ipc = "private"
+pid = "private"
 network_name = ""
 ports = []
 
 [security]
-privileged = true
+privileged = false
 cap_drop = []
 
-[[security.cap_add]]
-cap = "SYS_ADMIN"
-
-[[security.cap_add]]
-cap = "NET_ADMIN"
-
-[[security.cap_add]]
-cap = "MKNOD"
-
-[[security.security_opt]]
-opt = "seccomp:unconfined"
-
 [resources]
-shm_size = ""
+# Docker honours shm_size only with private IPC. Keep 16g as headroom for the Kit media pipeline.
+# stream-smoke also passed with the default 64 MB /dev/shm on a local workstation (2026-11-28).
+shm_size = "16g"
 
 [environment]
 env_1 = "ACCEPT_EULA=Y"
@@ -68,9 +61,6 @@ env_8 = "PYTHONPATH=/home/${USER_NAME}/work/framework:/home/${USER_NAME}/work/sr
 
 [devices]
 cgroup_rules = []
-
-[[devices.bindings]]
-path = "/dev:/dev"
 
 [[volumes]]
 source = "${WS_PATH}"
