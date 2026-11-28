@@ -59,7 +59,7 @@ _gpu_reusable_tag() {
   tag=$(_gpu_reusable_tag)
   tag_pattern=$(printf '%s\n' "${tag}" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
   pinned_ref="gpu-self-hosted\\.yml@${tag_pattern}([[:space:]\"']|$)"
-  for f in main.yaml ci-stream-smoke.yaml ci-headless-smoke.yaml publish-stream-source.yaml; do
+  for f in main.yaml ci-stream-smoke.yaml ci-headless-smoke.yaml ci-official-native-python.yaml publish-stream-source.yaml; do
     [ -f "${WORKFLOW_DIR}/${f}" ] || { echo "missing caller: ${f}"; return 1; }
     grep -Eq "${pinned_ref}" "${WORKFLOW_DIR}/${f}" \
       || { echo "${f} is not pinned to gpu-self-hosted.yml@${tag}"; return 1; }

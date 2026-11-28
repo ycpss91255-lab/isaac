@@ -315,6 +315,8 @@ container 不回報 health 狀態（`HEALTHCHECK NONE`）。NGC base image 的 h
 
 stream 組的 `stream-visual-e2e` GPU job 會啟動 stream stage，驗證 Chromium 持續收到能看見紅色測試方塊的影格。
 
+core 組的 `core-official-nativepython` GPU job 會執行 NVIDIA 官方的 standalone Python 測試桶，以及 livestream 與 hello_world 範例。本機執行方式與產物請見 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+
 Workflow 與 job 的命名規則見 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 檢查。
 
 ## Python 測試工具鏈（devel-test 階段）

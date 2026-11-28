@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **在 core CI 執行 NVIDIA 官方 standalone 測試（isaac#437）。** 使用共用 GPU runner 驗證 headless 映像的 41 項 `nativepythontests:testing` 案例，以及 livestream 與 hello_world 範例。同一 job 透過既有 Kit 探針驗證 `IsaacDriver` 的啟動設定。成功與失敗均上傳 JUnit、範例與 driver 日誌。Hosted pytest 從 921 增至 932 項（core 778 增至 789）。
+
 ### Changed
 - **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 119 -> 123（併入 main 後重算）。
 

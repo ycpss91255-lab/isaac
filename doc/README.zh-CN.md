@@ -315,6 +315,8 @@ out.step(sim_time_seconds)
 
 stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromium 持续收到能看到红色测试方块的视频帧。
 
+core 组的 `core-official-nativepython` GPU job 会执行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 
 ## Python 测试工具链（devel-test 阶段）

@@ -28,6 +28,7 @@ _EXPECTED_CALLERS = {
     "ci-stream-smoke.yaml",
     "ci-stream-visual-e2e.yaml",
     "ci-headless-smoke.yaml",
+    "ci-official-native-python.yaml",
     "publish-stream-source.yaml",
 }
 
@@ -60,12 +61,12 @@ def test_every_gpu_reusable_caller_uses_the_pinned_tag():
     }
     assert not bad, (
         f"callers not pinned to @{GPU_REUSABLE_TAG}: {bad}. "
-        "A Dependabot bump must update the 4 caller workflows, the dependabot.yml comment and GPU_REUSABLE_TAG in "
+        "A Dependabot bump must update all caller workflows, the dependabot.yml comment and GPU_REUSABLE_TAG in "
         "gpu_pin.py (the bats pin spec reads the tag from there); the tag has no other copy."
     )
 
 
-def test_gpu_reusable_callers_are_the_known_five():
+def test_gpu_reusable_callers_match_the_expected_set():
     callers = set(_callers())
     assert callers == _EXPECTED_CALLERS, (
         f"missing={_EXPECTED_CALLERS - callers}, extra={callers - _EXPECTED_CALLERS}. "
