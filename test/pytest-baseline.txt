@@ -324,7 +324,11 @@
 # isaac#408 再新增 5 項 GPU 工作流程清理測試（hosted 1018 → 1023，core 874 → 879）。
 # isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
 # isaac#336: USD driver and launcher (+12 core) and per-module import guards (+2 core) (hosted 1004 -> 1018, core 860 -> 874).
-HOSTED_UNIT_BASELINE = 1031
+# isaac#274: test_arch_overview.py adds 8 docs cases (hosted 1023 -> 1031).
+# isaac#558 adds eight core cases for the step timeout, process-group timeout,
+# watchdog default, runner assumption and four READMEs (hosted 1031 -> 1039, core 879 -> 887).
+# isaac#284 adds 8 docs cases for the published viewer image (hosted 1039 -> 1047).
+HOSTED_UNIT_BASELINE = 1047
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -332,13 +336,13 @@ HOSTED_UNIT_BASELINE = 1031
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1023。
+#   以下五組的測試數量下限合計為 1039。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py and test_stream_visual_*.py
 #   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py,
-#               test_readme_cleanup_text.py, test_model_readme_layout.py, test_stage_names_docs.py
+#               test_readme_cleanup_text.py, test_model_readme_layout.py, test_stage_names_docs.py, test_arch_overview.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
 #   (9) and test_main_workflow_scope.py (15), all core: 565 -> 627 (core 592).
@@ -375,15 +379,16 @@ HOSTED_UNIT_BASELINE = 1031
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 879
+HOSTED_UNIT_BASELINE_CORE = 887
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#289 adds 24 docs cases (docs 44 -> 68).
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
-#   isaac#284 adds 8 docs cases for the published viewer image (docs 83 -> 91).
-HOSTED_UNIT_BASELINE_DOCS = 91
+#   isaac#274 adds 8 docs cases (docs 83 -> 91).
+#   isaac#284 adds 8 docs cases for the published viewer image (docs 91 -> 99).
+HOSTED_UNIT_BASELINE_DOCS = 99
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/). NOT enforced at M1 (a skipped GPU job is
