@@ -158,11 +158,10 @@ Isaac Sim 6.2.0 は NVCF（`omni.services.livestream.nvcf`）livestream プロ�
 
 ### Browser-based viewer (omniverse_web_viewer)
 
-[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) リポジトリが、サイドカーコンテナとしてブラウザベースの client を提供。本リポジトリの `web_viewer/` にサブモジュールとして同梱。
+[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) リポジトリが、サイドカーコンテナとしてブラウザベースの client を提供。post-run hook は、固定バージョンの公開イメージ `ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0` がローカルにない場合に取得する。
 
 ```bash
-# 初回：サブモジュール初期化 + per-host config 作成
-git submodule update --init --recursive web_viewer
+# 初回はホスト用の設定ファイルを作成
 cp config/host.yaml.example config/host.yaml
 # config/host.yaml を編集：network.public_ip にこのマシンの LAN IP を設定
 
@@ -189,7 +188,7 @@ just docker stop
 
 `config/host.yaml` は gitignored・per-machine。`network.public_ip` が両方の container にマウントされ、Isaac 側は `runheadless-host-config.sh` が読んで Kit `publicEndpointAddress` 引数に注入、web-viewer 側は entrypoint が読んで `SIGNALING_SERVER` に設定する。
 
-post-run hook はさらに `network.public_ip` を `SIGNALING_SERVER` env として viewer container に渡す — defense in depth として、ローカルキャッシュの viewer image が `omniverse_web_viewer#12`（`/etc/host.yaml` を読む entrypoint）より古い場合でも正しい host IP を取得できる。`web_viewer/` submodule pointer 更新後は `owv:runtime` を手動 rebuild して新しい entrypoint を取り込むこと。
+別のバージョンを使うには、`just docker run -t stream -d` の実行時に、環境変数または `.env` で `OWV_IMAGE=ghcr.io/ycpss91255-lab/omniverse_web_viewer:<tag>` を設定する。
 
 要件：Chrome または Chromium（Firefox 非互換）。稼働中の Isaac Sim ごとに 1 つのインタラクティブ client のみ接続可能。
 
