@@ -254,7 +254,9 @@ fi
 docker run --rm --user "${RUN_AS}" -e HOME=/tmp -e FORBIDDEN_NAMES -e GROUP="${GROUP}" \
   -v "${REPO_ROOT}":/w -w /w "${PY_IMAGE}" sh -c '
   set -eu
-  pip install --quiet --user pyyaml pytest pytest-cov numpy
+  just_version="$(/w/.base/dist/script/base/just-version.sh)"
+  pip install --quiet --user pyyaml pytest pytest-cov numpy "rust-just==${just_version}"
+  export PATH="$HOME/.local/bin:$PATH"
   cd framework
   if [ "${GROUP}" = core ]; then
     set -- --junitxml=/tmp/hosted-junit.xml -rA
