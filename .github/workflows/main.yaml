@@ -243,10 +243,13 @@ jobs:
     with:
       # Also runs the UID matrix with a GPU import for each host identity.
       run-script: ./script/ci/gpu_integration_job.sh
-      artifact-name: startuptests
-      artifact-path: artifacts/startuptests
+      artifact-name: official-tests
+      artifact-path: |
+        artifacts/startuptests
+        artifacts/pythontests
       artifact-when: always
-      timeout-minutes: 30
+      timeout-minutes: 60
+      step-timeout-minutes: 55
       reap-container-filter: label=com.docker.compose.project=isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}
 
   # Stream group GPU job (isaac#434, formerly the nightly schedule of ci-stream-smoke.yaml

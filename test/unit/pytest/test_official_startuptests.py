@@ -30,5 +30,5 @@ def test_startuptests_only_need_isaac_sim():
 
 def test_gpu_job_uploads_the_startuptests_directory_even_on_failure(gpu_inputs):
     assert gpu_inputs.get("artifact-name")
-    assert Path(gpu_inputs["artifact-path"]) == Path("artifacts/startuptests")
+    assert "artifacts/startuptests" in gpu_inputs["artifact-path"].splitlines()
     assert gpu_inputs.get("artifact-when") == "always"

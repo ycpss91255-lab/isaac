@@ -121,7 +121,8 @@ def test_reap_filter_matches_script_baseline_project(tmp_path):
         ("script/setup.sh", _STUB_SETUP),
         ("script/build.sh", _STUB_SUCCESS),
         ("script/ci/uid_matrix.sh", _STUB_SUCCESS),
-        ("script/ci/official_startuptests.sh", "#!/usr/bin/env bash\ntrue\n"),
+        ("script/ci/official_startuptests.sh", _STUB_SUCCESS),
+        ("script/ci/official_pythontests.sh", _STUB_SUCCESS),
         ("test/assert_pytest_baseline.sh", _STUB_BASELINE),
     ):
         (tmp_path / rel).write_text(body, encoding="utf-8")

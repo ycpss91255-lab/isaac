@@ -35,3 +35,7 @@ gpu_job_endgroup
 gpu_job_group "Official Isaac Sim startuptests"
 ./script/ci/official_startuptests.sh
 gpu_job_endgroup
+
+gpu_job_group "Official Isaac Sim pythontests"
+./script/ci/official_pythontests.sh
+gpu_job_endgroup

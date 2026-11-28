@@ -45,6 +45,9 @@
 - **`stream_smoke.sh` 的存活檢查加上 `RestartCount == 0`（isaac#461）。** 原本只看 `State.Running`，重啟迴圈中的容器在兩次重啟之間也是 Running，會被當成存活；現在讀 `{{.State.Running}} {{.RestartCount}}`，必須是 `true 0`。bats stream 80 -> 81。
 
 ### Added
+
+- #440 GPU CI 依 core 範圍依序執行 Isaac Sim 官方 asset 與 deprecated Python 測試，並上傳各桶的 JUnit 報告。
+
 - **`core-gpu` 在 GPU pytest 通過後執行官方 Isaac Sim `startuptests`（isaac#436）。** 使用同一次建置的 test 映像；官方測試失敗會讓 job 失敗。成功或失敗都會上傳 JUnit 報告與 Kit log。Bats 以 Docker stub 驗證執行順序、失敗傳遞及產物，hosted pytest 檢查 workflow 設定。Hosted baseline 882 -> 885（core 741 -> 744），bats core 119 -> 124（gpu_job_scripts_spec 11 -> 16）。
 - **新增 PhysX 與 Newton 的時間軸 GPU 回歸測試（isaac#447）。** 每個引擎只啟動一次 `IsaacDriver`，供車輪位移、時間軸設定與更新頻率三項測試共用。新增的案例檢查 60 Hz 限速與固定時間步進已啟用、循環播放已關閉，並要求模擬時間單調遞增、每模擬秒更新 60 次（容許 ±15%）、實際吞吐量少於 69 次每秒 (僅上限，用來偵測 60 Hz 限速被移除)。GPU core 由 35 增至 39 項。
 - **新增 PR 路徑分組與建置條件的回歸測試（isaac#493）。** 自 #434、#491 起，純文件 PR 已會略過映像建置、各組單元測試與 GPU 工作。本次新增六個案例，涵蓋純文件、混合路徑及工作流程變更，並將排程版本監控工作流程 `base-version-monitor.yaml` 歸入文件組，由 `docs-unit` 繼續檢查工作流程命名。

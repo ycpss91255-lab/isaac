@@ -90,6 +90,12 @@ if [ -n "${SMOKE_RC:-}" ]; then
   exit "${SMOKE_RC}"
 fi
 STUB
+  # The hosted test_official_pythontests.py exercises the bucket runner.
+  cat > "${FAKE}/script/ci/official_pythontests.sh" <<'STUB'
+#!/usr/bin/env bash
+echo "pythontests" >> "${CALLS}"
+STUB
+  chmod +x "${FAKE}/script/ci/official_pythontests.sh"
   # uid_matrix_spec exercises the matrix and its failure status separately.
   printf '#!/bin/sh\nexit 0\n' > "${FAKE}/script/ci/uid_matrix.sh"
   chmod +x "${FAKE}/script/setup.sh" "${FAKE}/script/build.sh" \
@@ -111,7 +117,8 @@ teardown() {
   [ "${lines[3]}" = "WS_PATH=${FAKE}" ]
   [ "${lines[4]}" = "caches=writable" ]
   [[ "${lines[5]}" == "docker run "* ]]
-  [ "${#lines[@]}" -eq 6 ]
+  [ "${lines[6]}" = "pythontests" ]
+  [ "${#lines[@]}" -eq 7 ]
 
   # The baseline gate must finish successfully before starting another Isaac.
   : > "${CALLS}"
