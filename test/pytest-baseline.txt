@@ -87,10 +87,8 @@
 #   --enable -- the dependency belongs in the experience, not in a second
 #   declaration here); one covers the new --media-port / ISAAC_STREAM_PORT
 #   knob (6.0 makes the media port explicit, so two producers on one host
-#   collide on it even with distinct signalling ports). Two pin the
-#   EXPERIENCE, which is where the defect actually was: apps/
-#   isaacsim.exp.base.python.streaming.kit must depend on
-#   omni.kit.livestream.app and must define primaryStream.streamType.
+#   collide on it even with distinct signalling ports). Two tests checked
+#   the former custom experience's livestream dependency and stream type.
 #   Three pin the PUBLISH PATH: the job runs where Kit can boot, the build
 #   step does not push, and the push stands behind an unconditional
 #   producer_smoke.sh with no continue-on-error. That last group is the one
@@ -312,7 +310,8 @@
 # isaac#533 adds two core cases for the first line of the tracker PR body.
 # isaac#493 adds 6 PR scope and build cases (hosted 876 -> 882, core 735 -> 741).
 # isaac#436: official startuptests wiring adds 3 core cases (882 -> 885).
-HOSTED_UNIT_BASELINE = 885
+# isaac#484 adds 3 hosted tests on top of main's 885 -> 888 (core 744 -> 745, stream 52 -> 54).
+HOSTED_UNIT_BASELINE = 888
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -320,7 +319,7 @@ HOSTED_UNIT_BASELINE = 885
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 882。
+#   以下五組的測試數量下限合計為 888。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -355,9 +354,12 @@ HOSTED_UNIT_BASELINE = 885
 #   isaac#442 adds 65 core cases (core 668 -> 733).
 #   isaac#493 adds 6 core cases (core 735 -> 741).
 #   isaac#436 adds 3 core cases (core 741 -> 744).
-HOSTED_UNIT_BASELINE_CORE = 744
+#   isaac#484 replaces two custom experience checks with four checks for the
+#   official experience and removal of the custom file (stream 52 -> 54), and
+#   adds 1 core case (core 744 -> 745).
+HOSTED_UNIT_BASELINE_CORE = 745
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 52
+HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
 HOSTED_UNIT_BASELINE_DOCS = 83

@@ -66,6 +66,8 @@ Verified during PR-A + PR-B of #19:
 
 ## Update (2026-05-21) — `-t headless` does not work for this pattern; switch to `-t standalone` + custom experience
 
+> The custom experience chosen in this update was superseded by isaac#484. See the status of ADR-0007.
+
 Live verification of the original PR-A / PR-B Acceptance Snapshot above exposed two gaps that the issue body assumed away:
 
 1. **`-t headless` container can't host a `SimulationApp` driver.** Its `ENTRYPOINT` is `runheadless.sh` which immediately starts a full Kit instance (`isaacsim.exp.full.streaming.kit`). When `./exec.sh -t headless /isaac-sim/python.sh <driver.py>` is then run, the driver's `SimulationApp({"livestream": 2})` boots a **second** Kit inside the same container; both Kits race for the WebRTC streaming port (8211) and the driver's Kit silently loses. The Streaming Client connects to the first Kit (empty default stage) — the driver's actual scene is never streamed. The PR-A / PR-B test only verified that the driver runs and emits ROS 2 topics (it does); it did not visually verify the Streaming Client view, which never worked end-to-end. Switch to **`-t standalone`** — that target's container is idle (`sleep infinity`) until `./exec.sh` lands a script, so the driver's Kit is the only Kit instance. `ycpss91255-docker/isaac` Dockerfile §standalone explicitly notes this trade-off in its inline comment, predating this finding.
