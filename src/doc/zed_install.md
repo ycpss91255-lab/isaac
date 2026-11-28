@@ -119,7 +119,7 @@ just docker exec -t stream /isaac-sim/python.sh \
     --config /home/<user>/work/src/config/camera/zed.yaml
 ```
 
-The driver log should show `camera graph created at /World/CameraGraphs/forklift_camera_zed`. Topics on a sibling ros:humble container should include `<topic_prefix>/left/image_rect_color`, `<topic_prefix>/depth/depth_registered`, etc.
+The driver log should show `camera graph created at /World/CameraGraphs/robot_camera_zed`. Topics on a sibling ros:humble container should include `<topic_prefix>/left/image_rect_color`, `<topic_prefix>/depth/depth_registered`, etc.
 
 ## Troubleshooting
 

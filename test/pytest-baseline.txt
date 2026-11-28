@@ -315,14 +315,16 @@
 # Hosted 951 -> 955, core 807 -> 811.
 # isaac#438: Kit result gates add 2 core cases (hosted 964 -> 966, core 820 -> 822).
 # isaac#440: official Python buckets add 9 core cases (hosted 955 -> 964, core 811 -> 820).
+# isaac#137 adds nine core tests for the framework purity lint and CI wiring.
 # isaac#403 新增 13 項 GPU 工作流程版本與清理輸入測試（hosted 973 → 986，core 829 → 842）。
 # isaac#416: two core documentation checks (hosted 986 -> 988, core 842 -> 844).
 # isaac#520 新增 1 項 IMU 建立測試（hosted 988 → 989，core 844 → 845）。
 # isaac#437 adds eleven core cases for the scoped standalone workflow and runner (hosted 989 -> 1000, core 845 -> 856).
 # isaac#438 adds 2 Kit result validation tests (hosted 1000 -> 1002, core 856 -> 858).
-# isaac#549 adds ten core container-default cases and four README cases (1002 -> 1016).
-# isaac#549 adds four core README checks for stale host PID claims (hosted 1016 -> 1020; core +14, docs +4 in total).
-HOSTED_UNIT_BASELINE = 1020
+# isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
+# isaac#549 adds ten core container-default cases and four README cases (1004 -> 1018).
+# isaac#549 adds four core README checks for stale host PID claims (hosted 1018 -> 1022; core +14, docs +4 in total).
+HOSTED_UNIT_BASELINE = 1022
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -330,7 +332,7 @@ HOSTED_UNIT_BASELINE = 1020
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1020。
+#   以下五組的測試數量下限合計為 1022。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -374,7 +376,7 @@ HOSTED_UNIT_BASELINE = 1020
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 872
+HOSTED_UNIT_BASELINE_CORE = 874
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6

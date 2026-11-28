@@ -1,8 +1,8 @@
 # isaac — workspace
 
-NVIDIA Isaac Sim workspace content (scripts, docs, USD models) for `ycpss91255-lab/isaac`.
+NVIDIA Isaac Sim workspace content (scripts, docs, sensor configs) for `ycpss91255-lab/isaac`.
 
-This directory holds the editable content (driver scripts, documentation, 3D models) that runs inside the Isaac Sim Docker development environment defined at the repo root. It used to be a separate repo, `ycpss91255-lab/isaac`, which wrapped the Docker environment as a `docker/` submodule. Both were merged into this single repo per [#78](https://github.com/ycpss91255-lab/isaac/issues/78), and the research repo is archived.
+This directory holds the editable content (driver scripts, documentation, sensor configs) that runs inside the Isaac Sim Docker development environment defined at the repo root. It used to be a separate repo, `ycpss91255-lab/isaac`, which wrapped the Docker environment as a `docker/` submodule. Both were merged into this single repo per [#78](https://github.com/ycpss91255-lab/isaac/issues/78), and the research repo is archived.
 
 **[English](README.md)** | **[繁體中文](doc/readme/README.zh-TW.md)** | **[简体中文](doc/readme/README.zh-CN.md)** | **[日本語](doc/readme/README.ja.md)**
 
@@ -16,11 +16,8 @@ src/
 ├── doc/           # Documentation, ADRs, SOPs
 │   ├── readme/    # README translations
 │   └── adr/       # Architecture Decision Records
-├── scene/         # Scene definitions
 ├── script/        # Driver scripts (run inside Isaac Sim Kit / standalone Python)
-└── model/         # 3D models
-    ├── sw/        # SolidWorks raw source
-    └── usd/       # Authored / converted USD
+└── model/         # Model locations in sim_asset (see model/README.md)
 ```
 
 ## Getting Started
