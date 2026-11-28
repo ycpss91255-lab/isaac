@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **987 tests**.
+**233 tests** total (bats). Hosted pytest collects **1002 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 843 | 37 | 1009 |
+| core | 129 | 858 | 37 | 1024 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -376,15 +376,15 @@ Both #428 specs read files from the checkout when run locally. In the devel-test
 
 ## test/bats/smoke/workflow_pin_spec.bats (4)
 
-The Bats pin checks scan text and read the expected tag from `GPU_REUSABLE_TAG` in `test/unit/pytest/gpu_pin.py` (no hard-coded tag in the spec). The authoritative structural guard is `test_workflow_pins.py`, which parses each workflow's jobs.
+The Bats pin checks scan text and read the minimum release tag from `GPU_REUSABLE_MIN_TAG` in `test/unit/pytest/gpu_pin.py` (no hard-coded tag in the spec). The authoritative structural guard is `test_workflow_pins.py`, which parses each workflow's jobs.
 
 Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must be pinned to a release tag, never `@main`. When `.github`'s main branch is broken, every isaac push/PR that reaches `gpu-integration` or `stream-smoke` fails with "workflow file issue" and 0 jobs (run 42776185240, 2026-11-10). The base `build-worker.yaml` and `release-worker.yaml` are already pinned (e.g. `@v0.42.0`); this spec covers `gpu-self-hosted.yml`. Hermetic -- greps (pin tests) or PyYAML-parses (isaac#344 tests) `.github/workflows/` files, no docker or network.
 
 | Test | Description |
 |------|-------------|
 | `no workflow references gpu-self-hosted.yml@main` | Greps every workflow YAML under `.github/workflows/` and fails if any references `gpu-self-hosted.yml@main`. |
-| `every gpu-self-hosted.yml caller uses the pinned tag` | main.yaml, ci-stream-smoke.yaml, ci-headless-smoke.yaml and publish-stream-source.yaml must each exist and reference `gpu-self-hosted.yml@<GPU_REUSABLE_TAG>`; any other `gpu-self-hosted.yml@` tag fails. The spec's `setup` fails when the workflows directory is absent (the devel-test image now bakes `.github/workflows/`). |
-| `gpu-integration passes the run-scoped reap-container-filter` | Parses main.yaml with PyYAML (never greps) and asserts the `core-gpu` job uses `gpu-self-hosted.yml@<GPU_REUSABLE_TAG>` and its `with:` carries `reap-container-filter` equal to `label=com.docker.compose.project=isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}` (isaac#344). |
+| `every gpu-self-hosted.yml caller meets the minimum release tag` | main.yaml, ci-stream-smoke.yaml, ci-headless-smoke.yaml and publish-stream-source.yaml must each exist and reference `gpu-self-hosted.yml`. Every reference across all workflows must use a `vX.Y.Z` release tag at or above `GPU_REUSABLE_MIN_TAG`. The spec's `setup` fails when the workflows directory is absent (the devel-test image now bakes `.github/workflows/`). |
+| `core-gpu passes the run-scoped reap-container-filter` | Parses main.yaml with PyYAML (never greps) and asserts the `core-gpu` job uses the org’s `gpu-self-hosted.yml` at or above the minimum release tag and its `with:` carries `reap-container-filter` equal to `label=com.docker.compose.project=isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}` (isaac#344). |
 | `reap-container-filter names the BASELINE_PROJECT gpu_integration_job.sh runs` | Runs the real `gpu_integration_job.sh` against stubs with `GITHUB_RUN_ID=111 GITHUB_RUN_ATTEMPT=2`, captures the `BASELINE_PROJECT` it exports, renders the workflow filter with the same values and asserts they name the same compose project (isaac#344). |
 
 ## test/bats/smoke/run_bats_spec.bats (8)
@@ -431,7 +431,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **987 tests** on a host without Isaac Sim. isaac#440 adds nine core cases for the official Python buckets. isaac#399 adds four core cases for standalone smoke path portability and Docker lint coverage. Issue #528 adds seven core tests for the pre-run hook using base's TOML parser. They cover listing missing mounts while startup proceeds, a changed source at an existing target, a complete list with an extra mount and custom mode, inherited volumes with and without a local file, explicit empty lists, and advisory parse failures. isaac#478 adds 22 core cases for the scene backend and override contract. isaac#535 adds one stream case for camera framing. isaac#536 adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#480 replaces four NumPy pin cases with two base-dependency guards. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the USD default driver and launcher and one GPU case. isaac#416 adds two core checks for the CHANGELOG entry and this document's hosted count summary. isaac#440 adds nine core cases for the official Python buckets. isaac#399 adds four core cases for standalone smoke path portability and Docker lint coverage. Issue #528 adds seven core tests for the pre-run hook using base's TOML parser. They cover listing missing mounts while startup proceeds, a changed source at an existing target, a complete list with an extra mount and custom mode, inherited volumes with and without a local file, explicit empty lists, and advisory parse failures. isaac#478 adds 22 core cases for the scene backend and override contract. isaac#535 adds one stream case for camera framing. isaac#536 adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#480 replaces four NumPy pin cases with two base-dependency guards. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -450,8 +450,8 @@ The hosted suite collects **987 tests** on a host without Isaac Sim. isaac#440 a
 | `test_buffers.py` | 7 | `isaac_devkit.buffers.to_u8_buffer` (isaac#365, Bug 2 regression): a float32 depth image is 4 bytes per pixel and equals `tobytes()`, uint8 RGB round-trips, returns `array.array('B')`, accepts stdlib buffers, and the non-contiguous contract (strided / Fortran-ordered input raises `ValueError`, `np.ascontiguousarray` input passes). Needs `numpy` (installed by `assert_pytest_baseline.sh`). |
 | `test_no_ros_import_in_devkit.py` | 32 | 逐檔檢查原始碼（含註解與 docstring）沒有 `rclpy` 或 `isaacsim.ros2`。在新的 Python 程序中匯入整個套件及所有子模組，逐次確認未載入 ROS 模組。另檢查預設 Kit 擴充套件、已移除的兩個模組及三個公開名稱。 |
 | `test_default_driver.py` | 7 | Checks the required USD path, relative path resolution, inherited stage and lifecycle hooks, playback with a fake Kit, and Kit-free imports of the driver and launcher. |
-| `test_run_scene.py` | 10 | Checks custom driver discovery, USD precedence, CLI dispatch and the Python script entry point. |
 | `test_run_scene_just.py` | 3 | Checks recipe registration and captures the arguments sent to the exec wrapper for USD and driver paths containing spaces. |
+| `test_run_scene.py` | 10 | Checks custom driver discovery, USD precedence, CLI dispatch and the Python script entry point. |
 | `test_camera_setup.py` | 29 | Camera surface of `isaac_devkit.sensors` (former `camera_setup.py`): `validate_camera`, unified `load_config`, role -> Camera Helper type, FOV -> aperture math. |
 | `test_sensor_setup.py` | 26 | `isaac_devkit.sensors` (former `sensor_setup.py`): YAML load, shared validation, category dispatch, per-category validation (lidar profile, IMU rigid-body rule), plus `_enable_extensions` through the `omni.kit.app` extension manager with `isaacsim.core.utils` unimportable and a static no-`isaacsim.core.utils`-import scan (isaac#248). |
 | `test_sensor_prim.py` | 23 | `isaac_devkit.sensor_prim` (layer a, ADR-0024): config loading, shared/per-category validation, `ros:` section optional (loads without `ros:`, validates `ros:` when present), host-pure helpers (`fov_to_aperture`, `role_to_helper_type`), `get_category`. |
