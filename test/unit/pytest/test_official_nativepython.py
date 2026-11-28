@@ -60,6 +60,8 @@ def test_container_suite_and_examples(
     runner = sim / "run_tests.py"
     runner.write_text(
         "import sys\nfrom pathlib import Path\n"
+        "assert Path.cwd() != Path(__file__).resolve().parent\n"
+        "Path('_out_motion_blur_probe').mkdir()\n"
         "assert sys.argv[1:5] == ['--suite', 'nativepythontests', '--bucket', 'testing']\n"
         "assert sys.argv[5] == '--output'\n"
         f"report = '<testsuite name=\"nativepythontests.testing\" tests=\"{count}\" "

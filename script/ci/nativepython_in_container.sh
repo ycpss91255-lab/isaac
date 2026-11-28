@@ -2,11 +2,14 @@
 set -euo pipefail
 
 cd "${1:?Isaac Sim directory required}"
-artifacts="${2:?Artifact directory required}"
+sim_dir="${PWD}"
+artifacts="$(realpath "${2:?Artifact directory required}")"
+work_dir="$(mktemp -d)"
+trap 'rm -rf "${work_dir}"' EXIT
+
 # Exercise the repo's SimulationApp launch config through its existing Kit
 # probe. Kit can terminate with exit zero, so require the in-app marker too.
-usd="$(mktemp --suffix=.usda)"
-trap 'rm -f "${usd}"' EXIT
+usd="${work_dir}/probe.usda"
 cat > "${usd}" <<'USD'
 #usda 1.0
 (
@@ -28,8 +31,13 @@ if ! grep -Fxq '[MARKER] 1' "${artifacts}/driver.log"; then
 fi
 
 bucket_rc=0
-python3 run_tests.py --suite nativepythontests --bucket testing \
-  --output "${artifacts}/testing.xml" || bucket_rc=$?
+# Replicator writes render output relative to the working directory.
+mkdir "${work_dir}/bucket"
+(
+  cd "${work_dir}/bucket" || exit
+  python3 "${sim_dir}/run_tests.py" --suite nativepythontests --bucket testing \
+    --output "${artifacts}/testing.xml"
+) || bucket_rc=$?
 if (( rc == 0 )); then rc=${bucket_rc}; fi
 
 # The upstream runner can return zero despite reporting failures in JUnit.

@@ -25,7 +25,7 @@ GITHUB_WORKSPACE="$PWD" GITHUB_RUN_ID=local437 GITHUB_RUN_ATTEMPT=1 \
   ./script/ci/official_nativepython_job.sh
 ```
 
-The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist.
+The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. The bucket runs from a writable temporary working directory so Replicator can create render outputs. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist.
 
 The job also runs the existing Kit settings probe through this repository's `IsaacDriver`. The probe requires the running app to report the setting passed in its launch configuration.
 
