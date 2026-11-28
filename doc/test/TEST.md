@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1002 tests**.
+**233 tests** total (bats). Hosted pytest collects **1005 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 858 | 36 | 1023 |
+| core | 129 | 861 | 36 | 1026 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -462,6 +462,7 @@ The hosted suite runs without Isaac Sim. isaac#438 adds two core cases for Kit r
 
 | File | Collected | Scope |
 |------|:---------:|-------|
+| `test_kit_timing.py` | 3 | `core`. Checks that each runner boot counts once, file durations add up to the suite total, and the JSON report matches the terminal rows (isaac#527). |
 | `test_operator_volumes.py` | 7 | `core`. Checks the pre-run hook’s advisory volume coverage against base’s TOML merge rules (isaac#528). |
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
 | `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and sample references and no references to the unavailable `just run scene` recipe in all four READMEs (isaac#338). |
@@ -533,6 +534,8 @@ The hosted suite runs without Isaac Sim. isaac#438 adds two core cases for Kit r
 ### test/integration/pytest/
 
 The GPU suite collects **36 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
+
+For `test/integration/pytest/`, the terminal summary prints a `[FILE-TIMING]` row per file and a `TOTAL` row. Each row splits elapsed time, including fixture setup and teardown, into Kit construction (`kit_boot_sec`) and the remaining time (`test_body_sec`). Set `KIT_TIMING_JSON` to a file path to save the same measurements.
 
 | Test | Description |
 |------|-------------|
