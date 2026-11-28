@@ -4,6 +4,7 @@
 
 ### Added
 - **新增 Python 輸出模式的 GPU 整合測試（isaac#390）。** 測試放在 `test/integration/no_ros/`，因為檢查內容需要提到 ROS 2 bridge 節點名稱。驗證 Jetbot 相機的 RGB 回呼能收到影格，並確認 OmniGraph 中的 ROS 2 bridge 節點數為零。暖機 30 步後量測 300 步的平均耗時與第 95 百分位數，要求後者低於 33.3 毫秒。GPU 測試基準由 36 提高至 39。
+- **在 core CI 執行 NVIDIA 官方 standalone 測試（isaac#437）。** 使用共用 GPU runner 驗證 headless 映像的 41 項 `nativepythontests:testing` 案例，以及 livestream 與 hello_world 範例。同一 job 透過既有 Kit 探針驗證 `IsaacDriver` 的啟動設定。成功與失敗均上傳 JUnit、範例與 driver 日誌。Hosted pytest 從 964 增至 975 項（core 820 增至 831）。
 - **新增 GPU 共用工作流程版本下限測試（isaac#403）。** 五個呼叫端須共用同一個正式版本標籤，下限為首次支援 `reap-container-filter` 的 `v0.4.0`。新增案例涵蓋較新版本、過舊或格式不符的標籤，以及 `core-gpu` 缺少清理輸入的情形。新增 13 項 core 測試。
 - **框架純淨度檢查與基礎 repo 契約（isaac#137）。** Core CI 檢查框架原始碼與套件設定中的應用專屬詞彙。四語 README 說明下游透過 submodule 匯入共用框架，以及 `src/` 保留可執行範例的定位。補上 ADR 搬遷指引與九項 hosted 測試。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
