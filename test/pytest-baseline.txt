@@ -460,7 +460,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   The 35 remaining cases all run in the Isaac test container.
 #   isaac#429 keeps all 35 cases and moves two I/O checks to no_ros/.
 # isaac#478: pin the collision schema contract on the live stage.
-GPU_INTEGRATION_BASELINE = 36
+# isaac#390: test_output_mode_python_gpu.py adds 3 core cases (GPU 36 -> 39).
+GPU_INTEGRATION_BASELINE = 39
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
