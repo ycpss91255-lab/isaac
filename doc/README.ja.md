@@ -276,7 +276,7 @@ ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 
 ### Python 出力 API（isaac#365）
 
-`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）。コンシューマが登録された種別だけ GPU から CPU へコピーします。`ISAAC_OUTPUT_MODE` がサポートする値は既定値の `python` のみです。`ros` を含む他の値を指定すると `ValueError` が発生します。ROS 出力は `isaac_ros_io` が `ISAAC_IO_PLUGIN` を通じて提供します（ADR-0025 は新しい決定に置き換えられました）。
+`isaac_devkit.output.setup_output` は ROS を介さずにシミュレーションデータを Python コールバックへ渡します。種別：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`、順序 `w, x, y, z`）、`lidar_3d`（C 連続の float32 `(N, 3)` 配列。各行はメートル単位の XYZ 座標）、`lidar_2d`（`ranges` は距離［メートル］、`angles` は角度［ラジアン］。どちらも長さ N の float32 ベクトル）。コンシューマが登録された種別だけ GPU から CPU へコピーします。`ISAAC_OUTPUT_MODE` がサポートする値は既定値の `python` のみです。`ros` を含む他の値を指定すると `ValueError` が発生します。ROS 出力は `isaac_ros_io` が `ISAAC_IO_PLUGIN` を通じて提供します（ADR-0025 は新しい決定に置き換えられました）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output

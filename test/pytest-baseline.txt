@@ -324,7 +324,8 @@
 # isaac#408 再新增 5 項 GPU 工作流程清理測試（hosted 1018 → 1023，core 874 → 879）。
 # isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
 # isaac#336: USD driver and launcher (+12 core) and per-module import guards (+2 core) (hosted 1004 -> 1018, core 860 -> 874).
-HOSTED_UNIT_BASELINE = 1023
+# isaac#88: add 12 core cases for 3D and 2D lidar callbacks.
+HOSTED_UNIT_BASELINE = 1035
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -375,7 +376,7 @@ HOSTED_UNIT_BASELINE = 1023
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 879
+HOSTED_UNIT_BASELINE_CORE = 891
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -463,7 +464,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 # isaac#478: pin the collision schema contract on the live stage.
 # isaac#390: test_output_mode_python_gpu.py adds 3 core cases (GPU 36 -> 39).
 # isaac#336: play the Jetbot USD with the default driver and no I/O plugin (GPU 39 -> 40).
-GPU_INTEGRATION_BASELINE = 40
+# isaac#88: check delivery from both RTX lidar profiles (GPU 40 -> 42).
+GPU_INTEGRATION_BASELINE = 42
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.

@@ -21,13 +21,15 @@ CameraOutput = namedtuple(
 )
 JointOutput = namedtuple("JointOutput", "prim")
 ImuOutput = namedtuple("ImuOutput", "name prim")
+Lidar3dOutput = namedtuple("Lidar3dOutput", "name prim")
+Lidar2dOutput = namedtuple("Lidar2dOutput", "name prim")
 
 
-def make_python_sources(cameras, joint, imu):
+def make_python_sources(cameras, joint, imu, lidars_3d=(), lidars_2d=()):
     """Create the Isaac-side readers; return ``[(name, kind, reader)]``."""
     from isaac_devkit import output_python
 
-    return output_python.make_sources(cameras, joint, imu)
+    return output_python.make_sources(cameras, joint, imu, lidars_3d, lidars_2d)
 
 
 class Output:
@@ -51,7 +53,9 @@ class Output:
         self._hub.emit(stamp, self._sources)
 
 
-def setup_output(environ=None, *, cameras=(), joint=None, imu=None):
+def setup_output(
+    environ=None, *, cameras=(), joint=None, imu=None, lidars_3d=(), lidars_2d=()
+):
     """Wire the output path chosen by ``ISAAC_OUTPUT_MODE``.
 
     Args:
@@ -59,10 +63,18 @@ def setup_output(environ=None, *, cameras=(), joint=None, imu=None):
         cameras: Iterable of :class:`CameraOutput`.
         joint: Optional :class:`JointOutput` (articulation root prim).
         imu: Optional :class:`ImuOutput` (existing ``IsaacImuSensor`` prim).
+        lidars_3d: Iterable of :class:`Lidar3dOutput` for RTX lidar point clouds.
+        lidars_2d: Iterable of :class:`Lidar2dOutput` for planar RTX lidar scans.
 
     Raises:
         ValueError: ``ISAAC_OUTPUT_MODE`` holds an invalid value.
     """
     mode = resolve_output_mode(environ)
-    sources = make_python_sources(tuple(cameras), joint, imu)
+    cameras = tuple(cameras)
+    lidars_3d = tuple(lidars_3d)
+    lidars_2d = tuple(lidars_2d)
+    if lidars_3d or lidars_2d:
+        sources = make_python_sources(cameras, joint, imu, lidars_3d, lidars_2d)
+    else:
+        sources = make_python_sources(cameras, joint, imu)
     return Output(mode, OutputHub(), sources)
