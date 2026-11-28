@@ -13,6 +13,9 @@ Payloads by kind:
 * ``joint_state``: ``{"names", "positions", "velocities", "efforts"}``.
 * ``imu``: ``{"lin_acc", "ang_vel", "orientation"}``, orientation order
   ``w, x, y, z``.
+* ``lidar_3d``: C-contiguous ``float32`` ``(N, 3)`` XYZ points in meters.
+* ``lidar_2d``: Paired ``float32`` ``(N,)`` vectors of ``ranges`` in meters
+  and ``angles`` in radians.
 
 Pure: no Isaac or ROS import at module top (ADR-0017 section 8 /
 ADR-0023); numpy is imported inside the normalisers.
@@ -20,7 +23,7 @@ ADR-0023); numpy is imported inside the normalisers.
 
 from collections import namedtuple
 
-KINDS = ("rgb", "depth", "joint_state", "imu")
+KINDS = ("rgb", "depth", "joint_state", "imu", "lidar_3d", "lidar_2d")
 
 Frame = namedtuple("Frame", "name kind stamp data")
 
@@ -76,11 +79,40 @@ def _normalize_imu(data):
     return out
 
 
+def _normalize_lidar_3d(data):
+    import numpy as np
+
+    points = np.asarray(data, dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError(f"lidar_3d points must be (N, 3), got {points.shape}")
+    if not np.isfinite(points).all():
+        raise ValueError("lidar_3d points must be finite")
+    return np.ascontiguousarray(points)
+
+
+def _normalize_lidar_2d(data):
+    import numpy as np
+
+    scan = {}
+    for key in ("ranges", "angles"):
+        if key not in data:
+            raise ValueError(f"lidar_2d reading is missing {key!r}")
+        vector = np.asarray(data[key], dtype=np.float32)
+        if vector.ndim != 1 or not np.isfinite(vector).all():
+            raise ValueError(f"lidar_2d {key} must be a finite (N,) vector")
+        scan[key] = vector
+    if scan["ranges"].shape != scan["angles"].shape:
+        raise ValueError("lidar_2d ranges and angles must have equal lengths")
+    return scan
+
+
 _NORMALIZERS = {
     "rgb": _normalize_rgb,
     "depth": _normalize_depth,
     "joint_state": _normalize_joint_state,
     "imu": _normalize_imu,
+    "lidar_3d": _normalize_lidar_3d,
+    "lidar_2d": _normalize_lidar_2d,
 }
 
 

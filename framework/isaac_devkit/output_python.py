@@ -7,7 +7,7 @@ exists; :class:`~isaac_devkit.output_hub.OutputHub` normalises it.
 """
 
 
-def make_sources(cameras, joint, imu):
+def make_sources(cameras, joint, imu, lidars_3d=(), lidars_2d=()):
     """Create annotators / sensors; return ``[(name, kind, reader)]``."""
     sources = []
     if cameras:
@@ -33,6 +33,19 @@ def make_sources(cameras, joint, imu):
 
         sensor = IMUSensor(imu.prim)
         sources.append((imu.name, "imu", _imu_reader(sensor)))
+    if lidars_3d or lidars_2d:
+        from isaac_devkit.sensors import _enable_extensions
+
+        _enable_extensions("isaacsim.sensors.experimental.rtx")
+        from isaacsim.core.experimental.utils import stage as stage_utils
+        from isaacsim.sensors.experimental.rtx import LidarSensor
+
+        stage = stage_utils.get_current_stage(backend="usd")
+        for kind, lidars in (("lidar_3d", lidars_3d), ("lidar_2d", lidars_2d)):
+            for lidar in lidars:
+                path = _resolve_lidar_path(stage, lidar.prim)
+                sensor = LidarSensor(path, annotators=["generic-model-output"])
+                sources.append((lidar.name, kind, _lidar_reader(sensor, kind)))
     return sources
 
 
@@ -74,5 +87,42 @@ def _imu_reader(sensor):
             "orientation": [r.orientation_w, r.orientation_x,
                             r.orientation_y, r.orientation_z],
         }
+
+    return read
+
+
+def _resolve_lidar_path(stage, path):
+    """Return the path of the first OmniLidar at or below path."""
+    from pxr import Usd
+
+    root = stage.GetPrimAtPath(path)
+    if root.IsValid():
+        for prim in Usd.PrimRange(root):
+            if prim.GetTypeName() == "OmniLidar":
+                return str(prim.GetPath())
+    raise ValueError(f"No OmniLidar prim found at or below {path}")
+
+
+def _lidar_reader(sensor, kind):
+    import numpy as np
+    from isaacsim.sensors.experimental.rtx import parse_generic_model_output_data
+
+    def read():
+        data, _info = sensor.get_data("generic-model-output")
+        if data is None:
+            return None
+        gmo = parse_generic_model_output_data(data)
+        azimuth = np.deg2rad(gmo.x, dtype=np.float32)
+        if kind == "lidar_2d":
+            return {"ranges": np.array(gmo.z, dtype=np.float32), "angles": azimuth}
+
+        elevation = np.deg2rad(gmo.y, dtype=np.float32)
+        ranges = np.asarray(gmo.z, dtype=np.float32)
+        horizontal = ranges * np.cos(elevation)
+        return np.column_stack((
+            horizontal * np.cos(azimuth),
+            horizontal * np.sin(azimuth),
+            ranges * np.sin(elevation),
+        ))
 
     return read
