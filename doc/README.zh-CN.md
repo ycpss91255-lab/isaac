@@ -317,6 +317,8 @@ out.step(sim_time_seconds)
 
 stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromium 持续收到能看到红色测试方块的视频帧。
 
+`core-gpu` 作业依次运行 Isaac Sim 官方 `asset` 和 `deprecated` Python 测试，并将两份 JUnit 报告上传至 `official-tests` 制品。
+
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 
 ## Python 测试工具链（devel-test 阶段）
