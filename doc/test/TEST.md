@@ -1,6 +1,6 @@
 # TEST.md
 
-**234 tests** total (bats). Hosted pytest collects **921 tests**.
+**234 tests** total (bats). Hosted pytest collects **922 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 130 | 778 | 35 | 943 |
+| core | 130 | 779 | 35 | 944 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 54 | 0 | 145 |
 | headless | 13 | 6 | 0 | 19 |
@@ -414,7 +414,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **921 tests** on a host without Isaac Sim. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#446 adds four core cases for the NumPy pin. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **922 tests** on a host without Isaac Sim. isaac#536 retires one legacy error case and adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#446 adds four core cases for the NumPy pin. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -474,7 +474,7 @@ The hosted suite collects **921 tests** on a host without Isaac Sim. isaac#429 a
 | `test_no_ai_attribution.py` | 30 | PR commit checks (isaac#413, isaac#414). Clean commits, ordinary mentions, and human co-author names containing Claude pass. Model names and versions, anthropic.com co-author, author, or committer addresses, generation notices (including Markdown links), and session trailers flag the offending commit SHAs. Coverage includes indentation, mixed case, and versions written without a space (`Claude Sonnet4.5`, `Claude Opus4`, and `Claude-3`). With a stubbed git log, an empty range succeeds and an invalid range reports an error with exit code 2. Omitting both the range and `--stdin` is a usage error. |
 | `test_model_readme_layout.py` | 11 | `docs`. Checks the five moved model paths, the removal of their old paths, the sim_asset README citation (isaac#363). |
 | `test_standalone_smoke_matrix.py` | 7 | `core`. Three parametrized checks guard against reintroducing the USD gate. Two more verify that each case has three fields and that the runner passes `bash -n` (isaac#359). Two parser cases verify that both an empty matrix and a matrix containing only a comment yield an empty list. |
-| `test_standalone_scripts.py` | 12 | Checks the pure helpers for Kit configuration, periodic timers, exit codes, removal of OpenBase-specific attributes, the smoke script’s workspace path, and the sensor and camera shim entry points. |
+| `test_standalone_scripts.py` | 13 | Checks the pure helpers for Kit configuration, periodic timers, exit codes, removal of OpenBase-specific attributes, the smoke script’s workspace path, and the sensor and camera shim entry points. Also checks that the USD inspector stays removed and that tracked Python files contain no references to the retired extension. |
 | `test_ros_scripts_removed.py` | 25 | Guards against restoring retired ROS scripts and cross-container tests, checks the no-ROS integration layout, and verifies the documentation updates. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |
 | `test_test_assets.py` | 12 | Official Isaac test-asset fetch helper (`test/test_assets.py`, #324). Pins the NVIDIA Jetbot USD URL on the Omniverse S3 bucket with a version segment and SHA-256 digest; cache-hit path returns without calling `_download`; cache-miss path calls `_download`; the return value is a `Path`; an empty cache with a simulated `ConnectionError` raises `RuntimeError` naming the asset; an unknown asset name raises `KeyError`. #325 adds the pinned `nvidia_cube` entry (URL on the same bucket/version, SHA-256) and a structural guard that `test_build_scene_adapter.py` / `_build_scene_runner.py` no longer reference the removed bundled simulation example and use `fetch_test_asset`. Pure -- mocked HTTP, filesystem only. |
