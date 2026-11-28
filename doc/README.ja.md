@@ -86,7 +86,7 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-素の `pkill -f <script>` は使わないこと。container は `pid: host` で動作しているため、その pattern は host や他の container の process にもマッチする。すべてを停止したい場合は、`just docker stop` でこの checkout の container を削除すれば、内部で動いている Kit もまとめて停止する。
+各 container は独立した PID 名前空間を使うため、container 内の `pkill` から見えるのはその container の process だけ。同じ container 内の別の process にもマッチする可能性があるため、素の `pkill -f <script>` は使わないこと。すべてを停止したい場合は、`just docker stop` でこの checkout の container を削除すれば、内部で動いている Kit もまとめて停止する。
 
 ### checkout ごとに 1 つの image と 1 つの compose project
 

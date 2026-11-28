@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1002 tests**.
+**233 tests** total (bats). Hosted pytest collects **1006 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 854 | 36 | 1019 |
+| core | 129 | 858 | 36 | 1023 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -435,7 +435,7 @@ The hosted suite runs without Isaac Sim. isaac#416 adds two core checks for the 
 
 | File | Collected | Scope |
 |------|:---------:|-------|
-| `test_container_min_privilege.py` | 10 | `core`. Checks privileged mode, host device bindings, three added capabilities, seccomp, PID and IPC isolation, shared memory size and host networking (isaac#549). |
+| `test_container_min_privilege.py` | 14 | `core`. Checks privileged mode, host device bindings, three added capabilities, seccomp, PID and IPC isolation, shared memory size and host networking. Checks all four READMEs for stale claims about using the host PID namespace (isaac#549). |
 | `test_readme_container_permissions.py` | 4 | `docs`. Checks that each README explains the local privilege override in its container permissions section (isaac#549). |
 | `test_operator_volumes.py` | 7 | `core`. Checks the pre-run hook’s advisory volume coverage against base’s TOML merge rules (isaac#528). |
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |

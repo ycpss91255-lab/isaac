@@ -50,7 +50,8 @@ privileged = false
 cap_drop = []
 
 [resources]
-# Kit media pipeline needs more than the default 64 MB /dev/shm; docker honours shm_size only with a private ipc.
+# Docker honours shm_size only with private IPC. Keep 16g as headroom for the Kit media pipeline.
+# stream-smoke also passed with the default 64 MB /dev/shm on a local workstation (2026-11-28).
 shm_size = "16g"
 
 [environment]

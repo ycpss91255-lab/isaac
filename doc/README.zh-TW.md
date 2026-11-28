@@ -86,7 +86,7 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-不要直接用 `pkill -f <script>`。container 以 `pid: host` 執行，這個 pattern 也會比對到 host 與其他 container 裡的 process。若要全部停掉，`just docker stop` 會移除這個 checkout 的 container，連同裡面執行中的 Kit。
+每個 container 都有自己的 PID namespace，因此在裡面執行的 `pkill` 只看得到該 container 裡的 process。不要直接用 `pkill -f <script>`，因為這個 pattern 仍可能比對到同一個 container 裡的其他 process。若要全部停掉，用 `just docker stop` 移除這個 checkout 的 container，裡面執行中的 Kit 也會一起停止。
 
 ### 每個 checkout 一個 image 與一個 compose project
 

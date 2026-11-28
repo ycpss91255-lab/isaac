@@ -47,6 +47,15 @@ def test_pid_namespace_is_not_host(setup):
     assert setup.get("network", {}).get("pid") != "host"
 
 
+@pytest.mark.parametrize(
+    "readme",
+    ["README.md", "doc/README.zh-TW.md", "doc/README.zh-CN.md", "doc/README.ja.md"],
+)
+def test_readme_does_not_claim_host_pid_namespace(setup, readme):
+    assert setup["network"]["pid"] == "private"
+    assert "pid: host" not in (_SETUP.parent / readme).read_text(encoding="utf-8")
+
+
 def test_ipc_namespace_is_not_host(setup):
     assert setup.get("network", {}).get("ipc") != "host"
 

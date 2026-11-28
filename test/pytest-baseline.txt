@@ -317,7 +317,8 @@
 # isaac#403 新增 13 項 GPU 工作流程版本與清理輸入測試（hosted 973 → 986，core 829 → 842）。
 # isaac#416: two core documentation checks (hosted 986 -> 988, core 842 -> 844).
 # isaac#549 adds ten core container-default cases and four README cases (988 -> 1002).
-HOSTED_UNIT_BASELINE = 1002
+# isaac#549 adds four core README checks for stale host PID claims (hosted 1002 -> 1006, core 854 -> 858).
+HOSTED_UNIT_BASELINE = 1006
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -325,7 +326,7 @@ HOSTED_UNIT_BASELINE = 1002
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1002。
+#   以下五組的測試數量下限合計為 1006。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -369,7 +370,7 @@ HOSTED_UNIT_BASELINE = 1002
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 854
+HOSTED_UNIT_BASELINE_CORE = 858
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6

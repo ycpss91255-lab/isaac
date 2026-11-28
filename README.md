@@ -86,7 +86,7 @@ Ctrl+C in an interactive `just docker exec` reaches the script. Its SIGINT handl
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-Do not use a bare `pkill -f <script>`. The containers run with `pid: host`, so that pattern also matches processes on the host and in other containers. To stop everything instead, `just docker stop` removes this checkout's containers, and with them any Kit running inside.
+Each container uses a private PID namespace, so `pkill` inside it sees only that container's processes. Avoid a bare `pkill -f <script>` because it can still match other processes in the same container. To stop everything in this checkout, use `just docker stop` to remove its containers and stop any Kit running inside.
 
 ### One image and one compose project per checkout
 
