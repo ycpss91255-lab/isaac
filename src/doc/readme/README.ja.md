@@ -32,6 +32,10 @@ cd isaac
 
 次に [ルート README](../../../README.md) の Quick Start に従って Isaac Sim コンテナを build・起動する。repo ルートはコンテナ内の `/home/<ユーザー名>/work` にマウントされ、そこがコンテナの作業ディレクトリになる。そのためこのディレクトリはコンテナ内では `~/work/src/` で、script は `/isaac-sim/python.sh src/script/<name>.py` で実行する。
 
+### ストリームソースプロデューサー
+
+CI とブラウザーのテストで使う WebRTC ストリームソースプロデューサーは、12×12 のチェッカーボードを生成します。Isaac Sim の `ViewportManager.set_camera_view` で透視カメラを `[15, -15, 11]` に配置し、`[0, 0, 0]` に向けます。
+
 ## ライセンス
 
 [Apache-2.0](../../LICENSE)
