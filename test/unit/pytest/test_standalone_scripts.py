@@ -30,7 +30,7 @@ _SCRIPT_DIR = _REPO_ROOT / "src" / "script"
 _HELPER = _SCRIPT_DIR / "standalone_common.py"
 _HARD_CODED_HOME = re.compile(r"/home/[^/\s<>]+/")
 
-# The four standalone scripts the README tells a new user to run.
+# Standalone ROS diagnostics have their own publish and subscribe entry points.
 _README_SCRIPTS = (
     "ros2_test_pub_standalone.py",
     "ros2_test_sub_standalone.py",
@@ -200,3 +200,16 @@ def test_ros2_test_pub_publishes_on_a_wall_clock_period():
     assert "PeriodicTimer(" in source
     assert "_PUBLISH_EVERY" not in source
 
+
+@pytest.mark.parametrize("script, entry", [
+    ("camera_setup", "setup_camera"),
+    ("sensor_setup", "setup_sensor"),
+])
+def test_standalone_sensor_shims_expose_devkit_prim_setup(script, entry, monkeypatch):
+    monkeypatch.syspath_prepend(str(_REPO_ROOT / "framework"))
+    from isaac_devkit import sensors
+
+    spec = importlib.util.spec_from_file_location(script, _SCRIPT_DIR / f"{script}.py")
+    shim = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(shim)
+    assert getattr(shim, entry) is getattr(sensors, entry)

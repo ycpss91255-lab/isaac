@@ -50,14 +50,6 @@
 #   robot entry) and adds 1 test for it (test_resolves_prefixed_model):
 #   38 -> 39. Live count is now 255 -- the enforced floor.
 #
-#   owv#55 isaac-side fix (dedicated cross-container compose project): adds
-#   3 hosted unit tests (test/unit/pytest/test_xc_compose_project_isolation.py:
-#   the cross-container round-trip's default COMPOSE_PROJECT is the dedicated
-#   'xc-isaac-roundtrip', is isolated from any ${DOCKER_HUB_USER}-${IMAGE_NAME}
-#   stream-stack project, and the XC_COMPOSE_PROJECT env override still wins).
-#   Pure -- loads the integration module by file path with env cleaned, no
-#   docker / no GPU. Live count is now 299 -- the enforced floor.
-#
 #   isaac#223 (GHCR stream-source producer image): adds 8 hosted unit tests
 #   (test/unit/pytest/test_stream_source_producer.py: the producer driver
 #   src/script/stream_source_producer.py imports without leaking
@@ -68,13 +60,13 @@
 #   Pure -- loads the driver by file path, no docker/GPU. Live count is now
 #   307 -- the enforced floor.
 #
-#   isaac#248 (6.0.1 camera-headless fix): the base IsaacDriver enables the
+#   isaac#248 (6.0.1 camera-headless fix): the base IsaacDriver enabled the
 #   ros2 bridge at BOOT (BOOT_EXTENSIONS) via a new pure helper
 #   boot_extension_kit_args, because runtime enable_extension under the
 #   Isaac Lab AppLauncher headless-rendering experience closes the app on
 #   6.0.1. test_isaac_driver.py adds 5 hosted tests
 #   (TestBootExtensionKitArgs: single / multi / empty / None argv shaping +
-#   the BOOT_EXTENSIONS default carries ros2.bridge); the lifecycle-order
+#   the then-default ROS bridge, removed in #276); the lifecycle-order
 #   spy is strengthened in place (no collected change) to assert run()
 #   restores sys.argv after the boot-arg injection. All pure (no Isaac
 #   import). Live count is now 312 -- the enforced floor.
@@ -178,7 +170,8 @@
 #   validation, ros: section optional (loads without ros:, validates ros:
 #   when present), host-pure helpers (fov_to_aperture, role_to_helper_type),
 #   get_category.
-#   test_sensor_ros.py (7): build_graph_topology (host-pure graph-spec
+#   test_sensor_ros.py (7 cases, removed in isaac#276) covered
+#   build_graph_topology (host-pure graph-spec
 #   builder with mocked pxr.Sdf), single/multi stream, overrides, topic and
 #   frame_id naming, module interface (setup_sensor_publish).
 #   test_sensors_dispatch.py (11): backward-compatible re-exports
@@ -211,9 +204,6 @@
 #
 #   Default scene driver (isaac#336 part 3): adds 9 hosted tests
 #   (test_default_driver.py). Live count is now 455.
-#
-#   Cross-container round-trip on the Jetbot asset (isaac#325): adds 4 hosted
-#   tests (test_xc_roundtrip_asset_migration.py). Live count is now 459.
 #
 #   The build-scene adapter GPU test moving onto official assets (#325) adds 3
 #   (test_test_assets.py 9 -> 12: the pinned NVIDIA cube entry + a structural
@@ -289,12 +279,12 @@
 # isaac#381: test_readme_cleanup_text.py adds 4 docs cases (647 -> 651, docs 20 -> 24).
 # isaac#414: test_no_ai_attribution.py adds 20 docs cases (651 -> 671, docs 24 -> 44).
 # isaac#338: test_setup_isaac_sample.py adds 16 core cases (671 -> 687, core 602 -> 618).
-# isaac#363: test_model_readme_layout.py adds 11 docs cases (725 -> 736, docs 68 -> 79).
 # isaac#289: test_readme_multi_instance.py adds 24 docs cases (687 -> 711, docs 44 -> 68).
 # isaac#453: merge queue wiring adds 2 workflow and 2 scope-selection cases (711 -> 715, core 618 -> 622).
 # isaac#405: +1 hosted core test for the Dependabot comment guard: 715 -> 716 (core 622 -> 623).
 # isaac#479: test_isaac_driver.py 48 -> 57 (SimulationApp launch, streaming-mode
 #   equivalence, 6 _play_timeline cases); live 725.
+# isaac#363: test_model_readme_layout.py adds 11 docs cases (725 -> 736, docs 68 -> 79).
 # isaac#86: test_stage_names_docs.py adds 4 docs cases (736 -> 740, docs 79 -> 83).
 # isaac#487: +14 name-scan and CI cases, +1 standalone smoke path check,
 #   and +1 compose isolation case, all core (740 -> 756, core 632 -> 648).
@@ -311,7 +301,8 @@
 # isaac#493 adds 6 PR scope and build cases (hosted 876 -> 882, core 735 -> 741).
 # isaac#436: official startuptests wiring adds 3 core cases (882 -> 885).
 # isaac#484 adds 3 hosted tests on top of main's 885 -> 888 (core 744 -> 745, stream 52 -> 54).
-HOSTED_UNIT_BASELINE = 888
+# isaac#276 removes ROS I/O and its host round-trip guards (888 -> 853, all core).
+HOSTED_UNIT_BASELINE = 853
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -319,13 +310,13 @@ HOSTED_UNIT_BASELINE = 888
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 888。
+#   以下五組的測試數量下限合計為 853。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
 #   stream   -- test_stream_source_producer.py and test_stream_visual_*.py
 #   docs     -- test_producer_versions.py, test_no_ai_attribution.py, test_adr_drop_isaac_lab.py, test_readme_multi_instance.py,
-#               test_stage_names_docs.py
+#               test_readme_cleanup_text.py, test_model_readme_layout.py, test_stage_names_docs.py
 #   The 25 new tests of test_test_groups.py (isaac#434) are core: 540 -> 565.
 #   The scoped CI (isaac#434 PR2) adds test_changed_groups.py (38), test_ci_gate.py
 #   (9) and test_main_workflow_scope.py (15), all core: 565 -> 627 (core 592).
@@ -343,6 +334,7 @@ HOSTED_UNIT_BASELINE = 888
 #   isaac#414 adds 20 docs cases (docs 24 -> 44).
 #   isaac#338 adds 16 core cases (core 602 -> 618).
 #   isaac#453 adds 4 core cases (core 618 -> 622).
+#   isaac#405 adds 1 core case (core 622 -> 623).
 #   isaac#479: +9 core (test_isaac_driver.py 48 -> 57): core 623 -> 632.
 #   isaac#487 adds 16 core cases (core 632 -> 648).
 #   isaac#376 adds 1 core case (core 648 -> 649).
@@ -357,10 +349,13 @@ HOSTED_UNIT_BASELINE = 888
 #   isaac#484 replaces two custom experience checks with four checks for the
 #   official experience and removal of the custom file (stream 52 -> 54), and
 #   adds 1 core case (core 744 -> 745).
-HOSTED_UNIT_BASELINE_CORE = 745
+#   isaac#276 removes 35 net core cases (745 -> 710).
+HOSTED_UNIT_BASELINE_CORE = 710
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
+#   isaac#289 adds 24 docs cases (docs 44 -> 68).
+#   isaac#363 adds 11 docs cases (docs 68 -> 79).
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
 HOSTED_UNIT_BASELINE_DOCS = 83
 
@@ -368,35 +363,17 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   (test/integration/pytest/). NOT enforced at M1 (a skipped GPU job is
 #   not green, but hosted-only green is mergeable here). The full
 #   cross-runner aggregate (HOSTED_UNIT + GPU_INTEGRATION) is asserted at
-#   M2 with #132. Its example GPU tests exercise live robot structure, camera
-#   messages, cmd_vel round-trip and shutdown.
-#   The scaffold (#134) adds the scaffold GPU smoke
-#   (test_scaffold_smoke.py: 3 tests -- scaffold the consumer workspace
-#   via new-workspace.sh --local-docker, boot the SCAFFOLDED driver
-#   headless, and assert the L4 markers, the camera OmniGraph chain, and
-#   the camera topic appearing on a sibling rclpy probe; the DoD smoke
-#   end-to-end).
+#   M2 with #132. The in-container suite exercises USD robot structure, camera
+#   prim creation and driver shutdown. The gate requires at least one pass.
 #
-#   M2 cross-container round-trip (#132, PRD Pre-Publish item 1): the
-#   skipped placeholder in test_example_gpu_integration.py is REMOVED
-#   (-1 in-container, so the in-container GPU suite collects 24) and the
-#   genuine Isaac<->ament round-trip lands as
-#   test_cross_container_roundtrip.py (2 directional tests -- sim->ament
-#   camera receipt + ament->sim /cmd_vel receipt). That test
-#   host-orchestrates sibling ros:humble containers running the
-#   example/ros2/ ament nodes, so it CANNOT run inside the Isaac
-#   container; assert_pytest_baseline.sh --gpu runs it as a host leg and
-#   SUMS its collected/passed into the GPU-integration totals. Aggregate
-#   GPU-integration = 24 (in-container) + 2 (host xc) = 26 collected, all
-#   passing on the RTX 5090 reference runner. assert_pytest_baseline.sh
-#   enforces that the GPU suite actually RAN (passed > 0); an all-skipped
-#   GPU job does NOT satisfy the M2 aggregate.
+#   Baseline history: #134 added three scaffold smoke tests. Before #276,
+#   the GPU floor also included a ROS host leg.
 #
 #   MR (#149, ADR-0018): bake Isaac Lab 2.3 as the spawn-backend base
 #   tool. Adds the Isaac Lab availability smoke
 #   (test_isaaclab_available.py: 1 in-container test -- AppLauncher
 #   headless boot, import isaaclab.sim, check spawner classes and package version). In-container GPU
-#   suite collects 25; aggregate GPU-integration = 25 + 2 (host xc) = 27.
+#   suite collected 25 at that point.
 #
 #   MR (#153, ADR-0018 decision 7): color is a spawn-time material cfg
 #   param, not a USD variant set. The variant-set GPU coverage
@@ -404,7 +381,7 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   _apply_materials_runner.py helper) is REMOVED; spawn-time material
 #   application gets GPU coverage later in the spawn-adapter work
 #   (#152/#154). In-container GPU suite collects 25 - 2 = 23; aggregate
-#   GPU-integration = 23 + 2 (host xc) = 25. This is a -2 baseline drop;
+#   GPU-integration floor was then 25. This is a -2 baseline drop;
 #   it is intentional (the variant-set path no longer exists) and the
 #   removed coverage is reinstated at the spawn-adapter milestone -- an
 #   explicit exception to the ratchet, recorded here and in the PR body.
@@ -452,10 +429,12 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 #   NOT executed locally; first proof is the CI gpu-integration job.
 # isaac#423: test_io_plugin_integration.py (2 tests) -- ratchet UP 38 -> 40.
 #   NOT executed locally; first proof is the CI gpu-integration job.
-# isaac#479: replace the availability smoke (1) with PhysX and Newton wheel
+# isaac#479 replaces the availability smoke (1) with PhysX and Newton wheel
 #   motion (2): 34 -> 35.
 # isaac#447: timeline settings and clock checks on both engines add 4 core cases.
-GPU_INTEGRATION_BASELINE = 39
+# isaac#276 removes two in-container ROS cases and two host round-trip cases.
+#   The 35 remaining cases all run in the Isaac test container.
+GPU_INTEGRATION_BASELINE = 35
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
@@ -475,8 +454,9 @@ AGGREGATE_TARGET = 126
 #   forwarding case, raising core from 113 to 119.
 #   The detached stream post-run skip test raises the stream floor from 81 to 82.
 #   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
-#   isaac#436: gpu_job_scripts_spec +5 raises core from 119 to 124.
-BATS_BASELINE_CORE = 124
+#   isaac#497 adds 9 stream smoke cases (stream 81 -> 90).
+#   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 223 -> 219), then isaac#436 adds 5 (core 115 -> 120, total 224).
+BATS_BASELINE_CORE = 120
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13

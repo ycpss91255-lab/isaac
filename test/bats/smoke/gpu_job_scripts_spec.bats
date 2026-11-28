@@ -49,7 +49,7 @@ setup() {
   unset ISAAC_CI_CACHE_KEY
   export GITHUB_RUN_ID=1234
   export GITHUB_RUN_ATTEMPT=2
-  unset ISAAC_ALLOW_SHARED_IDENTITY BASELINE_PROJECT GPU_ROS_DOMAIN_ID \
+  unset ISAAC_ALLOW_SHARED_IDENTITY BASELINE_PROJECT \
     SMOKE_PROJECT SMOKE_REAP_PROJECT_PREFIX
 
   # setup.sh apply writes a cache with the mis-detected WS_PATH the job must
@@ -70,7 +70,7 @@ STUB
   cat > "${FAKE}/test/assert_pytest_baseline.sh" <<'STUB'
 #!/usr/bin/env bash
 {
-  echo "baseline $* project=${BASELINE_PROJECT:-unset} domain=${GPU_ROS_DOMAIN_ID:-unset} shared=${ISAAC_ALLOW_SHARED_IDENTITY:-unset}"
+  echo "baseline $* project=${BASELINE_PROJECT:-unset} shared=${ISAAC_ALLOW_SHARED_IDENTITY:-unset}"
   grep '^WS_PATH=' .env.generated
   [ -w isaac-sim/kit/cache ] && [ -w isaac-sim/nvidia/computecache ] \
     && [ -w isaac-sim/documents ] && echo "caches=writable"
@@ -104,7 +104,7 @@ teardown() {
   run cat "${CALLS}"
   [ "${lines[0]}" = "setup apply" ]
   [ "${lines[1]}" = "build -t test shared=1" ]
-  [ "${lines[2]}" = "baseline --gpu project=isaac-baseline-1234-2 domain=47 shared=unset" ]
+  [ "${lines[2]}" = "baseline --gpu project=isaac-baseline-1234-2 shared=unset" ]
   [ "${lines[3]}" = "WS_PATH=${FAKE}" ]
   [ "${lines[4]}" = "caches=writable" ]
   [[ "${lines[5]}" == "docker run "* ]]

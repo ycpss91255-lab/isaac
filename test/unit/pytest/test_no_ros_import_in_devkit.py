@@ -1,13 +1,9 @@
-"""Static AST guard: no module-top ROS import in isaac_devkit (ADR-0023).
-
-Python is the sole external interface; ROS 2 wiring is a downstream
-consumer. Companion of ``test_no_module_top_isaac_import.py`` for the ROS
-names: ``rclpy``, ``rosidl_*``, ``builtin_interfaces`` and the
-``isaacsim.ros2`` extension namespace must not be imported at module level
-in any package source. Function-local imports are allowed.
-"""
+"""Guard the boundary between the devkit and downstream ROS I/O plugins."""
 
 import ast
+import subprocess
+import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -17,6 +13,20 @@ pytestmark = pytest.mark.core
 _PACKAGE_DIR = (
     Path(__file__).resolve().parents[3] / "framework" / "isaac_devkit"
 )
+
+_ROS_IMPORT_GUARD = textwrap.dedent("""\
+    import sys
+    from importlib.abc import MetaPathFinder
+
+    class RosImportGuard(MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if (fullname.partition(".")[0] == "rclpy" or
+                    fullname.startswith(("isaacsim.ros2", "rosidl_"))):
+                raise ImportError(f"Blocked ROS import: {fullname}")
+            return None
+
+    sys.meta_path.insert(0, RosImportGuard())
+""")
 
 
 def _is_banned(name):
@@ -45,13 +55,17 @@ def _module_top_ros_imports(source):
 
 
 @pytest.mark.parametrize(
-    "module_file", sorted(_PACKAGE_DIR.glob("*.py")), ids=lambda p: p.name
+    "module_file", sorted(_PACKAGE_DIR.rglob("*.py")), ids=lambda p: p.name
 )
-def test_no_module_top_ros_import(module_file):
-    offenders = _module_top_ros_imports(module_file.read_text())
+def test_no_ros_dependencies_in_source(module_file):
+    source = module_file.read_text(encoding="utf-8")
+    for lineno, line in enumerate(source.splitlines(), start=1):
+        assert "rclpy" not in line and "isaacsim.ros2" not in line, (
+            f"{module_file.name}:{lineno}: {line}"
+        )
+    offenders = _module_top_ros_imports(source)
     assert offenders == [], (
-        f"{module_file.name} has module-top ROS import(s) {offenders}; "
-        "ROS names must be function-local (ADR-0023)"
+        f"{module_file.name} has module-top ROS imports: {offenders}"
     )
 
 
@@ -70,6 +84,66 @@ def test_detector_flags_ros_imports(line):
     assert _module_top_ros_imports(line + "\n") != []
 
 
-def test_detector_ignores_function_local_and_unrelated_imports():
-    src = "import os\n\ndef f():\n    import rclpy\n    return rclpy\n"
+def test_detector_ignores_unrelated_imports():
+    src = "import os\nfrom pathlib import Path\n"
     assert _module_top_ros_imports(src) == []
+
+
+def test_importing_entire_devkit_leaves_process_ros_free():
+    probe = _ROS_IMPORT_GUARD + textwrap.dedent("""\
+        import importlib
+        import pkgutil
+
+        def check_modules(after):
+            leaked = sorted(name for name in sys.modules if
+                            name.partition(".")[0] == "rclpy" or
+                            name.startswith(("isaacsim.ros2", "rosidl_")))
+            if leaked:
+                raise RuntimeError(f"{after} loaded ROS modules: {leaked}")
+
+        sys.path.insert(0, sys.argv[1])
+        import isaac_devkit
+        check_modules(isaac_devkit.__name__)
+        for module in pkgutil.walk_packages(isaac_devkit.__path__, "isaac_devkit."):
+            importlib.import_module(module.name)
+            check_modules(module.name)
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", probe, str(_PACKAGE_DIR.parent)],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_import_guard_blocks_ros_dependency(tmp_path):
+    package = tmp_path / "ros_dependent"
+    package.mkdir()
+    (package / "__init__.py").write_text("import rclpy\n", encoding="utf-8")
+    probe = _ROS_IMPORT_GUARD + "import ros_dependent\n"
+    result = subprocess.run(
+        [sys.executable, "-c", probe], cwd=tmp_path,
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode != 0
+    assert "ImportError: Blocked ROS import: rclpy" in result.stderr, result.stderr
+
+
+def test_default_boot_extensions_do_not_request_ros(monkeypatch):
+    monkeypatch.syspath_prepend(str(_PACKAGE_DIR.parent))
+    from isaac_devkit import IsaacDriver
+
+    assert not any("ros2" in name.lower() for name in IsaacDriver.BOOT_EXTENSIONS)
+
+
+@pytest.mark.parametrize("name", ["ros_io", "sensor_ros"])
+def test_builtin_ros_module_is_removed(name):
+    assert not (_PACKAGE_DIR / f"{name}.py").exists()
+
+
+@pytest.mark.parametrize("name", ["setup_ros2_io", "RosIo", "Msg"])
+def test_package_does_not_export_ros_io(name, monkeypatch):
+    monkeypatch.syspath_prepend(str(_PACKAGE_DIR.parent))
+    import isaac_devkit
+
+    assert not hasattr(isaac_devkit, name)
+    assert name not in isaac_devkit.__all__
