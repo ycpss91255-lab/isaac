@@ -40,7 +40,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from gpu_pin import GPU_REUSABLE
+from gpu_pin import GPU_REUSABLE_PATH, tag_at_least_min
 
 pytestmark = pytest.mark.stream
 
@@ -275,14 +275,14 @@ def _publish_commands():
 
 def test_publish_runs_where_kit_can_boot():
     job = _publish_job()
-    assert job.get("uses") == GPU_REUSABLE, (
+    path, _, tag = (job.get("uses") or "").partition("@")
+    assert path == GPU_REUSABLE_PATH, (
         "the publish job must run where Kit can actually boot -- the org GPU "
         "reusable workflow; on a hosted runner nothing can prove the image "
         "streams (isaac#252)"
     )
-    ref = (job.get("uses") or "").rsplit("@", 1)[-1]
-    assert ref.startswith("v") and ref != "v", (
-        f"gpu-self-hosted.yml must be pinned to a release tag (got @{ref}); "
+    assert tag_at_least_min(tag), (
+        f"gpu-self-hosted.yml must meet the minimum release tag (got @{tag}); "
         "@main breaks on upstream push (run 42776185240)"
     )
     assert "runs-on" not in job, "no direct self-hosted target; go through the reusable workflow"
