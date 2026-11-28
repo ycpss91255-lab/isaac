@@ -3,6 +3,7 @@
 import os
 import re
 import shlex
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -115,6 +116,10 @@ def test_configured_case_uses_checkout_and_container_paths(tmp_path, monkeypatch
 
 
 def test_marker_written_before_probe_exit_is_recognized(tmp_path, monkeypatch):
+    real_grep = shutil.which("grep")
+    real_sleep = shutil.which("sleep")
+    assert real_grep is not None and real_sleep is not None
+
     pid_fifo = tmp_path / "probe.pid"
     os.mkfifo(pid_fifo)
     monkeypatch.setenv("PROBE_PID_FIFO", str(pid_fifo))
@@ -127,10 +132,10 @@ def test_marker_written_before_probe_exit_is_recognized(tmp_path, monkeypatch):
         'if [[ -p "$PROBE_PID_FIFO" ]]; then\n'
         '  read -r pid < "$PROBE_PID_FIFO"\n'
         '  rm "$PROBE_PID_FIFO"\n'
-        '  while kill -0 "$pid" 2>/dev/null; do /bin/sleep 0.01; done\n'
+        f'  while kill -0 "$pid" 2>/dev/null; do {shlex.quote(real_sleep)} 0.01; done\n'
         "  exit 1\n"
         "fi\n"
-        'exec /usr/bin/grep "$@"\n'
+        f'exec {shlex.quote(real_grep)} "$@"\n'
     )
     grep.chmod(0o755)
 
