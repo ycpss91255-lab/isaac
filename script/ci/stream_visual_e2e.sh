@@ -71,6 +71,7 @@ done
 
 docker run --rm --name "${browser}" --network host --ipc host --user pwuser -w /tmp \
   -e "BASE_URL=${url}" -e OUT_DIR=/out -e "PLAYWRIGHT_VERSION=${playwright_version}" \
+  -e "VISUAL_E2E_TOTAL_TIMEOUT_S=${VISUAL_E2E_TOTAL_TIMEOUT_S:-600}" \
   -e PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 -v "${source_dir}:/probe:ro" -v "${out}:/out" \
   "mcr.microsoft.com/playwright:v${playwright_version}-noble" sh -ec 'cp /probe/probe.mjs .
     npm install --prefix /tmp --no-audit --no-fund "playwright@${PLAYWRIGHT_VERSION}"

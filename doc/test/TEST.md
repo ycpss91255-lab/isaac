@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1040 tests**.
+**233 tests** total (bats). Hosted pytest collects **1047 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -10,7 +10,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 129 | 888 | 40 | 1057 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 91 | 55 | 0 | 146 |
+| stream | 91 | 62 | 0 | 153 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 91 | 0 | 91 |
 
