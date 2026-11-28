@@ -3,12 +3,15 @@
 ## [Unreleased]
 
 ### Added
+- **`core-gpu` 執行 Isaac Sim 官方 core 與 sensors 測試（isaac#438）。** 串行驗證 18 支 core 與 14 支 sensors 腳本，並保留各桶的 JUnit 與 Kit log。檢查四個 RTX 回歸案例及兩個已知的 actuator skips，僅排除官方映像會崩潰的 tiled camera 案例。Hosted 基準由 1000 提高至 1002（core 856 → 858）。
+- **在 core CI 執行 NVIDIA 官方 standalone 測試（isaac#437）。** 使用共用 GPU runner 驗證 headless 映像的 41 項 `nativepythontests:testing` 案例，以及 livestream 與 hello_world 範例。同一 job 透過既有 Kit 探針驗證 `IsaacDriver` 的啟動設定。成功與失敗均上傳 JUnit、範例與 driver 日誌。Hosted pytest 從 964 增至 975 項（core 820 增至 831）。
 - **新增 GPU 共用工作流程版本下限測試（isaac#403）。** 五個呼叫端須共用同一個正式版本標籤，下限為首次支援 `reap-container-filter` 的 `v0.4.0`。新增案例涵蓋較新版本、過舊或格式不符的標籤，以及 `core-gpu` 缺少清理輸入的情形。新增 13 項 core 測試。
 - **框架純淨度檢查與基礎 repo 契約（isaac#137）。** Core CI 檢查框架原始碼與套件設定中的應用專屬詞彙。四語 README 說明下游透過 submodule 匯入共用框架，以及 `src/` 保留可執行範例的定位。補上 ADR 搬遷指引與九項 hosted 測試。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
 - **縮減容器的預設權限（isaac#549）。** 預設關閉特權模式，移除整個 `/dev` 的映射、額外的 Linux capabilities 與 `seccomp:unconfined`，並改用容器自己的 PID 與 IPC 命名空間。串流仍使用主機網路。保留 `shm_size = "16g"` 為 Kit 媒體管線預留共享記憶體空間，使用預設的 64 MB 也通過了 stream-smoke。四語 README 說明如何在 `setup.local.toml` 為 GUI 或特殊裝置開放所需權限。
+- **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。
 - **串流來源產生器改用 Isaac Sim 的 `ViewportManager.set_camera_view`（isaac#535）。** 移除舊版視窗 API 與備援匯入，新增一項 hosted 測試驗證相機路徑、位置和對準目標（924 項，stream 55 項）。
 - **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 119 -> 123（併入 main 後重算）。

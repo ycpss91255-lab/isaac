@@ -340,6 +340,8 @@ The stream group’s `stream-visual-e2e` GPU job boots the stream stage and chec
 
 The `core-gpu` job runs the official Isaac Sim `asset` and `deprecated` Python test buckets in sequence. Both JUnit reports are included in the `official-tests` artifact.
 
+The scoped `core-official-nativepython` job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
+
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 
 ## Python testing toolkit (devel-test stage)
@@ -362,6 +364,8 @@ GPU integration tests (Isaac Sim must boot, e.g. headless camera prim smoke test
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
+
+The scoped `core-gpu` CI job also runs the official Isaac Sim `core` and `sensors` Python buckets. See the [test guide](doc/test/TEST.md#official-isaac-sim-python-buckets-438-440) for scheduling, artifacts, and known exceptions.
 
 Run pytest against `test/integration/` to include both the GPU integration tests and the [no-ROS checks](test/integration/no_ros/README.md).
 

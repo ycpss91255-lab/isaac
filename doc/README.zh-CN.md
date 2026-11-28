@@ -340,6 +340,8 @@ stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromi
 
 `core-gpu` 作业依次运行 Isaac Sim 官方 `asset` 和 `deprecated` Python 测试，并将两份 JUnit 报告上传至 `official-tests` 制品。
 
+`core-official-nativepython` 作业按 core 变更范围运行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 
 ## Python 测试工具链（devel-test 阶段）
@@ -362,6 +364,8 @@ GPU integration test（需要 Isaac Sim 真正启动，例如 headless 相机 pr
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
+
+CI 的 `core-gpu` 作业也会运行 Isaac Sim 官方 `core` 和 `sensors` Python 测试。触发条件、产物和已知例外见[测试指南](test/TEST.md#official-isaac-sim-python-buckets-438-440)。
 
 对 `test/integration/` 运行 pytest，即可执行 GPU 集成测试与 [无 ROS 验证](../test/integration/no_ros/README.md)。
 
