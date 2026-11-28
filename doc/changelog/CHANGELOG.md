@@ -13,7 +13,9 @@
   - ROS 跨容器往返測試移至 `isaac_ros_io`。本 repo 的 GPU gate 只計 Isaac 測試容器內的 35 例。移除主機測試及其專用檢查（含 isaac#460 的 Bats 規格）後，hosted pytest 共 847 例（core 706），Bats 共 219 例（core 115）。
 
 ### Fixed
-- **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 853 -> 857（core 710 -> 714）。
+- **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 859 -> 863（core 716 -> 720）。
+
+- **補強驅動腳本的 `isaac_variant` 字串常值檢查（isaac#375）。** 改用 Python AST 解析 `src/script/*.py`，可偵測字典中的鍵值對、關鍵字引數與下標賦值。新增 6 個 core 測試案例，hosted pytest 從 853 增至 859 例（core 從 710 增至 716 例）。
 - 官方 `startuptests` 會在容器結束前，將 `$HOME/.nvidia-omniverse/logs/` 下各個 Kit app 的記錄複製到 `artifacts/startuptests/kit-logs/`。即使 `run_tests.py` 回傳 0，只要 JUnit 報告的 `failures` 或 `errors` 大於 0，或報告無法解析，`core-gpu` 就會失敗。`docker run` 回傳非零時沿用原結束碼。成功或失敗都會保留報告與 Kit log（isaac#436）。
 - **修正 Isaac Sim 更新 PR 內文首行顯示的舊版號（isaac#533）。** 首行使用測試清單實際比較的舊版號：指定 `--current-version` 時使用該值，否則使用 Dockerfile 的 `BASE_IMAGE` 版號。
 - **修正 `gui` stage 的 X11 掛載（isaac#428）。** `setup.toml` 改用 `gui.mode = "force"`，讓 Compose 掛載 X11 socket 並傳入 `DISPLAY`；resolver 測試確認只有 `gui` 解析為 `gui=true`。

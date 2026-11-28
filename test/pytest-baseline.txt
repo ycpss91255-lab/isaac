@@ -302,8 +302,9 @@
 # isaac#436: official startuptests wiring adds 3 core cases (882 -> 885).
 # isaac#484 adds 3 hosted tests on top of main's 885 -> 888 (core 744 -> 745, stream 52 -> 54).
 # isaac#276 removes ROS I/O and its host round-trip guards (888 -> 853, all core).
-# isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (853 -> 857, core 710 -> 714).
-HOSTED_UNIT_BASELINE = 857
+# isaac#375: test_sim_version.py adds 6 core cases (hosted 853 -> 859, core 710 -> 716).
+# isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (859 -> 863, core 716 -> 720).
+HOSTED_UNIT_BASELINE = 863
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -311,7 +312,7 @@ HOSTED_UNIT_BASELINE = 857
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 853。
+#   以下五組的測試數量下限合計為 859。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -351,8 +352,9 @@ HOSTED_UNIT_BASELINE = 857
 #   official experience and removal of the custom file (stream 52 -> 54), and
 #   adds 1 core case (core 744 -> 745).
 #   isaac#276 removes 35 net core cases (745 -> 710).
-#   isaac#446 adds 4 core cases (core 710 -> 714).
-HOSTED_UNIT_BASELINE_CORE = 714
+#   isaac#375 adds 6 core cases (core 710 -> 716).
+#   isaac#446 adds 4 core cases (core 716 -> 720).
+HOSTED_UNIT_BASELINE_CORE = 720
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
