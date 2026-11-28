@@ -332,7 +332,9 @@
 # isaac#527 adds 4 core tests for GPU timing reports (hosted 1047 -> 1051, core 888 -> 892).
 # isaac#549 adds ten core container-default cases and four README cases (1023 -> 1037).
 # isaac#549 adds four core README checks for stale host PID claims (core +14, docs +4 in total; merged with main: hosted 1051 -> 1069).
-HOSTED_UNIT_BASELINE = 1069
+# isaac#574 adds three core cases for Git metadata mounts (hosted 1069 -> 1072, core 906 -> 909).
+# isaac#363 adds two net core cases for required roots and literal model paths, plus one for the sensor bench model path (hosted 1072 -> 1075, core 909 -> 912).
+HOSTED_UNIT_BASELINE = 1075
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -340,7 +342,7 @@ HOSTED_UNIT_BASELINE = 1069
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1069。
+#   以下五組的測試數量下限合計為 1075。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -383,7 +385,7 @@ HOSTED_UNIT_BASELINE = 1069
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 906
+HOSTED_UNIT_BASELINE_CORE = 912
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 62
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -472,7 +474,8 @@ HOSTED_UNIT_BASELINE_DOCS = 95
 # isaac#478: pin the collision schema contract on the live stage.
 # isaac#390: test_output_mode_python_gpu.py adds 3 core cases (GPU 36 -> 39).
 # isaac#336: play the Jetbot USD with the default driver and no I/O plugin (GPU 39 -> 40).
-GPU_INTEGRATION_BASELINE = 40
+# isaac#363: build_scene resolves relative model paths under MODEL_PATH (three GPU cases, GPU 40 -> 43).
+GPU_INTEGRATION_BASELINE = 43
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.

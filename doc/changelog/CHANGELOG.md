@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **新增 Git worktree 掛載的回歸測試（isaac#574）。** 驗證一般 clone 不需額外掛載，連結工作樹則須將共用 Git 目錄掛載到容器內相同的絕對路徑。另檢查執行與收集 hosted pytest 的兩處 Docker 指令都引用掛載腳本。Hosted 基準由 1069 增至 1072，core 組由 906 增至 909。
 - **GPU 整合測試依檔案列出 Kit 啟動與測試耗時（isaac#527）。** 計時範圍僅限 `test/integration/pytest/`，`test/integration/no_ros/` 的 GPU 測試檔案尚未納入。每次建立 `SimulationApp` 時計時，共用 fixture 的啟動時間只計一次。pytest 摘要列出各檔與總計的秒數，可用 `KIT_TIMING_JSON` 指定 JSON 報表路徑。新增 4 項 hosted 測試，基準由 1047 提高至 1051（core 888 → 892）。此 PR 僅提供量測工具，驗收項目仍在 #527 追蹤，尚待完成。
 - **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
 - **新增 standalone smoke 就緒訊息的回歸測試（isaac#562）。** 模擬第一次檢查未找到 `READY`，而探針在存活檢查前已輸出 `READY` 並結束的情況。測試要求腳本回報 `PASS probe.py`。Hosted 基準由 1039 增至 1040，core 組由 887 增至 888。
@@ -15,7 +16,7 @@
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
-- **場景模型從掛載目錄載入（isaac#363）。** 相對模型路徑與 `package://` URI 依序搜尋 `MODEL_PATH` 中以冒號分隔的目錄。未設定或為空字串時會拋出 `ValueError`。相對路徑保留完整前綴，絕對路徑可直接使用。Hosted 測試增至 1049 項，core 增至 890 項。
+- **場景模型從掛載目錄載入（isaac#363）。** 相對模型路徑與 `package://` URI 依序搜尋 `MODEL_PATH` 中以冒號分隔的目錄。未設定或為空字串時會拋出 `ValueError`。相對路徑保留完整前綴，絕對路徑可直接使用。Hosted 測試增至 1075 項，core 增至 912 項。
 - **縮減容器的預設權限（isaac#549）。** 預設關閉特權模式，移除整個 `/dev` 的映射、額外的 Linux capabilities 與 `seccomp:unconfined`，並改用容器自己的 PID 與 IPC 命名空間。串流仍使用主機網路。保留 `shm_size = "16g"` 為 Kit 媒體管線預留共享記憶體空間，使用預設的 64 MB 也通過了 stream-smoke。四語 README 說明如何在 `setup.local.toml` 為 GUI 或特殊裝置開放所需權限。
 - **預設相機設定通用化（isaac#136）。** 三種相機共用掛載點 `/World/Robot/carriage`、ROS topic 前綴 `/robot/camera` 與 frame ID 前綴 `robot_camera`。RViz 與無頭相機測試已同步。移除其餘堆高機文字殘留並新增掃描測試，應用模型與場景資產已移交 [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146)。
 - **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
