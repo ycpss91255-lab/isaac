@@ -2,11 +2,11 @@
 
 **[English](../README.md)** | **[繁體中文](README.zh-TW.md)** | **[简体中文](README.zh-CN.md)** | **[日本語](README.ja.md)**
 
-NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
+可重用的 NVIDIA Isaac Sim 6.2.0 基礎 repo，提供以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) 建置的 Docker 開發環境。
+
+下游專案將本 repo 固定為 Git submodule，從 [framework/isaac_devkit/](../framework/isaac_devkit/) 匯入共用 Python 框架。[src/](../src/README.md) 保留可執行範例及應用資產，位於下游框架契約之外。
 
 場景生成與 articulation drive 預設值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。資產物理參數在 sim_asset 設定，由 asset_converter 寫入 USD。`IsaacDriver` 透過 `isaacsim.SimulationApp` 啟動 Kit。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
-
-本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
 ## 前置需求
 

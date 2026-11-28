@@ -32,7 +32,7 @@
 |---|---|---|
 | M1 | Time-to-first-topic | cached image 下 `new-workspace.sh`→`just run`→`ros2 topic echo` 出第一筆 camera frame **< 30s（warm）**；cold `just build` 另計（分鐘級）。綁定指定 GPU runner spec。（container-ops wrapper 入口自 base v0.41.0 起為 `just`，非 `make`；但 **CI lint/bats entry 仍是 `Makefile.ci`（make）**——base justfile header 明示其 unrelated、stays on make，CI-wiring issue 勿誤判全面改 just）|
 | M2 | Example 可重現 | example 端到端 integration 連跑 3 次 100% 綠、無 flake。 |
-| M3 | base repo 純淨度 | CI lint：`grep -iE 'forklift|coresam|pallet|pushback|openbase'`（排除 ADR stub）= 0 命中。 |
+| M3 | base repo 純淨度 | CI lint（#137）掃描 `framework/isaac_devkit/*.py` 與 `framework/pyproject.toml`，應用專屬詞彙不分大小寫 = 0 命中。 |
 | M4 | 框架可獨立 import | hosted（無 Isaac）import 全部 `isaac_devkit.*` 後 `sys.modules` 不含 `omni`/`pxr`/`isaacsim`。 |
 | M5 | Onboarding 成功率 | 1–2 名未碰過此 repo 的人照 README 走完「跑起來→換 USD→換 sensor」無需問人。 |
 | M6 | Coverage gate | framework pure 表面 line cov ≥ 80% 起步，每 PR 不低於 baseline（ratchet）；100% aspirational 非 merge gate。 |
@@ -113,10 +113,10 @@
 
 **0013 為何是 amend-重推導而非作廢**：0013 當初否決「docker 擁有所有測試類別」，兩個理由 = (1) 純 Python unit test 搬進 docker 害 contributor 為改一行要 build container、(2) locality 倒置。**mount 模型抵銷 (1)**（框架 mount 非 baked、unit/import-safety hosted 純跑零 Isaac、免 container build），**research→docker monorepo merge 把框架 code 搬進 base 使 (2) 反向**（tests follow code，locality 現在指向 base）。故 framework test 跟著 framework 住 base 是 0013 原則的延續而非違反——successor ADR amend 0013 記錄這個重推導；0012 一併記 monorepo merge 已撤銷 research/docker 分割，新軸 = -docker 容納可重用 base repos（env + framework base，如 `base` 本身）vs -research 放 app/scenario。
 
-**ADR 去 forklift 化（M3 純淨度 vs ADR append-only 的調和）**：保留 ADR 內仍含 forklift 詞彙（grep 實測：0008 L2/L3 vocab 26 處、0010 Dev Kit 12 處、0006 per-sensor yaml 6 處屬重度；0005/0007/0009/0015 各 2–4 處屬輕度），直接違反 M3。ADR 是 append-only 決策紀錄，不改寫歷史，分兩種處置：
-- **重度（0006/0008/0010）= supersede + stub + 搬原檔**：generic 決策由 successor ADR 用 generic 詞彙（example camera-bot 當範例）重述；原檔（含 Forklift_blocky/Model A 範例）整檔搬去 isaac-forklift 當歷史紀錄；base 只留指向 successor 的 stub。successor ADR 的處置清單因此為「amend 0013（重推導）、修訂 0012、supersede 0006/0008/0010」。註：0006 supersede 同時是 A4 sensor schema 取代（per-sensor-type-yaml → catalog/placement two-tier），de-forklift 與 schema 取代是同一刀。
+**ADR 歷史紀錄**：原案規劃下列文件處置。依 #137 收窄範圍後，ADR 位於 M3 檢查之外。
+- **重度（0006/0008/0010）= supersede + stub + 搬原檔**：generic 決策由 successor ADR 用 generic 詞彙（example camera-bot 當範例）重述；主分支已將原檔搬至 isaac_physics_test 保存歷史紀錄；base 只留指向 successor 的 stub。successor ADR 的處置清單因此為「amend 0013（重推導）、修訂 0012、supersede 0006/0008/0010」。註：0006 supersede 同時是 A4 sensor schema 取代（per-sensor-type-yaml → catalog/placement two-tier），de-forklift 與 schema 取代是同一刀。
 - **輕度（0005/0007/0009/0015）= 就地 editorial de-forklift**：把 incidental 範例詞 forklift→camera-bot，加 editorial footnote（原文留 git history），ADR 留 base。
-- **M3 grep scope**：掃 base 全樹，排除 stub 的 pointer 行（`grep -iE 'forklift|coresam|pallet|pushback|openbase'`，stub 指向行不計）。
+- **M3 grep scope（#137）**：v1.0.0 的 CI 檢查涵蓋框架的 Python 原始碼與套件設定。`src/` 保留可執行範例與指向搬遷文件的 ADR stub。
 
 **CONTEXT.md split（同一把刀）**：現有 CONTEXT.md 混框架 generic（Isaac Dev Kit / L2 / L3 / Robot / Environment Object / Scene YAML / Action Graph）與 forklift 專屬（Model A/B / OpenBase / Chassis SE(2) Slide / push-back / cmd_vel sink deprecated）。切兩份：
 - `base/doc/CONTEXT.md`：留 generic 詞彙，L2/L3 範例「Forklift_blocky 預設 5 cube」改 example camera-bot。
@@ -277,7 +277,7 @@ forklift 應用邏輯開發 / ros1_bridge 反向搬遷 / per-layer 獨立 GPU in
 | 6b | onboarding 驗證：**agent-proxy gate**（example+README only、不讀 framework 原碼）+ 1.0.0 前真人 dry-run | AFK | 6 | M2 | S | 3 |
 | 7a | 開 `-research/isaac-forklift`：repo + base 對齊（license/flags/branch protection）| HITL | — | M3 | S | 26 |
 | 7b | 搬 forklift 內容/ADR + submodule base + boot smoke + **variant single-owner refactor（「3b」：SetVariantSelection 移出 scene_builder→materials）** | AFK | 3,7a | M3 | M | 20,27,28 |
-| 8 | 清 base repo（刪 `src/`、root README→base 4-lang、CHANGELOG、修 `src/README.md`、純淨度 grep lint）| AFK | 7b | M3 | M | 3,16,25,31 |
+| 8 | 框架純淨度（#137，保留 `src/`、四語 root README、CHANGELOG、TEST.md、ADR stub 與框架 CI lint）| AFK | — | M3 | M | 3,16,25,31 |
 
 **Stories 覆蓋稽核**：1–32 每條都出現在 ≥1 個 Stories 欄（5 個曾孤兒已歸位：9→#4、11→#3、17→#6、29→#2、32→#3）。
 

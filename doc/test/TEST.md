@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **964 tests**.
+**233 tests** total (bats). Hosted pytest collects **973 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,22 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 820 | 36 | 985 |
+| core | 129 | 829 | 36 | 994 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 83 | 0 | 83 |
 
 The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
+
+## Framework purity (#137)
+
+Core CI runs `bash script/ci/check_framework_purity.sh` before hosted pytest.
+It scans `framework/isaac_devkit/*.py` and `framework/pyproject.toml` for
+case-insensitive matches of `forklift|coresam|pallet|pushback|openbase`.
+Matches and scan errors fail the check. Runnable applications in `src/` and
+ADR pointers sit outside the scope. Nine core tests cover the current checkout,
+all five terms, scope exclusions, scan errors and CI wiring.
 
 ## Official Isaac Sim Python buckets (#440)
 

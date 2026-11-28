@@ -151,6 +151,8 @@ jobs:
         env:
           FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
         run: python3 script/ci/check_forbidden_names.py --allow-unset
+      - name: Check framework purity
+        run: bash script/ci/check_framework_purity.sh
       - name: Hosted core-group pytest + group floor + coverage gate
         env:
           FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
