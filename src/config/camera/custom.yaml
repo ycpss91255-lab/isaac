@@ -10,7 +10,7 @@
 # mount = camera_link analog (device body center, attached to parent_prim).
 # Pose is RELATIVE to parent_prim.
 mount:
-  parent_prim: "/World/Forklift/carriage"
+  parent_prim: "/World/Robot/carriage"
   pose:
     xyz: [0.55, 0.0, 0.0]      # meters (RHS XYZ)
     rpy: [0.0, -5.0, 0.0]      # degrees (URDF roll/pitch/yaw around X/Y/Z)
@@ -55,5 +55,5 @@ sensors:
 #   <frame_id_prefix>_color_optical_frame
 #   <frame_id_prefix>_depth_optical_frame
 ros:
-  topic_prefix: "/forklift/camera"
-  frame_id_prefix: "forklift_camera"
+  topic_prefix: "/robot/camera"
+  frame_id_prefix: "robot_camera"

@@ -1,4 +1,4 @@
-# Stereolabs ZED X sim camera for forklift between-fork mount.
+# Stereolabs ZED X sim camera.
 # Uses Stereolabs's official Isaac Sim extension (third-party, not bundled).
 # Install instructions: doc/zed_install.md.
 #
@@ -12,7 +12,7 @@
 # mount = camera_link analog (device body center, attached to parent_prim).
 # Pose is RELATIVE to parent_prim.
 mount:
-  parent_prim: "/World/Forklift/carriage"
+  parent_prim: "/World/Robot/carriage"
   pose:
     xyz: [0.55, 0.0, 0.0]      # meters (RHS XYZ)
     rpy: [0.0, -5.0, 0.0]      # degrees (URDF roll/pitch/yaw around X/Y/Z)
@@ -47,5 +47,5 @@ overrides:
 # <topic_prefix>/left/camera_info, etc. See the Stereolabs ROS 2 wrapper
 # docs for the exact tree.
 ros:
-  topic_prefix: "/forklift/camera"
-  frame_id_prefix: "forklift_camera"
+  topic_prefix: "/robot/camera"
+  frame_id_prefix: "robot_camera"
