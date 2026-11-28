@@ -100,6 +100,7 @@ def write_kit_results(extension, names, *, skipped=False):
     (directory / "report.jsonl").write_text(chr(10).join(map(json.dumps, records)))
 
 if bucket == "core":
+    assert "--/exts/omni.kit.test/testExtDefaultTimeout=600" in settings.split()
     names = [
         f"test_usd_authoring.TestUsdAuthoring.test_neural_{kind}_controller_authored_and_discovered"
         for kind in ("mlp", "lstm")

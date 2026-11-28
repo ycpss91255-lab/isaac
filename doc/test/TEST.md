@@ -24,6 +24,8 @@ main and release tags run all groups. Manual dispatch defaults to all groups. Th
 `official-tests` artifact retains each bucket's JUnit XML and per-extension Kit logs on
 success and failure. All buckets are attempted when an earlier bucket fails. The gate
 checks JUnit and prints each bucket's script pass rate and summed execution time.
+The core bucket uses a 600-second default Kit subprocess timeout to accommodate cold
+shader compilation in `core.utils`. Extensions retain their explicit timeouts.
 
 The Isaac Sim 6.2.0.1 baseline has two scoped exceptions.
 

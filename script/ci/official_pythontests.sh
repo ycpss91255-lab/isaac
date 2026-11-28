@@ -14,7 +14,11 @@ for bucket in asset deprecated core sensors; do
   kit_output="$(mktemp -d "${artifacts}/${bucket}.XXXXXX")"
   chmod a+rwx "${kit_output}"
   script_args="--/exts/omni.kit.test/testExtOutputPath=/artifacts/kit-logs"
-  if [[ "${bucket}" == sensors ]]; then
+  if [[ "${bucket}" == core ]]; then
+    # Cold shader compilation can exhaust Kit's default 300 seconds in core.utils.
+    # This setting preserves any explicit timeout in an extension's test config.
+    script_args+=" --/exts/omni.kit.test/testExtDefaultTimeout=600"
+  elif [[ "${bucket}" == sensors ]]; then
     # Keep the RTX extension's two upstream excludes at indices 0 and 1.
     tiled_case='isaacsim.sensors.experimental.rtx.tests.test_tiled_camera_sensor.TestTiledCameraSensor.test_tiled_data'
     script_args+=" \"--/exts/omni.kit.test/testExtArgs/2=--/exts/omni.kit.test/excludeTests/2='${tiled_case}'\""
