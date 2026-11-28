@@ -5,8 +5,8 @@
 # build-worker.yaml@v0.42.0, release-worker.yaml@v0.42.0).
 # A Dependabot bump of gpu-self-hosted.yml must also update GPU_REUSABLE_TAG in
 # test/unit/pytest/gpu_pin.py (pytest and the bats pin spec both read the tag from
-# there). The 4 caller workflows (main, ci-stream-smoke, ci-headless-smoke,
-# publish-stream-source) and the tag in line 4 of this comment are the only other
+# there). The caller workflows (main, ci-stream-smoke, ci-headless-smoke,
+# ci-stream-visual-e2e, ci-official-native-python, publish-stream-source) and the tag in line 4 of this comment are the only other
 # places that carry it.
 #
 # The base subtree version (.base/.version vs the latest base release) is

@@ -4,7 +4,7 @@
 
 A reusable base repository for NVIDIA Isaac Sim 6.2.0. The Docker development environment is built on [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base).
 
-Downstream projects pin this repository as a Git submodule and import the shared Python framework from [framework/isaac_devkit/](framework/isaac_devkit/). [src/](src/README.md) contains runnable examples and application assets outside the downstream framework contract.
+Downstream projects pin this repository as a Git submodule and import the shared Python framework from [framework/isaac_devkit/](framework/isaac_devkit/). [src/](src/README.md) contains driver scripts and sensor configurations outside the downstream framework contract.
 
 Scene spawning and articulation drive defaults use Isaac Sim Core Experimental (`isaacsim.core.experimental`). Configure asset physics in sim_asset for asset_converter to write into USD. `IsaacDriver` starts Kit with `isaacsim.SimulationApp`. Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
 
@@ -50,11 +50,25 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless: bring Isaac up and run a scene
 
-This repository does not ship a simulation example. Choose a headless script from the [official Isaac Sim examples](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples). Replace `path/to/your_scene.py` with the script’s path inside the container. Relative paths start at the repository root (`~/work`).
+Start the headless container once for the session.
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
+```
+
+From the host, run `just run scene <usd>` with a path visible inside the container. Relative paths start at the repository root (`~/work`). The default driver opens the USD, plays the timeline and updates until you quit. For custom behavior, pass a Python file defining one `IsaacDriver` subclass. Its `USD` takes precedence when set.
+
+```bash
+just run scene "models/my robot.usd"
+just run scene "models/my robot.usd" --driver "drivers/my driver.py"
+```
+
+For ROS I/O, set `ISAAC_IO_PLUGIN=module:function` in the container environment. The driver calls the plugin before playback. With the variable unset or empty, the default driver loads no ROS modules.
+
+To run a standalone Python example, choose a headless script from the [official Isaac Sim examples](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples). Replace `path/to/your_scene.py` with the script’s path inside the container. Relative paths start at the repository root (`~/work`).
+
+```bash
 ./script/exec.sh -t headless bash -c \
   'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
@@ -319,6 +333,8 @@ The stream group’s `stream-visual-e2e` GPU job boots the stream stage and chec
 
 The `core-gpu` job runs the official Isaac Sim `asset` and `deprecated` Python test buckets in sequence. Both JUnit reports are included in the `official-tests` artifact.
 
+The scoped `core-official-nativepython` job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
+
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 
 ## Python testing toolkit (devel-test stage)
@@ -341,6 +357,8 @@ GPU integration tests (Isaac Sim must boot, e.g. headless camera prim smoke test
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
+
+The scoped `core-gpu` CI job also runs the official Isaac Sim `core` and `sensors` Python buckets. See the [test guide](doc/test/TEST.md#official-isaac-sim-python-buckets-438-440) for scheduling, artifacts, and known exceptions.
 
 Run pytest against `test/integration/` to include both the GPU integration tests and the [no-ROS checks](test/integration/no_ros/README.md).
 

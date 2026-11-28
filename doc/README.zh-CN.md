@@ -4,7 +4,7 @@
 
 可复用的 NVIDIA Isaac Sim 6.2.0 基础仓库，提供基于 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) 构建的 Docker 开发环境。
 
-下游项目将本仓库固定为 Git 子模块，从 [framework/isaac_devkit/](../framework/isaac_devkit/) 导入共享 Python 框架。[src/](../src/README.md) 保留可运行示例和应用资产，位于下游框架契约之外。
+下游项目将本仓库固定为 Git 子模块，从 [framework/isaac_devkit/](../framework/isaac_devkit/) 导入共享 Python 框架。[src/](../src/README.md) 提供驱动脚本和传感器配置，位于下游框架契约之外。
 
 场景生成与 articulation drive 默认值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。资产物理参数在 sim_asset 中配置，由 asset_converter 写入 USD。`IsaacDriver` 通过 `isaacsim.SimulationApp` 启动 Kit。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
 
@@ -50,11 +50,25 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：启动 Isaac 并跑一个场景
 
-本项目未附模拟示例。请从 [Isaac Sim 官方示例](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)中选择可在 headless 模式下运行的脚本。将 `path/to/your_scene.py` 换成容器内的脚本路径。相对路径从项目根目录（`~/work`）算起。
+先启动 headless 容器，之后就能在同一个容器中运行场景。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
+```
+
+在主机上运行 `just run scene <usd>`，传入容器内可读取的 USD 路径。相对路径从项目根目录（`~/work`）算起。默认 driver 会打开 USD、播放时间轴，并持续更新直到退出。要自定义行为，可以传入定义了一个 `IsaacDriver` 子类的 Python 文件。如果该类设置了 `USD`，会优先使用该路径。
+
+```bash
+just run scene "models/my robot.usd"
+just run scene "models/my robot.usd" --driver "drivers/my driver.py"
+```
+
+需要 ROS I/O 时，在容器环境中设置 `ISAAC_IO_PLUGIN=module:function`。driver 会在开始播放前调用插件。未设置或值为空时，默认 driver 不会加载 ROS 模块。
+
+如需运行独立的 Python 示例，请从 [Isaac Sim 官方示例](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)中选择可在 headless 模式下运行的脚本。将 `path/to/your_scene.py` 换成容器内的脚本路径。相对路径从项目根目录（`~/work`）算起。
+
+```bash
 ./script/exec.sh -t headless bash -c \
   'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
@@ -319,6 +333,8 @@ stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromi
 
 `core-gpu` 作业依次运行 Isaac Sim 官方 `asset` 和 `deprecated` Python 测试，并将两份 JUnit 报告上传至 `official-tests` 制品。
 
+`core-official-nativepython` 作业按 core 变更范围运行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 
 ## Python 测试工具链（devel-test 阶段）
@@ -341,6 +357,8 @@ GPU integration test（需要 Isaac Sim 真正启动，例如 headless 相机 pr
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
+
+CI 的 `core-gpu` 作业也会运行 Isaac Sim 官方 `core` 和 `sensors` Python 测试。触发条件、产物和已知例外见[测试指南](test/TEST.md#official-isaac-sim-python-buckets-438-440)。
 
 对 `test/integration/` 运行 pytest，即可执行 GPU 集成测试与 [无 ROS 验证](../test/integration/no_ros/README.md)。
 

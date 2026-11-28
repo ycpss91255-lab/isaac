@@ -2,8 +2,7 @@
 
 This repo converges from a research+env monorepo into the Isaac robot-simulation **base repo**:
 env (Dockerfile / `.base` / compose) + a mounted `isaac_devkit` Python framework +
-ROS 2 application templates. Application content remains in the repository as
-runnable examples pending the deferred migration (#136). The full
+ROS 2 application templates. Application assets are maintained in sim_asset. The full
 rationale lives in the convergence PRD (`doc/PRD-template-convergence.draft.md`); this ADR is
 the **committed architecture contract** (PRD "Finalized Issue Breakdown" row 2, issue #128):
 consumers code against the final shape from day one, while the implementation grows
@@ -11,8 +10,7 @@ incrementally behind it (schema locked, implementation incremental; unimplemente
 `NotImplementedError`).
 
 Schema illustration throughout: **camera-bot** — a minimal robot (one chassis body, one camera on
-`base_link`) that publishes a ROS 2 camera topic and consumes `/cmd_vel`. It replaces the
-forklift as the generic example so that base-repo documents carry no application vocabulary.
+`base_link`) that publishes a ROS 2 camera topic and consumes `/cmd_vel`.
 
 ## Decision
 
@@ -25,9 +23,8 @@ semver tag of this repo) next to `src/isaac` (the consumer's own robot content);
 workspace mounts into the container. The workspace scaffold was retired in #326.
 The v1.0.0 purity gate (#137, #273) applies to the downstream framework
 contract. Core CI scans `framework/isaac_devkit/*.py` and
-`framework/pyproject.toml`. The root `src/` continues to host runnable examples
-and application assets outside that contract. The application migration is
-deferred to a later version (#136).
+`framework/pyproject.toml`. The scripts and configuration in `src/` are outside that contract.
+For scenario assets, see [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146).
 
 ### 2. Framework install = mount, not baked
 
@@ -256,10 +253,7 @@ setup(stage); main(); shutdown(); app.close()
 Additional locked points:
 
 - **Variant single owner = `materials`**: the scene loader only passes variant names; only
-  `materials` calls `SetVariantSelection`. Current code has the call split across the scene
-  builder and the material setup; the consolidation refactor ("3b") lands with the forklift
-  migration (#136) — the interface contract is locked now, the mechanical extraction (#130)
-  keeps the status quo.
+  `materials` calls `SetVariantSelection`. ADR-0018 decision 7 amends this for color variants.
 - **`import_urdf` is greenfield**: the existing CLI returns only an exit int and the existing
   unit tests assert asset-structure layout, not prim/joint counts. The `PrimSummary` contract
   and the L1 "diff = 0" assertion are new code + new assertions, not ported external behavior.
@@ -271,8 +265,8 @@ Additional locked points:
 ## Restated generic decisions from superseded ADRs
 
 The three superseded ADRs carry generic decisions wrapped in application-specific examples.
-The generic content is restated here (camera-bot as the running example); the original files
-are stub-marked and migrate with the application content (#136).
+The generic content is restated here (camera-bot as the running example); local stubs link to the
+original decisions archived in `isaac_physics_test`.
 
 ### From ADR-0006 (per-sensor-type YAML config)
 
@@ -335,8 +329,7 @@ four layers: URDF in `src/isaac/sim/model/` -> `import_urdf` -> placement in `ro
 
 ## Per-ADR disposition table
 
-Disposition of all 16 existing ADRs. "Migrate" rows were planned to move physically in #136;
-however the `isaac-forklift` repo creation is deferred per #129. ADR-0001 / 0002 / 0003 / 0004 / 0006 / 0008 / 0010 / 0021
+Disposition of all 16 existing ADRs. ADR-0001 / 0002 / 0003 / 0004 / 0006 / 0008 / 0010 / 0021
 have been extracted to `ycpss91255-docker/isaac_physics_test` (isaac#309, isaac#342).
 
 | ADR | Title (short) | Disposition | Destination | New number |
@@ -344,7 +337,7 @@ have been extracted to `ycpss91255-docker/isaac_physics_test` (isaac#309, isaac#
 | 0001 | Chassis SE(2) slide | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0001-chassis-se2-slide-for-upper-layer-algorithm.md) (isaac#342) | `isaac_physics_test` | — |
 | 0002 | cmd_vel teleop via in-kit Script Editor | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0002-cmd-vel-teleop-via-in-kit-script-editor.md) (isaac#342); entrypoint already superseded by ADR-0005 | `isaac_physics_test` | — |
 | 0003 | Two-track simulation strategy | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0003-two-track-simulation-strategy.md) (isaac#309) | `isaac_physics_test` | — |
-| 0004 | Model A-hybrid block model | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0004-model-a-hybrid-forklift-block-model.md) (isaac#309) | `isaac_physics_test` | — |
+| 0004 | Application model | Archived in isaac#309. Asset follow-up is tracked in [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146). | `isaac_physics_test` | — |
 | 0005 | Standalone-with-livestream entrypoint | kept (light editorial de-application) | base | — |
 | [0006](0006-per-sensor-yaml-camera-config.md) | Per-sensor-type YAML config | **supersede** (this ADR section 5 and restatement above) | extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0006-per-sensor-yaml-camera-config.md) (isaac#342) | — |
 | 0007 | Custom streaming Kit experience | kept (light editorial de-application) | base | — |
@@ -397,7 +390,7 @@ The research -> docker monorepo merge (#78) already undid the research/docker sp
 isaac pair (recorded in ADR-0011's 2026-06-02 update). With the base-repo convergence, the org
 axis is re-derived rather than abandoned: **`-docker` holds reusable base repos** (environment
 and framework bases, like `base` itself and this isaac base repo) **vs `-research` holds
-application / scenario source** (`isaac-forklift`, `seggpt`, `sam_manager`). The dual
+application / scenario source** (`seggpt`, `sam_manager`). The dual
 org-level runner topology and the security gates stand unchanged. Recorded as an Update
 section in ADR-0012.
 
@@ -461,7 +454,7 @@ the grill record: ADR-0018 + PRD.
 - ADR-0018 (Isaac Lab spawn backend — amends sections 2 / 3 / 9 above).
 - Issues: #128 (this ADR), #127 (M0 camera smoke), #130 (framework extraction + parity
   baseline), #131 / #132 (example + GPU integration), #133 (ament templates), #134
-  (scaffold), #135 (onboarding gate), #129 / #136 (isaac-forklift repo + migration), #137
+  (scaffold), #135 (onboarding gate), #136 (asset handoff), #137
   (base purity).
 - ADRs: 0006 / 0008 / 0010 (superseded by this file), 0012 / 0013 (amended, update sections
   appended), 0009 (lifecycle pattern carried forward), 0011 (CI split — the 4-bucket

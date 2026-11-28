@@ -4,7 +4,7 @@
 
 再利用可能な NVIDIA Isaac Sim 6.2.0 のベースリポジトリです。Docker 開発環境は [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)をベースに構築しています。
 
-利用側は本リポジトリを Git サブモジュールとして固定し、[framework/isaac_devkit/](../framework/isaac_devkit/) から共通の Python フレームワークをインポートします。[src/](../src/README.md) の実行可能なサンプルとアプリケーション資産は、利用側とのフレームワーク契約の対象外です。
+利用側は本リポジトリを Git サブモジュールとして固定し、[framework/isaac_devkit/](../framework/isaac_devkit/) から共通の Python フレームワークをインポートします。[src/](../src/README.md) のドライバースクリプトとセンサー設定は、利用側とのフレームワーク契約の対象外です。
 
 シーン生成と articulation drive の既定値には Isaac Sim Core Experimental（`isaacsim.core.experimental`）を使用します。アセットの物理パラメータは sim_asset で設定し、asset_converter が USD に書き込みます。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
@@ -50,11 +50,25 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：Isaac を起動してシーンを実行する
 
-このリポジトリにはシミュレーションのサンプルを同梱していません。[Isaac Sim 公式サンプル](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)からヘッドレスで実行できるスクリプトを選び、`path/to/your_scene.py` をコンテナ内のパスに置き換えてください。相対パスの起点はリポジトリのルート（`~/work`）です。
+まずヘッドレスコンテナを起動します。以降のコマンドは同じコンテナを使います。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
+```
+
+ホストで `just run scene <usd>` を実行し、コンテナ内から読める USD のパスを指定します。相対パスの起点はリポジトリのルート（`~/work`）です。既定のドライバーは USD を開いてタイムラインを再生し、終了するまで更新を続けます。動作を変えるには、`IsaacDriver` のサブクラスを 1 つ定義した Python ファイルを指定します。クラスに `USD` を設定すると、そのパスが優先されます。
+
+```bash
+just run scene "models/my robot.usd"
+just run scene "models/my robot.usd" --driver "drivers/my driver.py"
+```
+
+ROS I/O を使うには、コンテナの環境変数に `ISAAC_IO_PLUGIN=module:function` を設定します。ドライバーは再生前にプラグインを呼び出します。未設定または空の場合、既定のドライバーは ROS モジュールを読み込みません。
+
+単体の Python サンプルを実行する場合は、[Isaac Sim 公式サンプル](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)からヘッドレスで実行できるスクリプトを選び、`path/to/your_scene.py` をコンテナ内のパスに置き換えてください。相対パスの起点はリポジトリのルート（`~/work`）です。
+
+```bash
 ./script/exec.sh -t headless bash -c \
   'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
@@ -319,6 +333,8 @@ stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージ
 
 `core-gpu` ジョブは Isaac Sim 公式の `asset` と `deprecated` の Python テストを順に実行し、両方の JUnit レポートを `official-tests` アーティファクトに保存します。
 
+core の変更範囲に応じて起動する `core-official-nativepython` ジョブは、NVIDIA 公式の standalone Python テスト一式と livestream、hello_world のサンプルを実行します。ローカル実行手順と成果物は [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437) を参照してください。
+
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 
 ## Python テストツールキット（devel-test ステージ）
@@ -341,6 +357,8 @@ GPU integration test（Isaac Sim の実起動が必要なもの、例: ヘッド
 just docker run -t test -- /isaac-sim/python.sh -m pytest \
     test/integration/pytest/test_camera_headless.py
 ```
+
+CI の `core-gpu` ジョブでは、Isaac Sim 公式の `core` と `sensors` の Python テストも実行する。実行条件、成果物、既知の例外は[テストガイド](test/TEST.md#official-isaac-sim-python-buckets-438-440)を参照。
 
 `test/integration/` を指定すると、GPU 統合テストと [ROS 非依存の検証](../test/integration/no_ros/README.md) の両方を実行できます。
 
