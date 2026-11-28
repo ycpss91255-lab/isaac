@@ -1,14 +1,13 @@
 name: "CI: Official Native Python"
 
 on:
-  schedule:
-    - cron: "17 18 * * *"
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
-# The shared single-job GPU runner serializes this job with stream-smoke.
+# The shared GPU runner serializes this job with stream-smoke.
 jobs:
   core-official-nativepython:
     uses: ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0
