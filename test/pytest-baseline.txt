@@ -316,7 +316,6 @@
 # isaac#440: official Python buckets add 9 core cases (hosted 955 -> 964, core 811 -> 820).
 # isaac#403 新增 13 項 GPU 工作流程版本與清理輸入測試（hosted 973 → 986，core 829 → 842）。
 # isaac#416: two core documentation checks (hosted 986 -> 988, core 842 -> 844).
-# isaac#437 adds eleven core cases for the scoped standalone workflow and runner.
 # isaac#520 新增 1 項 IMU 建立測試（hosted 988 → 989，core 844 → 845）。
 # isaac#437 adds eleven core cases for the scoped standalone workflow and runner (hosted 989 -> 1000, core 845 -> 856).
 HOSTED_UNIT_BASELINE = 1000
