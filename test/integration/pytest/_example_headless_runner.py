@@ -1,4 +1,7 @@
-"""Build the Jetbot scene and report the camera prim, robot structure and driver lifecycle."""
+"""Build an in-memory scene around the Jetbot USD supplied by the GPU test.
+
+Report the chassis, joints, mounted camera prim and shutdown markers from Kit.
+"""
 
 import argparse
 import ctypes
@@ -43,10 +46,6 @@ def _camera_cfg() -> dict:
                 "vfov": 60.0,
             }
         ],
-        "ros": {
-            "topic_prefix": "/jetbot/camera",
-            "frame_id_prefix": "jetbot_camera",
-        },
     }
 
 

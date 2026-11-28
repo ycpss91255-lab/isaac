@@ -4,7 +4,7 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
-イメージのスコープは Isaac Sim 本体に加え、同梱の ROS 2 bridge がコンテナ間通信できるための env 配線まで。NVIDIA Isaac Lab 3.0（`v3.0.0`）も scene-spawn backend（`sim_utils` spawner；ADR-0018）として image に baked。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
+イメージには Isaac Sim 本体と、scene-spawn backend（`sim_utils` spawner；ADR-0018）として使う NVIDIA Isaac Lab 3.0（`v3.0.0`）が含まれます。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
 本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 
@@ -26,13 +26,13 @@ clone した直後の repo で、まず repo root から次の 2 つの初回手
 ./script/init_isaac_dirs.sh             # 初回のみ — ./script/setup.sh apply を実行し、host 所有の cache ディレクトリ 10 個を作成
 ```
 
-> cache ディレクトリは、container が mount する **前に** 存在し、自分の所有になっている必要がある。そうでないと docker daemon がそれらを **root** で作成し、Kit が cache を書き込めない。その結果 ROS 2 OmniGraph node を登録できず（`[Errno 13] ... kit/cache/ogn_generated`）、それでも exit 0 で終了する。`init_isaac_dirs.sh` がこれらを作成し、pre-run hook が毎回の `just docker run` の前に再実行する。すでに root 所有になっている場合、スクリプトは停止して `chown` による修正方法を表示する。
+> cache ディレクトリは、container が mount する **前に** 存在し、自分の所有になっている必要がある。そうでないと docker daemon がそれらを **root** で作成し、Kit が cache を書き込めない。`init_isaac_dirs.sh` がこれらを作成し、pre-run hook が毎回の `just docker run` の前に再実行する。すでに root 所有になっている場合、スクリプトは停止して `chown` による修正方法を表示する。
 
 次に経路を**1 つだけ**選ぶ。各 stage は互いに独立しており、実行する stage だけを build すればよい。headless の経路の前に devel を build する必要は**ない**。
 
 | やりたいこと | Build | Run |
 |---|---|---|
-| camera_bot のシーンを実行する（まずはここから） | `just docker build -t headless` | `just docker run -t headless -d`、続いて下の「Headless：Isaac を起動してシーンを実行する」 |
+| ヘッドレスでシーンを実行する | `just docker build -t headless` | `just docker run -t headless -d`、続いて下の「Headless：Isaac を起動してシーンを実行する」 |
 | 開発用の対話 shell | `just docker build`（devel） | `just docker run` |
 | WebRTC でシミュレーションを見る | `just docker build -t stream` | `just docker run -t stream -d`、続いて「WebRTC livestream への接続」 |
 
@@ -46,21 +46,22 @@ just docker run -t stream -d                               # sim + WebRTC stream
 just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 ```
 
-> Stage ツリー：`devel-base` -> `devel`（共通層：isaac コードと共通設定）-> `gui` / `stream` / `headless`。X11 を mount するのは `gui` service のみ（`setup.toml` の `["stage:gui"] "gui.mode" = "auto"`。トップレベルの `[gui]` は `mode = "off"` なので `devel` と他の stage は mount しない）：`just docker run -t gui`。2 つの stage が [base #215](https://github.com/ycpss91255-lab/base/issues/215) により profile-gated compose service として auto-emit される：`headless`（pure sim、`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC、`ISAAC_LIVESTREAM=2`）。両者とも起動時は `CMD ["sleep","infinity"]` で idle（`runheadless.sh -v` ENTRYPOINT は無い）— container は起動したまま、`just docker exec -t <stage> <cmd>` で driver スクリプト（`/isaac-sim/python.sh <driver.py>`、`ISAAC_LIVESTREAM=2` を読んで stream を有効化）または一回限りの `/usr/local/bin/runheadless-host-config.sh` を送り込む；streaming 起動後は web-viewer が `:5173` で接続する。`just docker run -t <stage> -d` で起動。
+> Stage ツリー：`devel-base` -> `devel`（共通層：isaac コードと共通設定）-> `gui` / `stream` / `headless`。X11 を mount するのは `gui` service のみ（`setup.toml` の `["stage:gui"] "gui.mode" = "force"`。トップレベルの `[gui]` は `mode = "off"` なので `devel` と他の stage は mount しない）：`just docker run -t gui`。2 つの stage が [base #215](https://github.com/ycpss91255-lab/base/issues/215) により profile-gated compose service として auto-emit される：`headless`（pure sim、`ISAAC_LIVESTREAM=0`）、`stream`（sim + WebRTC、`ISAAC_LIVESTREAM=2`）。両者とも起動時は `CMD ["sleep","infinity"]` で idle（`runheadless.sh -v` ENTRYPOINT は無い）— container は起動したまま、`just docker exec -t <stage> <cmd>` で driver スクリプト（`/isaac-sim/python.sh <driver.py>`、`ISAAC_LIVESTREAM=2` を読んで stream を有効化）または一回限りの `/usr/local/bin/runheadless-host-config.sh` を送り込む；streaming 起動後は web-viewer が `:5173` で接続する。`just docker run -t <stage> -d` で起動。
 
 ### Headless：Isaac を起動してシーンを実行する
 
-ヘッドレスのサンプルは camera_bot のシーンを構築し、`[CAMERA MOUNT]` とカメラのマウントパスを表示する。シミュレーションの準備ができると `[BOOT OK]` を表示する。
+このリポジトリにはシミュレーションのサンプルを同梱していません。[Isaac Sim 公式サンプル](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)からヘッドレスで実行できるスクリプトを選び、`path/to/your_scene.py` をコンテナ内のパスに置き換えてください。相対パスの起点はリポジトリのルート（`~/work`）です。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
 ./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh example/sim/example_driver.py'
+  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
+
 just docker stop
 ```
 
-`EXAMPLE_TICK_BUDGET` を指定しない場合、driver は 1800 update（headless で約 2 分）後に自動で停止し、`[EXIT CLEAN]` を出力する。Kit は session log を host 側の `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` に書き込む。最新のものを追うには：
+Kit は session log を host 側の `isaac-sim/kit/logs/Kit/<app>/<version>/kit_<timestamp>.log` に書き込む。最新のものを追うには：
 
 ```bash
 tail -f "$(ls -t isaac-sim/kit/logs/Kit/*/*/kit_*.log | head -1)"
@@ -74,7 +75,7 @@ container の `docker logs` には idle の main process（`sleep infinity`）�
 
 Kit は起動のたびに、実行に影響しない警告をいくつか出力する：
 
-- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`、最初の 2 秒で約 40 行。OmniHub は Nucleus asset 用の任意のローカル cache サービスである。その helper（`/usr/local/bin/hub`）は container 内で `Permission denied` で終了するため、Kit は asset を直接読み込む。ここの例はローカルファイルしか使わない。
+- `OmniHub: ... Hub encountered error. Trying to reconnect to Hub. retry_reason="Hub failed to launch: ..."`、最初の 2 秒で約 40 行。OmniHub は Nucleus asset 用の任意のローカル cache サービスである。その helper（`/usr/local/bin/hub`）は container 内で `Permission denied` で終了するため、Kit は asset を直接読み込む。
 - `Extensions config 'extension.toml' doesn't exist '/home/<user>/work/<dir>'`、repo のトップレベルディレクトリごとに 1 行（約 15 行）。これはこの修正より前に build した image で出る：experience ファイルの `extsUser` extension フォルダが image になく、container user もそれを作成できないため、Kit が代わりに作業ディレクトリで extension を探していた。現在の image はこのフォルダを作成する。まだこの警告が出る場合は `just docker build -t <stage>` でその stage を再 build すること。
 
 ### driver スクリプトの停止
@@ -186,7 +187,7 @@ post-run hook はさらに `network.public_ip` を `SIGNALING_SERVER` env とし
 
 ### 決定論的 stream-source producer（GHCR image、isaac#223）
 
-CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)、Tier B browser-frames smoke isaac#173 が消費）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
+CI とブラウザベースの視覚 e2e（[`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)）向けに、デスクトップ Isaac session を立ち上げずに*確実に非ブラック*な WebRTC ソースを提供する、pull 可能で版号を pin した producer image。起動時に決定論的な「空だが光のある」シーン — dome + distant key light を 12×12 チェッカーボード床に当て、カメラは `eye=[15,-15,11]` にフレーミング — をレンダリングし、永久に livestream するので、ブラウザはいつ接続しても再現可能なフレームを見る。シーン全体はプログラムで生成（外部 asset なし）、image は自己完結。
 
 - **Image**：`ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>`（pin した immutable tag — `:latest` ではない）。`producer` Dockerfile stage から build。
 - **Driver**：`src/script/stream_source_producer.py`、`/opt/isaac-producer/stream_source_producer.py` に bake され、image `CMD` が起動。
@@ -231,72 +232,13 @@ docker inspect ghcr.io/ycpss91255-lab/isaac-stream-source:<tag> \
 
 必須：NVENC フレームエンコード用の NVIDIA GPU runtime（`--gpus all`）、`--network=host`、非 localhost client には `PUBLIC_IP`。`ISAAC_SIGNAL_PORT` は任意（デフォルト `49100`）。driver は `--public-ip` / `--port` / `--run-seconds N`（`N>0` で smoke run を区切る；デフォルトは永久実行）も受け付ける。
 
-## ROS 2 bridge（内蔵、build-time distro）
-
-Isaac Sim 6.2.0 は Humble と Jazzy 両方の内部 ROS 2 ライブラリを `/isaac-sim/exts/isaacsim.ros2.core/{humble,jazzy}/` に同梱しており（5.1 では `isaacsim.ros2.bridge/` に配置。6.0 で単一の bridge ext が `isaacsim.ros2.core` + `isaacsim.ros2.nodes` などに分割された）、両方とも kit 内蔵インタプリタと一致する Python 3.12 rclpy。**本イメージは build-time に distro を hard-bake する** — `setup.toml` の `[[build.args]]` で `key = "ROS_DISTRO"` の項目を指定（デフォルトは `value = "humble"`、CoreSAM 整合）。
+## ドライバー設定
 
 `IsaacDriver` が起動時に既定で有効にする拡張は `isaacsim.core.nodes` のみ。ROS 2 を利用する場合は、外部プラグインの `module:function` を `ISAAC_IO_PLUGIN` に指定し、必要な Kit 拡張を `ISAAC_KIT_EXTRA_ARGS` で有効にする。センサー設定は既存の YAML の `ros:` フィールドを受け付け、作成した USD prim またはマウントのパスを返す。
 
-`setup.toml [environment]` で配線済みの env（distro-agnostic）：
+### 追加の Kit 引数（`ISAAC_KIT_EXTRA_ARGS`）
 
-| 変数 | 値 | 理由 |
-|------|-----|------|
-| `ROS_DOMAIN_ID` | `0` | 小規模チームのデフォルト；同一 host を複数ユーザーで共有する場合は変更 |
-| `RMW_IMPLEMENTATION` | `rmw_fastrtps_cpp` | 明示的に FastDDS 指定、host から継承しない |
-| `FASTRTPS_DEFAULT_PROFILES_FILE` | `/isaac-sim/fastdds.xml` | UDPv4 のみの profile（コンテナ間 DDS が信頼可能、SHM の不安定さなし）|
-
-### Distro 選択（build-time, hard-baked）
-
-Dockerfile の `ARG ROS_DISTRO=humble` は `setup.toml [[build.args]]` と配線されている。build 時にこの値が `/etc/isaac/ros-distro` に書き込まれ、`script/isaac-ros-env-wrapper.sh` が `/usr/local/bin/` に install される。`headless` / `stream` stage は `ENTRYPOINT` をその wrapper に設定し、コンテナ起動毎に baked file から `ROS_DISTRO` と `LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.core/${ROS_DISTRO}/lib` を**無条件**で re-export する — そのため runtime の `-e ROS_DISTRO=...` flag は production path では無効。
-
-`devel` stage は同じ値を Dockerfile `ENV` 経由で soft-bake する（interactive shell ではデフォルトで取得；開発者は `export ROS_DISTRO=...` で実験可能）。
-
-jazzy に切り替えるには：
-
-```bash
-just docker setup remove build.arg "ROS_DISTRO=humble"
-just docker setup add build.arg "ROS_DISTRO=jazzy"
-just docker build           # 新しい ARG で rebuild（影響 layer のみ、~10 秒）
-just docker run -t headless -d
-```
-
-jazzy パスは Isaac の 24.04 自動デフォルト（2029 年まで LTS）に揃う — 既知の caveat：jazzy on noble は Python 3.11/3.12 mix と Nav2 paths まわりが NVIDIA forum で追跡中。本 repo では jazzy パスを Isaac Sim 6.2.0 で再検証していない；検証済みのデフォルトは humble。
-
-### コンテナ間 DDS の検証
-
-`just docker run -t headless -d`（humble override env 付き）後、WebRTC client で接続し、Script Editor → File → Open → `~/work/src/script/ros2_test_pub.py`（container 内に mount された repo の `src/script/`）→ Run。スクリプトは Play を自動押下し（publisher は timeline が再生中のみ発火）、`/isaac/test` に `std_msgs/String "hello N"` を publish 開始。
-
-同一 host の別 terminal で：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic list &&
-             ros2 topic echo /isaac/test --once'
-```
-
-期待動作：`/isaac/test` が topic list に現れ、`echo` で hello メッセージが出力される。
-
-host → Isaac の方向は、Script Editor で `ros2_test_sub.py` を実行し、隣接コンテナから pub：
-
-```bash
-docker run --rm --net=host --ipc=host -e ROS_DOMAIN_ID=0 ros:humble \
-    bash -c 'source /opt/ros/humble/setup.bash &&
-             ros2 topic pub /host/test std_msgs/String "{data: hello-from-host}" --once'
-```
-
-kit terminal に `[ros2_test_sub] /host/test <- 'hello-from-host'` と出力されるはず。
-
-> jazzy に整合した Isaac インスタンスを動かす場合は、両側を `ros:jazzy` + `/opt/ros/jazzy/setup.bash` に切り替える — IDL hash を一致させるため、両側の distro を揃える必要がある。
-
-### Standalone Python workflow（Script Editor 代替手段）
-
-`src/script/` には M1 / M2 デモの in-kit Script Editor 版と standalone 版が同梱されている。standalone 版は `SimulationApp` で独自の Kit を boot し、stage の `ISAAC_LIVESTREAM`（`headless` は 0、`stream` は 2）に従う。各 standalone スクリプトは `--run-seconds N` を受け付け、エラー時は exit 1 で終了する（以前は exit 0 だった）。
-
-
-#### 追加の Kit 引数（`ISAAC_KIT_EXTRA_ARGS`）
-
-`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_KIT_EXTRA_ARGS` を読み、空白で分割して Kit 起動時の既存引数（組み込みの boot 引数）の後ろに追加する。未設定、空文字列、空白のみの場合は動作が変わらない。この変数を読むのは `IsaacDriver` だけで、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
@@ -305,9 +247,9 @@ export ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1'
 ISAAC_KIT_EXTRA_ARGS='--/app/isaac_test/marker=1' /isaac-sim/python.sh my_driver.py
 ```
 
-#### 起動プラグイン（`ISAAC_IO_PLUGIN`）
+### 起動プラグイン（`ISAAC_IO_PLUGIN`）
 
-`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`example_driver.py`、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
+`IsaacDriver.run` は `ISAAC_IO_PLUGIN`（`module:function`）を読む。stage の構築後、timeline の play 前に、その module を import し `function(stage, robot_prim, config)` を 1 回呼ぶ。`config` は opaque な dict（現在は `usd_path` と、stage の default prim パスである `robot_prim`）。未設定または空文字列なら何も呼ばず、ROS モジュールも import しない。形式の誤り、module を import できない、function が見つからない場合は、それぞれ原因を示して起動時に失敗する。対応するのは `IsaacDriver.run` だけで、`stream_source_producer`、`src/script/` 配下のスクリプトは非対応。
 
 ```bash
 export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
@@ -315,24 +257,6 @@ export ISAAC_IO_PLUGIN='my_pkg.io:setup_io'
 # 1 行で書く場合：
 ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 ```
-
-| In-kit（Script Editor → File → Open → Run） | Standalone（`just docker exec -t headless /isaac-sim/python.sh src/script/<name>`） | 6.2.0 で検証（headless） |
-|---|---|---|
-| `ros2_test_pub.py` | `ros2_test_pub_standalone.py`：`/isaac/test` を毎秒 1 回 publish | `ros2 topic hz` 1.000 |
-| `ros2_test_sub.py` | `ros2_test_sub_standalone.py`：受信した `/host/test` メッセージを毎回出力 | 3/3 受信 |
-
-使用 pattern：
-
-```bash
-just docker run -t headless -d
-./script/exec.sh -t headless bash -c \
-  'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh src/script/<name>_standalone.py'
-# stop it (see "Stopping a driver script"):
-./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
-just docker stop                           # cleanup
-```
-
-共有 host では ROS domain 0 上に他の `/cmd_vel` publisher が存在することがあり、それらも OpenBase を動かしてしまう。自分の run には専用の domain を割り当てること。例えば `bash -c 'ROS_DOMAIN_ID=77 exec /isaac-sim/python.sh ...'` とし、隣接 container にも同じ `-e ROS_DOMAIN_ID=77` を指定する。
 
 ### Python 出力 API（isaac#365）
 
@@ -388,6 +312,8 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 詳細は [doc/test/TEST.md](test/TEST.md) を参照。
 
 すべてのテストはちょうど 1 つの範囲グループ（`core`、`gui`、`stream`、`headless`、`docs`）に属します。pytest モジュールは `pytestmark = pytest.mark.<グループ>`（1 グループだけ実行するには `pytest -m <グループ>`）、bats spec は `# bats file_tags=<グループ>` を書きます。グループのないテストは収集時に失敗します。`test/pytest-baseline.txt` にはグループごとの下限があります。件数は TEST.md のグループ表を参照。
+
+stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージを起動し、赤いテスト用キューブが映ったフレームを Chromium が継続して受信できることを確認します。
 
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 

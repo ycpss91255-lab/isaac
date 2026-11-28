@@ -1,4 +1,8 @@
-"""GPU coverage for the Jetbot structure, mounted camera and driver lifecycle."""
+"""GPU coverage for the official Jetbot USD, fetched through test_assets.
+
+Check the robot structure, mounted USD camera and driver lifecycle using the
+headless runner's stdout markers. Kit can exit with status zero after an error.
+"""
 
 import re
 import subprocess

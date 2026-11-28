@@ -1,10 +1,6 @@
 # example/ros2 -- アプリ側 ROS 2 テンプレート
 
-このディレクトリには、base リポジトリの ROS 2 サンプルの**アプリ側**が
-入っています。Isaac driver（[`example/sim/`](../sim/)）はカメラ映像を配信
-し、`/cmd_vel` からシャシーを駆動します。ここのパッケージはその消費側の
-カウンターパート -- 別の ROS 2 Humble コンテナで動く通常の ROS 2 ノードで、
-**カメラを購読**し、**`/cmd_vel` を配信**します。
+これらの ROS 2 Humble ノードは Isaac シーンのカメラ画像を購読し、`/cmd_vel` に速度指令を配信します。
 
 これが「ROS 2 デフォルトの双方向トポロジー」を構造として体現したもの
 （ADR-0017 第 6 節）です。フレームワークが Isaac 側のブリッジ配線を担い、
@@ -23,14 +19,12 @@
 
 ## トピック
 
-ノード名とデフォルトトピックは Isaac サンプル（[`example/sim/`](../sim/)）
-が配信／購読するものと一致するので、同じ DDS ネットワーク上で両側がそのまま
-つながります。
+次の表はノードのデフォルト値です。シーンのカメラが別の名前空間を使う場合は、`camera_topic` にその画像トピックを指定してください。例えば Jetbot の統合テスト用シーンでは `/jetbot/camera/color/image_raw` を使います。
 
-| 方向 | トピック | 型 | 設定元 |
+| 方向 | トピック | 型 | ROS 2 パラメータ |
 |---|---|---|---|
-| Isaac -> アプリ（inbound） | `/camera_bot/camera/color/image_raw` | `sensor_msgs/Image` | `example/sim/config/sensor/custom.yaml` |
-| アプリ -> Isaac（outbound） | `/cmd_vel` | `geometry_msgs/Twist` | `example/sim/scene/scene.yaml` |
+| Isaac -> アプリ（inbound） | `/camera_bot/camera/color/image_raw` | `sensor_msgs/Image` | `camera_topic` |
+| アプリ -> Isaac（outbound） | `/cmd_vel` | `geometry_msgs/Twist` | `cmd_vel_topic` |
 
 ## 前提条件
 
@@ -65,10 +59,9 @@ docker run --rm -v "$PWD":/ws -w /ws ros:humble bash -c '
 linter は base イメージにオプションツールが無いため skip されます -- これは
 skip であり failure ではありません）。
 
-## サンプルに対して実行
+## Isaac シーンに接続する
 
-まず Isaac サンプル（[`example/sim/`](../sim/) 参照）を、このコンテナと
-DDS ネットワークを共有するホストで起動し、次を実行します。
+ノードと同じ DDS ドメインで、カメラ画像を配信して速度指令を購読するシーンを起動します。デフォルトのトピックを使う場合は次を実行します。
 
 ```bash
 docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
@@ -87,8 +80,7 @@ docker run --rm --net=host -v "$PWD":/ws -w /ws ros:humble bash -c '
   ros2 run example_app_py cmd_vel_publisher'
 ```
 
-`[CMD_VEL OK]` の各行は、Isaac driver が受け取ってシャシーに適用する Twist
-に対応します。C++ パッケージも同じ使い方です。
+`[CMD_VEL OK]` の各行はノードが Twist を配信したことを示します。C++ パッケージでも同じパラメータを使います。
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`。
 
@@ -102,8 +94,7 @@ Isaac と ament のコンテナ間の往復テストは `isaac_ros_io` に移り
 2. パッケージ名を変更します。ディレクトリ、`package.xml` の `name`、
    さらに（Python）`setup.py` の `package_name` ／内側のモジュール
    ディレクトリ、または（C++）`CMakeLists.txt` の `project()`。
-3. `camera_topic` ／ `cmd_vel_topic` パラメータを自分のトピックに向けます
-   （サンプルとつなぐならデフォルトのままで構いません）。
+3. `camera_topic` と `cmd_vel_topic` にシーンで使うトピックを指定します。
 4. ノードの中身を自分のアプリロジックに置き換えます。
 
 ## ライセンス

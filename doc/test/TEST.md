@@ -1,6 +1,6 @@
 # TEST.md
 
-**218 tests** total (bats). Hosted pytest collects **728 tests**.
+**219 tests** total (bats). Hosted pytest collects **847 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,13 +8,13 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 115 | 620 | 31 | 766 |
+| core | 115 | 706 | 35 | 856 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 90 | 19 | 0 | 109 |
+| stream | 91 | 52 | 0 | 143 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 83 | 0 | 83 |
 
-The `**218 tests** total` above counts the bats specs only. `gui` has no tests yet (they arrive with #428); `headless` has the boot check (#461); the GPU integration tests are all `core` because they boot Isaac on the shared `devel` layer.
+The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
 ## test/bats/smoke/host_yaml_spec.bats (16)
 
@@ -58,7 +58,7 @@ Single builder of the Isaac livestream Kit invocation (`script/runheadless-host-
 | `runheadless: invalid public_ip -> rc 1 (shared parser rejects)` | Garbage in host.yaml fails fast via the shared `resolve_public_ip`. |
 | `runheadless: forwards extra args after the built kit-args` | Trailing `"$@"` (e.g. a scene USD) is appended after the constructed args. |
 
-## test/bats/smoke/post_run_hook_spec.bats (18)
+## test/bats/smoke/post_run_hook_spec.bats (19)
 
 Post-run hook (`script/hooks/post/run.sh`, base #440): on `run.sh -t stream -d`, copies host.yaml into the Isaac container and starts the per-project `${USER_NAME}-${IMAGE_NAME}-owv<suffix>` web-viewer (#237, isaac#238). The WebRTC livestream ports are sourced from `host.yaml` (#231), not hardcoded. base v0.42.0 removed `--instance` / `INSTANCE_SUFFIX` (base#666); the viewer suffix is now derived from the resolved `PROJECT_NAME` (empty when it equals the default `${DOCKER_HUB_USER}-${IMAGE_NAME}` -> byte-identical to today's names, `-<remainder>` for any distinct project; owv#55). A distinct `PROJECT_NAME` is the internal isolation seam for CI/tooling (a distinct compose project + per-project viewer name, so a CI actor never reaps a co-hosted manual stack), not a return of user-facing same-repo multi-instance, which ADR-0019 removed as a feature. The Isaac stream container name is base-fixed by `compose.yaml` `container_name` (no suffix; residual co-host collision filed as base#920), so the `docker cp` target is that fixed name. Exercised via `POST_RUN_DRYRUN=1`.
 
@@ -66,6 +66,7 @@ Post-run hook (`script/hooks/post/run.sh`, base #440): on `run.sh -t stream -d`,
 |------|-------------|
 | `post-run: non-stream target is a no-op` | A non-`stream` target produces no actions. |
 | `post-run: stream without -d is a no-op` | The stream stage without `-d/--detach` produces no actions. |
+| `post-run: stream + -d is a no-op with ISAAC_SKIP_STREAM_POST_RUN=1` | The hook exits 0 with empty stdout and stderr. |
 | `post-run: stream + -d starts the viewer with stream-only UI mode` | Viewer `docker run` carries `VIEWER_UI_MODE=stream-only`; negative guards that `usd-viewer` and the dropped `VIEWER_AUTO_LAUNCH` flag never appear (#123). |
 | `post-run: omitted ports fall back to viewer defaults 49100/5173 (#231)` | With no host.yaml, the viewer gets `SIGNALING_PORT=49100` + `SERVE_PORT=5173`, no `MEDIA_PORT` (negotiated), and no per-instance `--env-file` (ADR-0019) -- today's exact behavior. |
 | `post-run: viewer signal/serve ports sourced from host.yaml (#231)` | `livestream.ports.signal`/`serve` flow to the viewer as `SIGNALING_PORT`/`SERVE_PORT`; the old literal 49100/5173 no longer appear. |
@@ -168,13 +169,12 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `log_tail: prints the last N lines between markers` | Failure reporting emits a framed, bounded kit log tail. |
 | `log_tail: missing log -> rc 0 and says so (teardown stays safe)` | The failure reporter never itself fails, so teardown still runs. |
 
-## test/bats/smoke/docker_env.bats (5)
+## test/bats/smoke/docker_env.bats (4)
 
 | Test | Description |
 |------|-------------|
 | `entrypoint.sh is installed and executable` | Entrypoint check |
 | `bash is available on PATH` | Shell sanity |
-| `fastdds.xml is baked at /isaac-sim/fastdds.xml and world-readable` | Fast DDS profile (UDPv4-only) shipped by this repo's Dockerfile, content sanity-checked for `useBuiltinTransports=false` |
 | `custom streaming kit experience baked at /isaac-sim/apps/ (issue #21 fix-B)` | The repo's custom streaming `.kit` experience file is baked into `/isaac-sim/apps/` so the stream stage launches it |
 | `devel stage drops the NGC Kit healthcheck (idle containers are not 'unhealthy')` | The NGC base image's HEALTHCHECK greps a Kit log for `App is loaded`. devel / headless / stream / test idle with no Kit by design, so the devel stage (inherited by the others) resets it with `HEALTHCHECK NONE`. |
 
@@ -187,26 +187,11 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `runtime user is host-aligned (not root, not isaac-sim default)` | Container user is the host-UID-aligned `USER_NAME`, not the image default `isaac-sim` (UID 1234) |
 | `runtime user is in isaac-sim group (can read /isaac-sim/* mode 0750)` | Group membership unlocks read/exec on Isaac Sim binaries |
 | `HOME is writable` | `${HOME}` is owned by the runtime user — required for cache / logs / Documents writes |
-| `bundled ROS 2 humble + jazzy libs are both readable` | `librmw_fastrtps_cpp.so` present under both `humble/lib/` and `jazzy/lib/` — image carries both distros; the headless / stream shim picks one via `ARG ROS_DISTRO` |
+| `bundled ROS 2 humble + jazzy libs are both readable` | `librmw_fastrtps_cpp.so` present under both `humble/lib/` and `jazzy/lib/` in the official base image |
 | `bundled ROS 2 humble + jazzy rclpy are both readable (Python 3.12)` | `rclpy/` Python bindings present under both distros; kit-side `import rclpy` resolves to whichever the bridge extension activates |
 | `Isaac Lab targets the Isaac Sim release the image bundles` | Isaac Lab's `[tool.isaaclab.versions] isaacsim` (root `pyproject.toml`) names the same `X.Y.Z` as `/isaac-sim/VERSION` -- bumping `BASE_IMAGE` without `ISAACLAB_VERSION` (or the reverse) fails at build time, not at first Kit boot (isaac#295) |
 | `Isaac python torch is Isaac Lab's pinned CUDA 13 build` | The torch distribution on the Isaac python is exactly Isaac Lab's pinned version with `+cu130` (sm_120 kernels for the RTX 5090 runner); any other build means a later pip step overrode Isaac Lab's install (isaac#295) |
 | `no pip_prebundle package lost its __init__.py (isaac#288)` | No dangling `__init__.py` symlink under any `pip_prebundle` -- the 6.0.1 build left `packaging` dangling under `omni.services.pip_archive`, breaking matplotlib plots and the Newton experience |
-
-## test/bats/smoke/isaac_ros_env_wrapper.bats (10)
-
-| Test | Description |
-|------|-------------|
-| `wrapper exists and is executable` | `/usr/local/bin/isaac-ros-env-wrapper.sh` 0755 |
-| `/etc/isaac/ros-distro is baked with humble (default ARG)` | Const file written from `ARG ROS_DISTRO` at build time |
-| `wrapper exports ROS_DISTRO from /etc/isaac/ros-distro` | Wrapper reads file and exports |
-| `wrapper exports LD_LIBRARY_PATH derived from ROS_DISTRO` | Wrapper exports `/isaac-sim/exts/isaacsim.ros2.bridge/${ROS_DISTRO}/lib` |
-| `wrapper hard-overrides runtime ROS_DISTRO env` | `ROS_DISTRO=jazzy ./wrapper bash -c 'echo ROS_DISTRO'` still prints `humble` — runtime `-e` ineffective on headless / stream |
-| `wrapper passes args verbatim to wrapped command` | `./wrapper echo arg1 arg2 arg3` → `arg1 arg2 arg3` |
-| `wrapper appends publicEndpointAddress when PUBLIC_IP is set` | With `PUBLIC_IP` exported, the wrapper adds `--/app/livestream/publicEndpointAddress=<ip>` to the Kit args |
-| `wrapper does not append publicEndpointAddress when PUBLIC_IP is empty` | With no `PUBLIC_IP`, the wrapper omits the public-endpoint arg (localhost-only WebRTC) |
-| `devel stage ENV ROS_DISTRO is baked (soft)` | Devel interactive shell sees `ROS_DISTRO=humble` from Dockerfile `ENV` |
-| `devel stage ENV LD_LIBRARY_PATH points to baked humble lib` | Same — `ENV LD_LIBRARY_PATH=/isaac-sim/exts/isaacsim.ros2.bridge/${ROS_DISTRO}/lib` interpolated at build time |
 
 ## test/bats/smoke/init_isaac_dirs_spec.bats (13)
 
@@ -268,7 +253,7 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `guard: no .env.generated yet -> nothing to check, passes` | No resolved identity means nothing to refuse. |
 | `pre hooks: build/run/stop refuse a shared checkout and pass an isolated one` | The real baked hooks exit non-zero on the shared identity and zero on an isolated one. |
 
-## test/bats/smoke/gpu_job_scripts_spec.bats (7)
+## test/bats/smoke/gpu_job_scripts_spec.bats (11)
 
 Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. Hermetic -- stub `setup.sh` / `build.sh` / `assert_pytest_baseline.sh`, no docker or GPU.
 
@@ -281,6 +266,10 @@ Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration
 | `gpu_job_cache_dirs makes the workspace world-writable (rootless Docker)` | Creates a restricted-permission file and directory, runs the integration job, and asserts both are widened to include other-read-write (and execute for directories) by the `chmod -R a+rwX` at the end of `gpu_job_cache_dirs`. On a rootless Docker daemon the container's non-root user maps to a host subuid, so the mounted workspace must be world-writable. |
 | `stream smoke job: a failed smoke fails the job and prints the full kit log` | A failing smoke exits with its status and prints the kit log. |
 | `stream smoke job: a failed smoke with no kit log still fails with the smoke's status` | A failing smoke with no log file still exits with the smoke's exit code. |
+| `gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag` | `isaac-sim/kit/cache` and `isaac-sim/nvidia/computecache` become symlinks into `<ISAAC_CI_CACHE_ROOT>/<BASE_IMAGE tag>/{kit-cache,computecache}`, outside the workspace; old workspace contents are dropped (isaac#260). |
+| `gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag` | An explicit `ISAAC_CI_CACHE_KEY` selects the persistent cache directory instead of the Dockerfile tag. |
+| `gpu integration job: both caches survive workspace cleanup between runs` | Files in the persistent cache dirs remain after the workspace `isaac-sim/` is wiped and the job runs again. |
+| `gpu integration job: baseline sees writable mounts and state dirs stay in the workspace` | Mounts are writable when the baseline stub runs; state dirs (`kit/data`, `ov/*`, ...) stay real workspace dirs, not links, so state starts cold. |
 
 ## test/bats/smoke/cleanup_merged_worktree_spec.bats (14)
 
@@ -331,6 +320,27 @@ Behavioral guard for `script/git/merge-train.sh` (#368). Hermetic: stub `gh` (ca
 | `merge-train: the script source never hard-codes the squash flag` | `grep -n -e "--squash" script/git/merge-train.sh` prints nothing. |
 | `merge-train: the one required check is the summary job gate (isaac#434)` | `REQUIRED_CHECKS` is exactly `gate`; the two pre-#434 required-check names are gone. |
 
+## test/bats/smoke/gui_stage_static_spec.bats (3)
+
+In `setup.toml`, `stage:gui` sets `gui.mode = "force"` because `auto` would inherit the top-level `off`. The resolver test checks that only `gui` resolves to `gui=true`, enabling `DISPLAY` and the X11 socket mount for that service.
+
+| Test | Description |
+|------|-------------|
+| `setup.toml disables GUI by default and explicitly for every non-GUI stage` | Checks that the top-level mode and each non-GUI stage override are `off`. |
+| `every auto-emitted Dockerfile service stage has a setup.toml override` | Requires a section for each emitted Dockerfile stage and an explicit `gui.mode` of `off`, `auto`, or `force` in every stage section. |
+| `effective GUI per stage: only gui mounts X11` | Validates each stage override key and resolves the Docker flags with `DISPLAY` unset and the parent GUI flag disabled. Expects `gui=true` for `gui` and `gui=false` for every other configured stage. |
+
+## test/bats/smoke/pr_template_gui_spec.bats (4)
+
+Both #428 specs read files from the checkout when run locally. In the devel-test image they read the Dockerfile, resolver libraries, setup.toml, contributor guide, and PR template under `/lint`. A missing input fails setup with its path.
+
+| Test | Description |
+|------|-------------|
+| `PR template has an unchecked GUI screenshot item` | Checks that one unchecked Markdown item in the PR template mentions both GUI and a screenshot. |
+| `contributor guide requires visual evidence for GUI PRs` | Checks the merge rule and looks for the execution command, Isaac Sim, and the scene in the guide. |
+| `contributor guide records the Xvfb Kit screenshot experiment` | Checks for Xvfb, `--no-window`, menu readiness, the screenshot API, and CI status. |
+| `contributor guide uses a generic machine label and omits personal identifiers` | Requires an approved label and checks for home paths, email addresses, and the current username when set to a non-root account. |
+
 ## test/bats/smoke/workflow_pin_spec.bats (4)
 
 The Bats pin checks scan text and read the expected tag from `GPU_REUSABLE_TAG` in `test/unit/pytest/gpu_pin.py` (no hard-coded tag in the spec). The authoritative structural guard is `test_workflow_pins.py`, which parses each workflow's jobs.
@@ -375,7 +385,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **728 tests** on a host without Isaac Sim. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **847 tests** on a host without Isaac Sim. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -401,15 +411,25 @@ The hosted suite collects **728 tests** on a host without Isaac Sim. CI runs `te
 | `test_no_urdf_import.py` | 6 | Enforces the USD-only boundary and verifies that the USD helpers remain importable. |
 | `test_isaac_driver.py` | 57 | Tests both livestream helpers, USD resolution, boot extension ordering, Kit-free construction, and the `SCENE` class attribute. A fake `SimulationApp` records headless mode, streaming experience, and the boot arguments followed by whitespace-split `ISAAC_KIT_EXTRA_ARGS` in `extra_args`. The tests check caller `sys.argv` during and after construction, invalid livestream rejection before startup, signal registration and lifecycle order, traceback output before close, and `ISAAC_IO_PLUGIN` invocation and error handling before timeline play. `TestPlayTimeline` checks warm start callback preference, package fallback, and the warning when neither callback is available. It verifies all three settings (fixed time stepping, rate limiting enabled, and a 60 Hz limit) and the call order from disabling looping through setting the end time, starting playback, and running 10 warmup updates. |
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |
-| `test_example_driver.py` | 12 | 驗證三份場景 YAML 的合併、機器人與 base_link 路徑、驅動程式的執行順序、無 I/O 插件時的更新次數，以及 SIGINT 觸發的關閉流程。 |
-| `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "auto"` (stream / headless / devel-test stay `off`). No docker/GPU. |
+| `test_example_sim_removed.py` | 1 | Guards against restoring the bundled simulation example or importing its driver. |
+| `test_dockerfile_no_ros.py` | 4 | Checks image inputs, build arguments and environment settings for obsolete ROS configuration. |
+| `test_stage_structure.py` | 4 | Parses the Dockerfile `FROM ... AS` lines and `setup.toml` (isaac#427): `devel` is `FROM devel-base`; `gui` / `stream` / `headless` are each `FROM devel`; the header `# Stages:` block lists every active stage; top-level `[gui] mode = "off"` with only `["stage:gui"] "gui.mode" = "force"` (stream / headless / devel-test stay `off`). No docker/GPU. |
 | `test_test_groups.py` | 25 | Test-group contract (isaac#434), `core`: every pytest module has exactly one `pytestmark` group (static AST check over `test/unit/pytest` and `test/integration/pytest`, with unmarked / two-group / unknown-group / function-level-marker detector self-tests on temp trees); every bats spec has exactly one `# bats file_tags=<group>` (non-group tags allowed, `test_tags` may not name a group) plus per-group bats counts; the collection-time plugin `test/group_markers.py` aborts a subprocess pytest run for an ungrouped or two-group test, accepts a grouped one, and `-m <other group>` collects nothing without an unknown-marker warning; the plugin and `script/ci/scope_groups.py` agree on the five groups; `test/pytest-baseline.txt` has a floor per group that sums to the total, the bats counts meet the `BATS_BASELINE_*` floors, and the 'Tests by group' table above matches the specs and the baseline. |
-| `test_changed_groups.py` | 49 | `core`. Scope selection for CI (isaac#434), `script/ci/changed_groups.py`: push / dispatch / tag run every group; a PR runs the groups its paths belong to plus `docs`; docs-only paths touch only `docs`; a shared layer (Dockerfile, compose, `setup.toml`, config, `.base`, `main.yaml`, the CI scripts and baseline) runs all five; a test file follows the group it declares (not a path pattern); `ci-<group>-*` workflow files follow the group in their name; an unknown or deleted path is `core`, never nothing; dispatch group list validated; outputs (`build`, `stages`, `bats_skip`) per scenario; the CLI prints `$GITHUB_OUTPUT` lines and reads the PR diff with `git diff --name-only base...head` (stub `git`). Each stream smoke input must select `stream` on its own, with the shared entrypoint and pre-hooks selecting all five groups (isaac#459). A merge group selects all five groups and the CLI enables every flag without PR SHAs (isaac#453). |
-| `test_ci_gate.py` | 9 | `core`. The required-check summary job (isaac#434), `script/ci/gate_result.py`: success and skipped jobs pass; failure or cancelled fails; `changes` not succeeding fails even when everything else is skipped (nothing was checked); empty needs fails; CLI exit codes 0 / 1 / 2. |
-| `test_main_workflow_scope.py` | 21 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
+| `test_changed_groups.py` | 67 | `core`. Scope selection for CI (isaac#434), `script/ci/changed_groups.py`: push / dispatch / tag run every group; a PR runs the groups its paths belong to plus `docs`; docs-only paths touch only `docs`; a shared layer (Dockerfile, compose, `setup.toml`, config, `.base`, `main.yaml`, the CI scripts and baseline) runs all five; a test file follows the group it declares (not a path pattern); `ci-<group>-*` workflow files follow the group in their name; an unknown or deleted path is `core`, never nothing; dispatch group list validated; outputs (`build`, `stages`, `bats_skip`) per scenario; the CLI prints `$GITHUB_OUTPUT` lines and reads the PR diff with `git diff --name-only base...head` (stub `git`). Each stream smoke input must select `stream` on its own, with the shared entrypoint and pre-hooks selecting all five groups (isaac#459). A merge group selects all five groups and the CLI enables every flag without PR SHAs (isaac#453). |
+| `test_ci_gate.py` | 10 | `core`. The required-check summary job (isaac#434), `script/ci/gate_result.py`: success and skipped jobs pass; failure or cancelled fails; `changes` not succeeding fails even when everything else is skipped (nothing was checked); empty needs fails; CLI exit codes 0 / 1 / 2. |
+| `test_stream_visual_job.py` | 11 | Per-run ports, the shared viewer image default, producer and client startup, failure artifacts and teardown. |
+| `test_stream_visual_scene.py` | 3 | Kit startup, known scene content and recovery after a stage replacement. |
+| `test_stream_visual_probe.py` | 2 | Browser frame sampling, fresh navigation on retry and diagnostic capture. |
+| `test_stream_visual_verdict.py` | 12 | Pixel statistics, known-colour thresholds and WebRTC requirements. |
+| `test_stream_visual_wiring.py` | 5 | 驗證 stream 組觸發條件、GPU 工作流程、失敗時的產物上傳、必要檢查，以及容器清理篩選器只命中同一次執行與嘗試的容器。 |
+| `test_main_workflow_scope.py` | 28 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
 | `test_workflow_naming.py` | 42 | `core`. Workflow naming rule and lint (isaac#443), `script/ci/lint_workflow_names.py` + `doc/workflow-naming.md`: the real `.github/workflows/` follows the rule (and the glob finds `main.yaml` and `ci-stream-smoke.yaml`, no vacuous pass; the pre-rename stream smoke file is gone); detector self-tests on temp trees for bad file names (`.yml`, no category, uppercase, underscores), bad display names (parenthesised note, wrong case, wrong category), non-kebab job ids, a CI job with no group prefix, job-level `name:`; the allowed CI ids (`changes` / `gate` / `release` / `<group>-...`) and a bot job needing only kebab-case; exemptions are by exact file name and each carries a reason; `main.yaml` is exempt from file and display name but not from the job rule; base's `init.sh` still generates `base-version-monitor.yaml` under that name and only creates it when absent (the reason it keeps its name); the doc lists every category, group and exemption; retired names (`RETIRED_NAMES` in the lint: the old job ids, the old stream smoke file name and display name) are reported in docs while the new file name and history (changelog, ADRs) are not. |
-| `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only `base-version-monitor.yaml` (an upstream-release bot that runs no tests) may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
-| `test_workflow_pins.py` | 5 | Three guards cover the GPU workflow pin (isaac#402, isaac#405). The workflow jobs and the Dependabot comment must match `GPU_REUSABLE_TAG` in `gpu_pin.py`, the single source of truth for pytest. The expected callers are `main.yaml`, `ci-stream-smoke.yaml`, `ci-headless-smoke.yaml`, and `publish-stream-source.yaml`. A mismatch lists missing and extra callers and directs maintainers to update `_EXPECTED_CALLERS` and this row. Two tests cover the run-scoped reap filter (isaac#344). |
+| `test_track_isaac_sim.py` | 24 | `core`. Official Isaac Sim stable tag filtering, version ordering, suite and script changes, Traditional Chinese PR text, deduplication and the Dockerfile pin (isaac#442). |
+| `test_bot_isaac_sim_version_workflow.py` | 13 | `core`. Weekly and manual triggers, optional version override, tracker invocation, gate independence, scoped permissions and built-in token (isaac#442). |
+| `test_track_isaac_sim_inventory.py` | 10 | `core`. Offline tar-layer fixtures for `read_layer`, `image_layers`, `image_inventory` and `inventory_diff`: whiteout, opaque whiteout, oversized metadata, index manifests and history mismatch (isaac#442). |
+| `test_track_isaac_sim_run.py` | 20 | `core`. Offline `run()` flow with faked registry, git and gh: same version opens nothing, new version opens a PR and an inventory issue, an existing branch, PR or issue opens nothing, `--dry-run` writes nothing, and main.yaml is dispatched after the PR is created (isaac#442). |
+| `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only the upstream release trackers `base-version-monitor.yaml` and `bot-isaac-sim-version.yaml` may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
+| `test_workflow_pins.py` | 5 | Three guards cover the GPU workflow pin (isaac#402, isaac#405). The workflow jobs and the Dependabot comment must match `GPU_REUSABLE_TAG` in `gpu_pin.py`, the single source of truth for pytest. The expected callers are `main.yaml`, `ci-stream-smoke.yaml`, `ci-headless-smoke.yaml`, `ci-stream-visual-e2e.yaml`, and `publish-stream-source.yaml`. A mismatch lists missing and extra callers and directs maintainers to update `_EXPECTED_CALLERS` and this row. Two tests cover the run-scoped reap filter (isaac#344). |
 | `test_readme_cleanup_text.py` | 4 | `docs`. One case per README language (isaac#381) checks the inline force-removal warning, the compose project label lookup, the nominal per-tag size and when shared layers can be reclaimed. |
 | `test_stream_source_producer.py` | 19 | Hosted import/CLI-contract for the deterministic WebRTC stream-source producer driver `src/script/stream_source_producer.py` (isaac#223 / owv#48 / isaac#173): the module imports on a non-Isaac host without pulling `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (every Isaac import function-local), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env vars (the `docker run -e` container contract) with an explicit flag overriding the env, and `python stream_source_producer.py --help` exits 0 on a bare host (argparse exits before any Isaac import). Loads the driver by file path; no docker/GPU. |
 | ~~`test_render_settings.py`~~ | ~~13~~ | Moved to `ycpss91255-lab/isaac_physics_test` with `viz_render.py` (isaac#309). The converged-render recipe `_capture_noise_runner.py` used is now inlined there. |
@@ -419,15 +439,15 @@ The hosted suite collects **728 tests** on a host without Isaac Sim. CI runs `te
 | `test_no_ai_attribution.py` | 30 | PR commit checks (isaac#413, isaac#414). Clean commits, ordinary mentions, and human co-author names containing Claude pass. Model names and versions, anthropic.com co-author, author, or committer addresses, generation notices (including Markdown links), and session trailers flag the offending commit SHAs. Coverage includes indentation, mixed case, and versions written without a space (`Claude Sonnet4.5`, `Claude Opus4`, and `Claude-3`). With a stubbed git log, an empty range succeeds and an invalid range reports an error with exit code 2. Omitting both the range and `--stdin` is a usage error. |
 | `test_model_readme_layout.py` | 11 | `docs`. Checks the five moved model paths, the removal of their old paths, the sim_asset README citation (isaac#363). |
 | `test_standalone_smoke_matrix.py` | 7 | `core`. Three parametrized checks guard against reintroducing the USD gate. Two more verify that each case has three fields and that the runner passes `bash -n` (isaac#359). Two parser cases verify that both an empty matrix and a matrix containing only a comment yield an empty list. |
-| `test_standalone_scripts.py` | 21 | The README-listed standalone drivers (`src/script/{ros2_test_pub,ros2_test_sub}_standalone.py`), from a README-only onboarding run on 6.2.0. Pins the pure helper `src/script/standalone_common.py`: `kit_config` follows `ISAAC_LIVESTREAM`, `PeriodicTimer` fires once per wall-clock period whatever the Kit update rate and does not burst after a stall, and `run_and_exit` turns an exception into exit code 1 and passes a return code through. The helper exposes no OpenBase path or stage setup functions, wheel names, or base-link constant (isaac#358). Each script has no `omni.isaac.dynamic_control` import (removed in 6.x), no hard-coded home directory, no module-top Isaac import or `SimulationApp(...)` (a module-top failure bypassed every handler and exited 0), and a `__main__` block that goes through `run_and_exit`. `ros2_test_pub` publishes on a `PeriodicTimer` instead of every 60 ticks (measured 3.5-7.5 Hz against a claimed ~1 Hz). The `move_openbase_planar` / `cmd_vel_planar` standalone scripts and their guards moved to `ycpss91255-lab/isaac_physics_test` (isaac#342). The smoke script is also checked for a hard-coded workspace. Two cases check that the camera and sensor shims expose the corresponding devkit setup functions. |
+| `test_standalone_scripts.py` | 21 | The standalone drivers (`src/script/{ros2_test_pub,ros2_test_sub}_standalone.py`), from a README-only onboarding run on 6.2.0. Pins the pure helper `src/script/standalone_common.py`: `kit_config` follows `ISAAC_LIVESTREAM`, `PeriodicTimer` fires once per wall-clock period whatever the Kit update rate and does not burst after a stall, and `run_and_exit` turns an exception into exit code 1 and passes a return code through. The helper exposes no OpenBase path or stage setup functions, wheel names, or base-link constant (isaac#358). Each script has no `omni.isaac.dynamic_control` import (removed in 6.x), no hard-coded home directory, no module-top Isaac import or `SimulationApp(...)` (a module-top failure bypassed every handler and exited 0), and a `__main__` block that goes through `run_and_exit`. `ros2_test_pub` publishes on a `PeriodicTimer` instead of every 60 ticks (measured 3.5-7.5 Hz against a claimed ~1 Hz). The `move_openbase_planar` / `cmd_vel_planar` standalone scripts and their guards moved to `ycpss91255-lab/isaac_physics_test` (isaac#342). The smoke script is also checked for a hard-coded workspace. Two cases check that the camera and sensor shims expose the corresponding devkit setup functions. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |
-| `test_test_assets.py` | 12 | Official Isaac test-asset fetch helper (`test/test_assets.py`, #324). Pins the NVIDIA Jetbot USD URL on the Omniverse S3 bucket with a version segment and SHA-256 digest; cache-hit path returns without calling `_download`; cache-miss path calls `_download`; the return value is a `Path`; an empty cache with a simulated `ConnectionError` raises `RuntimeError` naming the asset; an unknown asset name raises `KeyError`. #325 adds the pinned `nvidia_cube` entry (URL on the same bucket/version, SHA-256) and a structural guard that `test_build_scene_adapter.py` / `_build_scene_runner.py` no longer reference `example_driver` / `example/sim` and use `fetch_test_asset`. Pure -- mocked HTTP, filesystem only. |
+| `test_test_assets.py` | 12 | Official Isaac test-asset fetch helper (`test/test_assets.py`, #324). Pins the NVIDIA Jetbot USD URL on the Omniverse S3 bucket with a version segment and SHA-256 digest; cache-hit path returns without calling `_download`; cache-miss path calls `_download`; the return value is a `Path`; an empty cache with a simulated `ConnectionError` raises `RuntimeError` naming the asset; an unknown asset name raises `KeyError`. #325 adds the pinned `nvidia_cube` entry (URL on the same bucket/version, SHA-256) and a structural guard that `test_build_scene_adapter.py` / `_build_scene_runner.py` no longer reference the removed bundled simulation example and use `fetch_test_asset`. Pure -- mocked HTTP, filesystem only. |
 | `test_headless_smoke_wiring.py` | 6 | Checks the headless smoke workflow, its CI scope and the scripts installed in the image. |
 | `test_producer_versions.py` | 6 | Checks the generated producer-version tables in the four READMEs. |
 
 ## test/integration/pytest/ — GPU integration (pytest, not in the bats count above)
 
-The GPU suite collects **31 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. The ROS round-trip belongs to `isaac_ros_io` (isaac#276).
+The GPU suite collects **35 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. The ROS round-trip belongs to `isaac_ros_io` (isaac#276).
 
 | Test | Description |
 |------|-------------|
@@ -435,12 +455,12 @@ The GPU suite collects **31 tests**, all inside the Isaac test container. `test/
 | `test_example_gpu_integration.py` (6) | 檢查 Jetbot 場景啟動與結束、CUDA 與 Vulkan 初始化、底盤剛體、連桿與關節數量、底盤下的 Camera prim，以及 SIGINT 關閉流程。 |
 | `test_sensor_setup_integration.py` (5) | 使用含 `ros:` 的 YAML 建立 RealSense、兩種 LiDAR 及 IMU，檢查回傳的 prim 與掛載位置，並驗證 IMU 拒絕非剛體的父節點。 |
 | `test_joint_drive_integration.py` (1) | Creates a revolute USD joint, applies a runtime drive and reads the angular stiffness and damping back from its DriveAPI. |
-| `test_output_hub_gpu.py` (4) | OutputHub delivery (isaac#365): one runner boot (`_output_hub_runner.py`, official Jetbot) builds python-mode output with an RGB and a depth camera, joint state and an IMU prim, steps 300 ticks and the four tests assert RGB uint8 `480x640x3`, depth float32 `480x640`, joint names present, IMU orientation length 4. Marker-line acceptance. NOT run locally; first run is CI `gpu-integration`. |
+| `test_output_hub_gpu.py` (4) | OutputHub delivery (isaac#365): one runner boot (`_output_hub_runner.py`, official Jetbot) builds python-mode output with an RGB and a depth camera, joint state and an IMU prim, steps 300 ticks and the four tests assert RGB uint8 `480x640x3`, depth float32 `480x640`, joint names present, IMU orientation length 4. Marker-line acceptance. Executed on a real GPU in the devel-test container (isaac#384): 4 passed, 0 skipped; the runtime `IMU.create(...)` + IMU reader path is confirmed (orientation length 4). |
 | `test_kit_extra_args_integration.py` (2) | `ISAAC_KIT_EXTRA_ARGS` (isaac#422): `_kit_extra_args_runner.py` boots a minimal `IsaacDriver` and reads `/app/isaac_test/marker` back through carb settings. With `ISAAC_KIT_EXTRA_ARGS=--/app/isaac_test/marker=1` the value is `1`; without the variable the setting is absent (control). First proof is the CI GPU job. |
 | `test_io_plugin_integration.py` (2) | `ISAAC_IO_PLUGIN` (isaac#423): `_io_plugin_runner.py` boots a minimal `IsaacDriver` with the default `isaacsim.core.nodes` extension on the official Jetbot asset (`fetch_test_asset`). With `ISAAC_IO_PLUGIN=_io_plugin_marker:make_marker` the fake plugin's marker prim exists once the timeline is playing; without it the marker is absent. Both runs check that no `rclpy` or `isaacsim.ros2*` module was loaded. First proof is the CI GPU job. |
-| `test_build_scene_adapter.py` (4) | MR gate (#152, ADR-0018 decisions 1/3), assertions strengthened (#154); since #325 the scene is built in the runner around the official Jetbot (robot, `/World/Robot/chassis` replaces `base_link`) and NVIDIA cube (`mobility: dynamic`) USDs fetched via `test/test_assets.py` (runner takes `--robot-usd` / `--object-usd`), no `example/sim/` assets; NOT yet run on the GPU runner. Originally: the example scene spawned via the framework `build_scene` adapter (`to_isaaclab_cfg` -> `sim_utils` cfg -> `cfg.func()`). A module-scoped fixture runs `_build_scene_runner.py` once (one `SimulationApp`) and shares its marker stdout. `test_adapter_runner_clean_exit` (`[EXIT CLEAN]`, no `[RAISED]`, returncode 0); `test_adapter_spawns_ground_light_robot` (`[ADAPTER OK] ground=True light=True robot=True objects>=1` -- environment ground (a procedural collision cuboid, NOT the nucleus `GroundPlaneCfg`) + light + robot USD authored on the live stage -- AND, strengthened in #154, `[ADAPTER BASE_LINK] valid=True`: `/World/Robot/base_link` now resolves through the adapter reference + the fb6f580 `defaultPrim`); `test_adapter_spawns_mobility_dynamic_object` (a `mobility: dynamic` object materializes a `UsdFileCfg` with `rigid_props`/`mass_props`/`collision_props`, `cfg.func` spawns it, AND -- strengthened in #154 -- carries `rigidbody=True`, the `UsdPhysics.RigidBodyAPI` now landing on resolved referenced content). Both strengthenings were reported-not-asserted before fb6f580 added the `defaultPrim` to the committed `camera_bot.usd` / `prop_cube.usda`. Collected count unchanged (the base_link assertion is folded into the ground/light/robot test). Marker-line acceptance; headless; runner `_build_scene_runner.py` (underscore-prefixed, not collected). |
+| `test_build_scene_adapter.py` (4) | The runner builds an in-memory scene from the official Jetbot and NVIDIA cube USDs fetched via `test/test_assets.py` (#325). Checks clean exit, ground and light creation, the robot and its `/World/Robot/chassis` prim, a dynamic cube with `RigidBodyAPI`, and identity orientation for zero roll, pitch and yaw. |
 | `test_capture_noise.py` (3) | Capture-speckle fix (isaac#266): one Kit boot (`_capture_noise_runner.py`) builds a lit room and captures it TWICE through the SAME render product -- once as replicator creates it, once after `apply_converged_render_settings` (inlined from the former `viz_render` module, now in `ycpss91255-lab/isaac_physics_test`) authors the recipe on the RenderProduct prim. Asserts the default leg is CLEAN, i.e. NGX-denoised (isaac#294: since #285 set `gpu_capabilities = all` the container gets the `ngx` capability, so the old "default must still be noisy" guard was inverted -- a default leg back near 53 now means NGX dropped out again), that the mode reads back as `PathTracing` off the live prim (a carb `/rtx/rendermode` write reads back unchanged, so this is what separates "applied" from "attempted"), and that the converged frame is clean (absolute ceiling, no relative-to-default check since both legs are now clean) with no fully black pixels. The metric is neighbouring-pixel mean absolute difference, NOT frame `std`: `std` is dominated by scene contrast, which is why every failed hypothesis in the issue "left std unchanged" and looked equally inert. Reference on the RTX 5090: pre-#285 default 53.0 vs converged 2.1; post-#285 default ~0.41 vs converged ~1.53 (CI run 34233956492). |
-| `test_driver_joint_motion.py` (2) | The #447 regression runs `IsaacDriver` on the official Jetbot with PhysX and Newton. Each case checks the active engine and requires both wheels to move more than one radian in the commanded direction. |
+| `test_driver_joint_motion.py` (6) | The #447 regression shares one Jetbot run per engine (PhysX and Newton). The wheel test checks the active engine and requires both wheels to move more than one radian in the commanded direction. The settings test checks that the 60 Hz rate limit and fixed stepping are enabled and timeline looping is off. The clock test requires monotonic `omni.timeline` time, 60 updates per simulated second (±15%), and fewer than 69 updates per wall-clock second (upper bound only, detects removal of the 60 Hz rate limit). |
 | `test_isaac_driver_integration.py` (1) | Exercises the driver lifecycle in Kit. |
 
 ## example/ros2/ — app-side ament package tests (colcon test, not in the counts above)
@@ -452,6 +472,6 @@ The app-side ROS 2 templates (#133, `example/ros2/src/`) carry their own tests, 
 | `test_copyright.py` | `example_app_py` | `ament_copyright`: every source file carries an accepted licence header. |
 | `test_flake8.py` | `example_app_py` | `ament_flake8`: source is flake8-clean. |
 | `test_pep257.py` | `example_app_py` | `ament_pep257`: docstrings follow the ament PEP 257 convention. |
-| `test_helpers.py` | `example_app_py` | Pure-helper unit tests (no ROS context): default topics match the example, `describe_image` summary fields, `make_twist` sets only the planar components. |
+| `test_helpers.py` | `example_app_py` | Pure-helper unit tests (no ROS context): default camera and velocity command topics, `describe_image` summary fields, `make_twist` sets only the planar components. |
 | `ament_lint_common` suite | `example_app_cpp` | `copyright` / `cpplint` / `uncrustify` / `lint_cmake` / `xmllint` / `cppcheck` (cppcheck skips when the optional tool is absent) over the C++ nodes + `CMakeLists.txt` + `package.xml`. |
 
