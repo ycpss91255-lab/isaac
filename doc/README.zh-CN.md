@@ -4,7 +4,7 @@
 
 可复用的 NVIDIA Isaac Sim 6.2.0 基础仓库，提供基于 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) 构建的 Docker 开发环境。
 
-下游项目将本仓库固定为 Git 子模块，从 [framework/isaac_devkit/](../framework/isaac_devkit/) 导入共享 Python 框架。[src/](../src/README.md) 保留可运行示例和应用资产，位于下游框架契约之外。
+下游项目将本仓库固定为 Git 子模块，从 [framework/isaac_devkit/](../framework/isaac_devkit/) 导入共享 Python 框架。[src/](../src/README.md) 提供驱动脚本和传感器配置，位于下游框架契约之外。
 
 场景生成与 articulation drive 默认值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。资产物理参数在 sim_asset 中配置，由 asset_converter 写入 USD。`IsaacDriver` 通过 `isaacsim.SimulationApp` 启动 Kit。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
 
