@@ -27,6 +27,7 @@ SCOPED = {
     "core-unit": "core",
     "stream-unit": "stream",
     "core-gpu": "core",
+    "core-official-nativepython": "core",
     "core-build": "build",
     "stream-smoke": "stream",
     "stream-visual-e2e": "stream",
@@ -154,7 +155,10 @@ def test_scoped_jobs_wait_for_changes_and_check_their_flag(jobs, job):
     assert "changes" in needs
     # Merge groups select every flag and have no pull_request payload.
     expected = f"needs.changes.outputs.{SCOPED[job]} == 'true'"
-    if job in {"core-gpu", "stream-smoke", "stream-visual-e2e", "headless-smoke"}:
+    if job in {
+        "core-gpu", "core-official-nativepython", "stream-smoke",
+        "stream-visual-e2e", "headless-smoke",
+    }:
         expected += (
             " && (github.event_name != 'pull_request' || "
             "github.event.pull_request.head.repo.full_name == github.repository)"
