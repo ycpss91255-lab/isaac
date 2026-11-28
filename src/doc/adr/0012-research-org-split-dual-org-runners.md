@@ -98,8 +98,7 @@ new cut:
 - **`-docker` holds reusable base repos** -- environment and framework bases that downstream
   repos consume as their foundation (`base` itself, `github_runner`, and this isaac base repo
   with its mounted `isaac_devkit` framework).
-- **`-research` holds application / scenario source** -- `isaac-forklift` (created by #129,
-  populated by #136), and the Phase-2 migrants `seggpt` / `sam_manager`.
+- **`-research` holds application / scenario source** -- for example, the Phase-2 migrants `seggpt` / `sam_manager`.
 
 This refines the original "container env vs code" criterion: the discriminator is now
 **reusable base vs application content**, which is why a base repo that contains framework

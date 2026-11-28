@@ -255,8 +255,9 @@ jobs:
         artifacts/startuptests
         artifacts/pythontests
       artifact-when: always
-      timeout-minutes: 60
-      step-timeout-minutes: 55
+      # The official core and sensors buckets run serially on one GPU.
+      timeout-minutes: 180
+      step-timeout-minutes: 170
       reap-container-filter: label=com.docker.compose.project=isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}
 
   # Stream group GPU job (isaac#434, formerly the nightly schedule of ci-stream-smoke.yaml

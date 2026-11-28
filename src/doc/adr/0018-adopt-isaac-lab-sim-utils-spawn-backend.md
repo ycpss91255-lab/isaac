@@ -148,15 +148,14 @@ and exposes joint-drive gains cfg the old path did not.
 
 ### 7. `materials`: color is a material parameter, not a variant set
 
-The iron / green / blue 擋板 (and analogous) variants differ by **color**, which is a material
+Variants that differ only by **color** use a material
 **parameter** on the same mesh/texture — not different assets. Color is set (and randomized for
 domain-randomization image generation) via an Isaac Lab material cfg
 (`sim_utils.PreviewSurfaceCfg(diffuse_color=...)` or an MDL cfg with a color param), carried
 through the `spawn_overrides` passthrough. The USD **variant-set** machinery in `materials.py`
 is therefore **dropped for color-only variants**. [ADR-0008](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md)'s `<model>_<suffix>` variant naming
 is retained **only** for variants that are structurally distinct (different mesh / topology /
-texture file), which is verified against the actual assets at the forklift migration (#136); on
-current evidence (one texture, color-driven) the forklift variants are color-only. This amends
+texture file). This amends
 [ADR-0008](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md) (the variant-set emphasis) and supersedes the "variant single owner" / "3b" thread in
 ADR-0017 section 9 for the color case.
 
@@ -186,8 +185,7 @@ later:
   most) the structurally-distinct-variant case. `driver.py` moves onto `AppLauncher` +
   `SimulationContext`. `sensors.py` / `ros_io.py` are untouched.
 - Timing: the re-base lands **before** `v1.0.0` (the tag is born as the Isaac Lab version).
-  The M2 example + GPU integration are reworked once onto the new spawn backend; a new
-  "Isaac Lab re-base" milestone is inserted ahead of the forklift migration.
+  The M2 example + GPU integration are reworked once onto the new spawn backend.
 - ADR-0017 sections 2 (base-tool-baked vs framework-mounted), 3 (module set responsibilities),
   and 9 (driver lifecycle first line + variant-owner note) are amended; ADR-0009 (AppLauncher +
   SimulationContext) and [ADR-0008](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md) (variant-set scope) are amended. The PRD A2 / A6 / A7 /
