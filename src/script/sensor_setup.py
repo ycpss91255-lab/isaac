@@ -5,8 +5,7 @@ The unified sensor-setup code (former ``sensor_setup.py`` +
 framework was extracted into ``framework/isaac_devkit/`` (ADR-0017's
 "one file per layer" rule). This module re-exports the former
 ``sensor_setup`` public surface so the existing ``src/script`` entry
-points keep importing ``sensor_setup`` unchanged until they migrate with
-the forklift application content (#136).
+points keep importing ``sensor_setup`` unchanged.
 
 New code should import ``isaac_devkit.sensors`` directly.
 """
