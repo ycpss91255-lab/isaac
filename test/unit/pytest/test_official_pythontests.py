@@ -47,6 +47,7 @@ def test_runs_buckets_serially_and_checks_reports(
     docker = tmp_path / "docker"
     docker.write_text(
         """#!/usr/bin/env python3
+import argparse
 import json
 import os
 import sys
@@ -68,6 +69,9 @@ logs = Path(logs_mount.split(":", 1)[0])
 (logs / "kit.log").write_text("fixture Kit log")
 mount = next(arg for arg in args if arg.endswith(":" + output))
 report = Path(mount.split(":", 1)[0])
+parser = argparse.ArgumentParser()
+parser.add_argument("--script-args", required=True)
+settings = parser.parse_args(args[args.index("/isaac-sim/run_tests.py") + 7:]).script_args
 mode = os.environ["MODE"] if bucket == "asset" else "pass"
 if mode == "missing":
     sys.exit(0)
@@ -104,7 +108,6 @@ if bucket == "core":
         names.append("test_other")
     write_kit_results("isaacsim.core.experimental.actuators", names, skipped=True)
 if bucket == "sensors":
-    settings = args[args.index("--script-args") + 1]
     assert "excludeTests/2=" in settings
     assert "TestTiledCameraSensor.test_tiled_data'" in settings
     names = [

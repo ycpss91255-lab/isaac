@@ -35,7 +35,7 @@ for bucket in asset deprecated core sensors; do
     -v "${kit_output}:/artifacts/kit-logs" \
     --entrypoint python3 "${DOCKER_HUB_USER:?}/${IMAGE_NAME:?}:test" \
     /isaac-sim/run_tests.py --suite pythontests --bucket "${bucket}" \
-    --output "${container_report}" --script-args "${script_args}" || docker_status=$?
+    --output "${container_report}" --script-args="${script_args}" || docker_status=$?
   if (( docker_status != 0 )); then
     echo "${bucket}: Docker exited with status ${docker_status}" >&2
     status=1
