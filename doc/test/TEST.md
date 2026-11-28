@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **973 tests**.
+**233 tests** total (bats). Hosted pytest collects **987 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 829 | 36 | 994 |
+| core | 129 | 843 | 37 | 1009 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -431,25 +431,27 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **964 tests** on a host without Isaac Sim. isaac#440 adds nine core cases for the official Python buckets. isaac#399 adds four core cases for standalone smoke path portability and Docker lint coverage. Issue #528 adds seven core tests for the pre-run hook using base's TOML parser. They cover listing missing mounts while startup proceeds, a changed source at an existing target, a complete list with an extra mount and custom mode, inherited volumes with and without a local file, explicit empty lists, and advisory parse failures. isaac#478 adds 22 core cases for the scene backend and override contract. isaac#535 adds one stream case for camera framing. isaac#536 adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#480 replaces four NumPy pin cases with two base-dependency guards. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **987 tests** on a host without Isaac Sim. isaac#440 adds nine core cases for the official Python buckets. isaac#399 adds four core cases for standalone smoke path portability and Docker lint coverage. Issue #528 adds seven core tests for the pre-run hook using base's TOML parser. They cover listing missing mounts while startup proceeds, a changed source at an existing target, a complete list with an extra mount and custom mode, inherited volumes with and without a local file, explicit empty lists, and advisory parse failures. isaac#478 adds 22 core cases for the scene backend and override contract. isaac#535 adds one stream case for camera framing. isaac#536 adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#480 replaces four NumPy pin cases with two base-dependency guards. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
 | `test_operator_volumes.py` | 7 | `core`. Checks the pre-run hook’s advisory volume coverage against base’s TOML merge rules (isaac#528). |
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
-| `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and sample references and no references to the unavailable `just run scene` recipe in all four READMEs (isaac#338). |
+| `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and documentation of the sample and the `just run scene` recipe in all four READMEs (isaac#338, #336). |
 | `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream` and the standalone livestream SOP and ZED installation guide for retired stage names, the `isaac-headless` container name and stale headless prose. Requires the SOP to include both `run -t stream -d` (start the idle container) and `exec -t stream /isaac-sim/runheadless.sh` (start Kit inside it). |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |
 | `test_check_forbidden_names.py` | 14 | `core`. Checks case-insensitive matches, redaction in filenames and matched lines, tracked-file scope, the skip reason when the secret is unavailable, Git errors, and the current checkout. Verifies that CI passes the secret to the standalone scan and hosted core tests, and checks the core runner’s image, skip gate, and per-test reporting (isaac#487). |
 | `test_import_safety.py` | 15 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
-| `test_no_module_top_isaac_import.py` | 16 | AST static guard: no module-top `import omni\|pxr\|isaacsim` in any package source (catches try/except-disguised module-top imports; mirrors the ruff TID253 config). |
+| `test_no_module_top_isaac_import.py` | 17 | AST static guard: no module-top `import omni\|pxr\|isaacsim` in any package source (catches try/except-disguised module-top imports; mirrors the ruff TID253 config). |
 | `test_output_mode.py` | 12 | `isaac_devkit.output_mode.resolve_output_mode` (isaac#366, #514): unset -> `python`; only `python` passes through; `ros`, `ROS`, `Python`, empty, `both`, leading / trailing space raise `ValueError` naming the offending value, `ISAAC_OUTPUT_MODE` and the allowed set; unrelated variables ignored; defaults to `os.environ`; constants. |
 | `test_output_hub.py` | 17 | `isaac_devkit.output_hub.OutputHub` (isaac#365): delivery of the four kinds with the documented payloads (RGB uint8 `(H,W,3)` alpha dropped, depth float32 `(H,W)`, joint `names/positions/velocities/efforts`, IMU `lin_acc/ang_vel/orientation` w,x,y,z), `test_reader_not_called_without_consumer`, `test_reader_called_once_per_emit_with_consumer` (incl. unregister), shared copy for several consumers, `None` readings skipped, unknown kinds and malformed payloads raise `ValueError`. Fake sources only. |
 | `test_output.py` | 8 | `isaac_devkit.output.setup_output` (isaac#365 / #366): spec defaults, python mode builds readers (monkeypatched), unset -> python, invalid mode raises, `step` / `unregister`, `ros` raises `ValueError`, `OutputModeError` hierarchy. |
 | `test_stamp.py` | 4 | `isaac_devkit.stamp.split_stamp` (isaac#365, Bug 1 regression): `1.0 - 1e-10 -> (1, 0)` nanosecond carry, exact values, strictly increasing `(sec, nanosec)` pairs across second boundaries, `0 <= nanosec < 1e9` for seeded random times. |
 | `test_buffers.py` | 7 | `isaac_devkit.buffers.to_u8_buffer` (isaac#365, Bug 2 regression): a float32 depth image is 4 bytes per pixel and equals `tobytes()`, uint8 RGB round-trips, returns `array.array('B')`, accepts stdlib buffers, and the non-contiguous contract (strided / Fortran-ordered input raises `ValueError`, `np.ascontiguousarray` input passes). Needs `numpy` (installed by `assert_pytest_baseline.sh`). |
-| `test_no_ros_import_in_devkit.py` | 31 | 逐檔檢查原始碼（含註解與 docstring）沒有 `rclpy` 或 `isaacsim.ros2`。在新的 Python 程序中匯入整個套件及所有子模組，逐次確認未載入 ROS 模組。另檢查預設 Kit 擴充套件、已移除的兩個模組及三個公開名稱。 |
-| `test_default_driver.py` | 8 | `isaac_devkit.default_driver.DefaultSceneDriver` (isaac#336 part 3): the driver a scene launch uses with no user driver. Pins that it is an `IsaacDriver` adding no `setup` / `main` / `shutdown` override, requires a scene path, `_open_stage` order (load scene -> new stage -> `build_scene`), the `run()` order with fake Kit (open stage, defaults, play timeline, tick `app.update()`, close), and Kit-free import. |
+| `test_no_ros_import_in_devkit.py` | 32 | 逐檔檢查原始碼（含註解與 docstring）沒有 `rclpy` 或 `isaacsim.ros2`。在新的 Python 程序中匯入整個套件及所有子模組，逐次確認未載入 ROS 模組。另檢查預設 Kit 擴充套件、已移除的兩個模組及三個公開名稱。 |
+| `test_default_driver.py` | 7 | Checks the required USD path, relative path resolution, inherited stage and lifecycle hooks, playback with a fake Kit, and Kit-free imports of the driver and launcher. |
+| `test_run_scene.py` | 10 | Checks custom driver discovery, USD precedence, CLI dispatch and the Python script entry point. |
+| `test_run_scene_just.py` | 3 | Checks recipe registration and captures the arguments sent to the exec wrapper for USD and driver paths containing spaces. |
 | `test_camera_setup.py` | 29 | Camera surface of `isaac_devkit.sensors` (former `camera_setup.py`): `validate_camera`, unified `load_config`, role -> Camera Helper type, FOV -> aperture math. |
 | `test_sensor_setup.py` | 26 | `isaac_devkit.sensors` (former `sensor_setup.py`): YAML load, shared validation, category dispatch, per-category validation (lidar profile, IMU rigid-body rule), plus `_enable_extensions` through the `omni.kit.app` extension manager with `isaacsim.core.utils` unimportable and a static no-`isaacsim.core.utils`-import scan (isaac#248). |
 | `test_sensor_prim.py` | 23 | `isaac_devkit.sensor_prim` (layer a, ADR-0024): config loading, shared/per-category validation, `ros:` section optional (loads without `ros:`, validates `ros:` when present), host-pure helpers (`fov_to_aperture`, `role_to_helper_type`), `get_category`. |
@@ -504,7 +506,7 @@ The hosted suite collects **964 tests** on a host without Isaac Sim. isaac#440 a
 
 ### test/integration/pytest/
 
-The GPU suite collects **36 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
+The GPU suite collects **37 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
 
 | Test | Description |
 |------|-------------|
@@ -525,6 +527,7 @@ The GPU suite collects **36 tests**, all inside the Isaac test container. `test/
 
 | Test | Description |
 |------|-------------|
+| `test_scene_default_driver.py` (1) | Opens the Jetbot USD through the launcher, checks its default prim and observes the timeline advancing over 20 updates with no ROS modules loaded. |
 | `test_io_plugin_integration.py` (2) | Boots the Jetbot with the default extensions and checks that the fake I/O plugin creates its marker only when configured. Both cases verify that no ROS client or bridge module was loaded. |
 
 ## example/ros2/ — app-side ament package tests (colcon test, not in the counts above)

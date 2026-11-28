@@ -50,11 +50,25 @@ just docker exec -t stream /isaac-sim/python.sh <script>   # run a driver script
 
 ### Headless：启动 Isaac 并跑一个场景
 
-本项目未附模拟示例。请从 [Isaac Sim 官方示例](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)中选择可在 headless 模式下运行的脚本。将 `path/to/your_scene.py` 换成容器内的脚本路径。相对路径从项目根目录（`~/work`）算起。
+先启动 headless 容器，之后就能在同一个容器中运行场景。
 
 ```bash
 just docker build -t headless
 just docker run -t headless -d
+```
+
+在主机上运行 `just run scene <usd>`，传入容器内可读取的 USD 路径。相对路径从项目根目录（`~/work`）算起。默认 driver 会打开 USD、播放时间轴，并持续更新直到退出。要自定义行为，可以传入定义了一个 `IsaacDriver` 子类的 Python 文件。如果该类设置了 `USD`，会优先使用该路径。
+
+```bash
+just run scene "models/my robot.usd"
+just run scene "models/my robot.usd" --driver "drivers/my driver.py"
+```
+
+需要 ROS I/O 时，在容器环境中设置 `ISAAC_IO_PLUGIN=module:function`。driver 会在开始播放前调用插件。未设置或值为空时，默认 driver 不会加载 ROS 模块。
+
+如需运行独立的 Python 示例，请从 [Isaac Sim 官方示例](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/introduction/examples.html#standalone-examples)中选择可在 headless 模式下运行的脚本。将 `path/to/your_scene.py` 换成容器内的脚本路径。相对路径从项目根目录（`~/work`）算起。
+
+```bash
 ./script/exec.sh -t headless bash -c \
   'echo $$ > /tmp/isaac-driver.pid; exec /isaac-sim/python.sh path/to/your_scene.py'
 
