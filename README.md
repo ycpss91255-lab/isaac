@@ -126,6 +126,8 @@ Available GPU memory sets the practical instance count. On a 32607 MiB card, eac
 
 Isaac ships no example models. Use USD models from `sim_asset` or the output of `asset_converter`.
 
+To validate a USD asset, use Isaac Sim’s [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html) tool.
+
 1. Run `cp setup.isaac_sample.toml setup.local.toml` to create the gitignored local configuration. If you already have a local configuration, merge the sample into it to keep your checkout settings.
 2. Edit the model mount’s `source` to point to your models. Keep its read-only target at `/home/${USER_NAME}/models/sim_asset` so scenes resolve the same paths on every machine. If you add model mounts, add their container paths to `MODEL_PATH`, separated by colons.
 3. Start the container with `just docker run -t headless -d`.
@@ -187,7 +189,7 @@ Notes:
 
 ### Deterministic stream-source producer (GHCR image, isaac#223)
 
-For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, camera framed at `eye=[15,-15,11]` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
+For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, the perspective camera set to `eye=[15,-15,11]` and aimed at `target=[0,0,0]` via Isaac Sim’s `ViewportManager.set_camera_view` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
 
 - **Image**: `ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>` (pinned, immutable tag — not `:latest`). Built from the `producer` Dockerfile stage.
 - **Driver**: `src/script/stream_source_producer.py`, baked at `/opt/isaac-producer/stream_source_producer.py` and launched by the image `CMD`.

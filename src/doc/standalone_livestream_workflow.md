@@ -112,7 +112,6 @@ sim_app = SimulationApp({"headless": True, "livestream": 2})
 # Kit-side imports go after SimulationApp() — they load Kit modules.
 import omni.usd                                                    # noqa: E402
 import omni.timeline                                                # noqa: E402
-from omni.isaac.dynamic_control import _dynamic_control as dc      # noqa: E402
 
 stop_requested = False
 
@@ -175,19 +174,6 @@ sys.exit(exit_code)
 ### 瀏覽器看到一片黑
 
 通常是 livestream 連上去太早,Kit 還在初始化。等 10 秒重新整理一下。或先 `just docker exec ... smoke.py` 跑 smoke 確認 livestream 真的開了。
-
-### `set_kinematic_target` AttributeError
-
-`omni.isaac.dynamic_control` 在某些 Isaac 版本沒有 `set_kinematic_target`。Driver 應該 fallback:
-
-```python
-if hasattr(iface, "set_kinematic_target"):
-    iface.set_kinematic_target(h, target)
-else:
-    iface.set_rigid_body_pose(h, target)
-```
-
-也建議同時寫一次 `xformOp:translate`(USD attr),Hydra 不一定 auto-sync kinematic body 到 USD 給 viewport。
 
 ### Driver 卡住沒 print,瀏覽器看 sim 動但 stdout 沒東西
 

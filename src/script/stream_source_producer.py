@@ -168,16 +168,13 @@ def _build_empty_lit_stage():
 
 
 def _frame_camera():
-    """Pull the default perspective camera back + up to frame the 12x12
-    checkerboard. Non-fatal if the viewport helper is absent."""
-    try:
-        from isaacsim.core.utils.viewports import set_camera_view
-    except Exception:  # noqa: BLE001
-        from omni.isaac.core.utils.viewports import set_camera_view
-    set_camera_view(
+    """Pull the default perspective camera back and up to frame the checkerboard."""
+    from isaacsim.core.rendering_manager import ViewportManager
+
+    ViewportManager.set_camera_view(
+        "/OmniverseKit_Persp",
         eye=[15.0, -15.0, 11.0],
         target=[0.0, 0.0, 0.0],
-        camera_prim_path="/OmniverseKit_Persp",
     )
 
 

@@ -8,8 +8,8 @@ stream smoke).
 The producer (`src/script/stream_source_producer.py`) is a mostly
 declarative Kit driver: it boots `SimulationApp`, builds a deterministic
 non-black checkerboard stage, frames a camera, and livestreams over WebRTC.
-Its scene-build / camera-framing / stream-loop behaviour only runs on the
-GPU inside the Isaac container, so it is out of scope for a hosted test.
+Actual rendering runs on the GPU inside the Isaac container. The hosted
+test checks the camera-framing API call with a mock.
 
 What IS host-checkable -- and what the Dockerfile `producer` CMD and the
 `docker run --network=host -e PUBLIC_IP=<ip> <image>` contract rely on --
@@ -80,6 +80,25 @@ def test_hosted_import_leaves_sys_modules_isaac_free():
     assert leaked == [], (
         f"hosted import of the producer leaked Isaac modules: {leaked}; "
         "every omni/pxr/isaacsim/carb import must be function-local"
+    )
+
+
+def test_frame_camera_uses_rendering_manager(monkeypatch):
+    set_camera_view = Mock()
+    monkeypatch.setitem(
+        sys.modules,
+        "isaacsim.core.rendering_manager",
+        SimpleNamespace(
+            ViewportManager=SimpleNamespace(set_camera_view=set_camera_view)
+        ),
+    )
+
+    _load_module()._frame_camera()
+
+    set_camera_view.assert_called_once_with(
+        "/OmniverseKit_Persp",
+        eye=[15.0, -15.0, 11.0],
+        target=[0.0, 0.0, 0.0],
     )
 
 

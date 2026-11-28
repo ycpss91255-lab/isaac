@@ -126,6 +126,8 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 
 Isaac 不附範例模型。請使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的轉換輸出。
 
+若要驗證 USD 資產，請使用 Isaac Sim 官方的 [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html) 工具。
+
 1. 執行 `cp setup.isaac_sample.toml setup.local.toml`，建立 Git 會忽略的本機設定檔。若已有本機設定檔，請將範例合併進去，以保留這個 checkout 的設定。
 2. 將模型掛載的 `source` 改成模型所在的目錄。唯讀掛載的目標保持為 `/home/${USER_NAME}/models/sim_asset`，讓場景在每台機器上都能解析相同的路徑。若新增模型掛載，請將對應的容器內路徑加入 `MODEL_PATH`，並以冒號分隔。
 3. 執行 `just docker run -t headless -d` 啟動容器。
