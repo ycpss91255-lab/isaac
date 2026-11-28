@@ -305,6 +305,27 @@ out.step(sim_time_seconds)
 
 容器以对齐 host UID 的非 root user 跑（`USER_NAME` 从 `.env` 读取，默认 UID 1000）。该 user 以数字 gid 加进 base image 官方账号（从其 `USER` 探测，不写死）的 group，可读取 `/isaac-sim/*`（mode `0750`）。该组可写入 MJCF 导入器与 UI 的 `data` 目录，以及导入器的 `data/mjcf`，让 UI 能在输入 XML 旁导出 USD。通过 `/home/${USER_NAME}/work`（mount 到 host `${WS_PATH}`）写的文件保留 host 端 owner，无需 `chown`。
 
+## 容器权限
+
+默认配置仅授予无界面模拟和实时串流所需的最低权限。如果 GUI 或特殊设备需要额外权限，请从以下示例中选取所需的配置，添加到 `setup.local.toml`。如果只需开放单个设备，请将 `/dev:/dev` 改为该设备的路径映射，例如 `/dev/video0:/dev/video0`。
+
+```toml
+[security]
+privileged = true
+
+[[devices.bindings]]
+path = "/dev:/dev"
+
+[[security.cap_add]]
+cap = "SYS_ADMIN"
+
+[[security.cap_add]]
+cap = "NET_ADMIN"
+
+[[security.cap_add]]
+cap = "MKNOD"
+```
+
 ## EULA
 
 `ACCEPT_EULA=Y` 与 `PRIVACY_CONSENT=Y` 通过 `setup.toml [environment]` 注入。注意：Isaac Sim 6.x 用 `OMNI_ENV_PRIVACY_CONSENT` 读取 privacy consent（此名称自 5.1 起采用，跟 5.1 之前的版本不同）；目前设的 `PRIVACY_CONSENT=Y` 无害但实际无作用，要 telemetry opt-in 请另设正确的变量。
