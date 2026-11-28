@@ -1,6 +1,6 @@
 # TEST.md
 
-**236 tests** total (bats). Hosted pytest collects **1055 tests**.
+**239 tests** total (bats). Hosted pytest collects **1055 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -10,7 +10,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 |-------|-----:|--------------:|-----------:|------:|
 | core | 129 | 888 | 40 | 1057 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 94 | 62 | 0 | 156 |
+| stream | 97 | 62 | 0 | 159 |
 | headless | 13 | 6 | 0 | 19 |
 | docs | 0 | 99 | 0 | 99 |
 
@@ -165,7 +165,7 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
 | `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (17)
+## test/bats/smoke/stream_smoke_isolation_spec.bats (20)
 
 Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-lab/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
 
@@ -188,6 +188,9 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)` | With `SMOKE_SKIP_PORT_PREFLIGHT=1`, the same signal-port conflict allows `run.sh` to run. |
 | `stream_smoke: reports load at startup and elapsed time and load at readiness (isaac#497)` | Checks the three load averages before bring-up and again when Kit is ready, along with elapsed seconds. |
 | `stream_smoke: ready timeout reports load, marker progress and port holders (isaac#497)` | A live container logs only the first ready marker. The timeout diagnostic includes the wait duration, load, both markers and both ports' holders. |
+| `stream_smoke: passes custom signal and media ports to Kit (isaac#563)` | The Kit launch passes the exported ports 49200 and 47999 as Docker exec environment options. |
+| `stream_smoke: passes default signal and media ports to Kit (isaac#563)` | With both variables unset and no host.yaml, the launch passes 49100 and 47998. |
+| `stream_smoke: host.yaml overrides the environment signal port passed to Kit (isaac#563)` | With signal port 49291 in host.yaml and 49200 in the environment, the launch passes 49291. |
 
 ## test/bats/smoke/stream_smoke_lib_spec.bats (25)
 
