@@ -2,7 +2,7 @@
 # bats file_tags=core
 #
 # Guard: every reusable-workflow reference to the org's gpu-self-hosted.yml
-# must be pinned to a release tag, never @main.
+# must use a release tag at or above GPU_REUSABLE_MIN_TAG.
 # test_workflow_pins.py is the authoritative structural guard for these pins.
 #
 # Motivation: when .github's main branch is broken even briefly, every isaac
@@ -29,16 +29,36 @@ setup() {
   [ -d "${WORKFLOW_DIR}" ]
 }
 
-_gpu_reusable_tag() {
+_gpu_reusable_min_tag() {
   local source="${BATS_TEST_DIRNAME}/../../../test/unit/pytest/gpu_pin.py" tag
   if [ "${WORKFLOW_DIR}" = "${BATS_TEST_DIRNAME}/workflows" ]; then
     source="${BATS_TEST_DIRNAME}/gpu_pin.py"
   fi
-  if ! tag=$(sed -n 's/^GPU_REUSABLE_TAG[[:space:]]*=[[:space:]]*"\([^"]\{1,\}\)".*$/\1/p' "${source}") || [ -z "${tag}" ]; then
-    echo "Could not read GPU_REUSABLE_TAG from ${source}" >&2
+  if ! tag=$(sed -n 's/^GPU_REUSABLE_MIN_TAG[[:space:]]*=[[:space:]]*"\([^"]\{1,\}\)".*$/\1/p' "${source}") || [ -z "${tag}" ]; then
+    echo "Could not read GPU_REUSABLE_MIN_TAG from ${source}" >&2
     return 1
   fi
   printf '%s\n' "${tag}"
+}
+
+_tag_at_least_min() {
+  local LC_ALL=C component='(0|[1-9][0-9]*)' i
+  local release="^v${component}\.${component}\.${component}$"
+  [[ $1 =~ ${release} ]] || return 1
+  local -a version=("${BASH_REMATCH[@]}")
+  [[ $2 =~ ${release} ]] || return 1
+  local -a minimum=("${BASH_REMATCH[@]}")
+  for i in 1 2 3; do
+    [[ ${version[i]} == "${minimum[i]}" ]] && continue
+    # Compare digit counts first so large components cannot overflow Bash arithmetic.
+    if (( ${#version[i]} != ${#minimum[i]} )); then
+      (( ${#version[i]} > ${#minimum[i]} ))
+    else
+      [[ ${version[i]} > ${minimum[i]} ]]
+    fi
+    return
+  done
+  return 0
 }
 
 @test "no workflow references gpu-self-hosted.yml@main" {
@@ -49,30 +69,24 @@ _gpu_reusable_tag() {
     echo "Found unpinned gpu-self-hosted.yml@main references:"
     echo "${hits}"
     echo ""
-    echo "Use the release tag from GPU_REUSABLE_TAG in gpu_pin.py."
+    echo "Use a release tag at or above GPU_REUSABLE_MIN_TAG in gpu_pin.py."
     return 1
   fi
 }
 
-@test "every gpu-self-hosted.yml caller uses the pinned tag" {
-  local f tag tag_pattern pinned_ref
-  tag=$(_gpu_reusable_tag)
-  tag_pattern=$(printf '%s\n' "${tag}" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
-  pinned_ref="gpu-self-hosted\\.yml@${tag_pattern}([[:space:]\"']|$)"
+@test "every gpu-self-hosted.yml caller meets the minimum release tag" {
+  local f minimum refs ref
+  minimum=$(_gpu_reusable_min_tag)
   for f in main.yaml ci-stream-smoke.yaml ci-headless-smoke.yaml ci-official-native-python.yaml publish-stream-source.yaml; do
-    [ -f "${WORKFLOW_DIR}/${f}" ] || { echo "missing caller: ${f}"; return 1; }
-    grep -Eq "${pinned_ref}" "${WORKFLOW_DIR}/${f}" \
-      || { echo "${f} is not pinned to gpu-self-hosted.yml@${tag}"; return 1; }
+    grep -Fq 'gpu-self-hosted.yml@' "${WORKFLOW_DIR}/${f}" \
+      || { echo "missing gpu-self-hosted.yml reference in ${f}"; return 1; }
   done
-  # Check the remaining workflows for references to a different tag too.
-  local other
-  other=$(grep -rn 'gpu-self-hosted\.yml@' "${WORKFLOW_DIR}/" \
-    | grep -Ev "${pinned_ref}" || true)
-  if [ -n "${other}" ]; then
-    echo "gpu-self-hosted.yml refs not at @${tag}:"
-    echo "${other}"
-    return 1
-  fi
+  # Include every occurrence in the required callers and in other workflows.
+  refs=$(grep -rHoE "gpu-self-hosted\.yml@[^[:space:]\"']*" "${WORKFLOW_DIR}/")
+  while IFS= read -r ref; do
+    _tag_at_least_min "${ref#*:gpu-self-hosted.yml@}" "${minimum}" \
+      || { echo "${ref} must use a release tag at or above ${minimum}"; return 1; }
+  done <<< "${refs}"
 }
 
 # --- isaac#344: run-scoped reap-container-filter on core-gpu ---------
@@ -105,11 +119,12 @@ print(job["uses"] if field == "uses" else job["with"][field])
 }
 
 @test "core-gpu passes the run-scoped reap-container-filter" {
-  local tag
-  tag=$(_gpu_reusable_tag)
+  local minimum
+  minimum=$(_gpu_reusable_min_tag)
   run _gpu_integration_field uses
   [ "${status}" -eq 0 ]
-  [ "${output}" = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@${tag}" ]
+  [ "${output%%@*}" = "ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml" ]
+  _tag_at_least_min "${output#*@}" "${minimum}"
 
   run _gpu_integration_field reap-container-filter
   [ "${status}" -eq 0 ]

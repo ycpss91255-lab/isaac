@@ -1,12 +1,4 @@
-"""Hosted guard: every caller of the org GPU reusable workflow is pinned.
-
-isaac#402.  The callers of `gpu-self-hosted.yml` (main.yaml,
-ci-stream-smoke.yaml, publish-stream-source.yaml) must all pin the same
-release tag.  Callers are discovered by parsing every workflow file, so a
-new caller is covered without editing this list; a second test pins the
-discovered set so a rename or an empty discovery cannot pass vacuously.
-isaac#344 adds two tests for the run-scoped reap filter of core-gpu.
-"""
+"""檢查 GPU 共用工作流程的呼叫端、版本下限與 core-gpu 的容器清理範圍。"""
 
 import pathlib
 import re
@@ -17,7 +9,7 @@ import yaml
 
 import pytest
 
-from gpu_pin import GPU_REUSABLE, GPU_REUSABLE_PATH, GPU_REUSABLE_TAG
+from gpu_pin import GPU_REUSABLE_MIN_TAG, GPU_REUSABLE_PATH, GPU_REUSABLE_TAG, tag_at_least_min
 
 pytestmark = pytest.mark.core
 
@@ -31,6 +23,18 @@ _EXPECTED_CALLERS = {
     "ci-official-native-python.yaml",
     "publish-stream-source.yaml",
 }
+
+
+@pytest.mark.parametrize("tag", ["v0.4.0", "v0.4.1", "v0.10.0", "v1.0.0"])
+def test_tag_at_least_min_accepts_release(tag):
+    assert tag_at_least_min(tag) is True
+
+
+@pytest.mark.parametrize(
+    "tag", ["main", "v0.3.0", "v0.3.9", "v0.4", "0.4.0", "v0.4.0-rc1", ""]
+)
+def test_tag_at_least_min_rejects_ineligible_tag(tag):
+    assert tag_at_least_min(tag) is False
 
 
 def _callers():
@@ -53,17 +57,18 @@ def _gpu_integration_job():
     return doc["jobs"]["core-gpu"]
 
 
-def test_every_gpu_reusable_caller_uses_the_pinned_tag():
-    bad = {
-        name: refs
-        for name, refs in _callers().items()
-        if any(ref != GPU_REUSABLE for ref in refs)
-    }
-    assert not bad, (
-        f"callers not pinned to @{GPU_REUSABLE_TAG}: {bad}. "
-        "A Dependabot bump must update all caller workflows, the dependabot.yml comment and GPU_REUSABLE_TAG in "
-        "gpu_pin.py (the bats pin spec reads the tag from there); the tag has no other copy."
-    )
+def test_gpu_reusable_callers_share_one_tag():
+    callers = _callers()
+    tags = {ref.partition("@")[2] for refs in callers.values() for ref in refs}
+    assert len(tags) == 1, f"所有呼叫端應使用相同標籤：{callers}"
+
+
+def test_every_gpu_reusable_caller_meets_minimum_tag():
+    for name, refs in _callers().items():
+        for ref in refs:
+            assert tag_at_least_min(ref.partition("@")[2]), (
+                f"{name} 的 {ref} 必須使用 {GPU_REUSABLE_MIN_TAG} 以上的正式版本"
+            )
 
 
 def test_gpu_reusable_callers_match_the_expected_set():
@@ -88,10 +93,20 @@ def test_dependabot_comment_matches_gpu_reusable_tag():
     )
 
 
+def has_reap_filter(job):
+    return "reap-container-filter" in job.get("with", {})
+
+
+def test_core_gpu_requires_reap_filter_input():
+    assert has_reap_filter(_gpu_integration_job())
+
+
 def test_gpu_integration_passes_run_scoped_reap_filter():
     """isaac#344: the cancel-safe reap step only runs when the input is set."""
     job = _gpu_integration_job()
-    assert job["uses"] == GPU_REUSABLE
+    path, _, tag = job["uses"].partition("@")
+    assert path == GPU_REUSABLE_PATH
+    assert tag_at_least_min(tag)
     assert job["with"]["reap-container-filter"] == (
         "label=com.docker.compose.project="
         "isaac-baseline-${{ github.run_id }}-${{ github.run_attempt }}"
