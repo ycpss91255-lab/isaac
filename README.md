@@ -4,16 +4,16 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker development environment, built on top of [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) (previously `ycpss91255-lab/template`).
 
-The image includes Isaac Sim and NVIDIA Isaac Lab 3.0 (`v3.0.0`) as the scene-spawn backend (`sim_utils` spawners; ADR-0018). `IsaacDriver` starts Kit with `isaacsim.SimulationApp`. Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
+Scene spawning and articulation drive defaults use Isaac Sim Core Experimental (`isaacsim.core.experimental`). Configure asset physics in sim_asset for asset_converter to write into USD. `IsaacDriver` starts Kit with `isaacsim.SimulationApp`. Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
 
 The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-lab/isaac` and `ycpss91255-lab/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-lab/isaac/issues/78).
 
 ## Prerequisites
 
-- NVIDIA driver `>= 580` (Isaac Lab 3.0 installs the CUDA 13 PyTorch build; NVIDIA tested Isaac Sim 6.2.0 on 595.58.03; verified here on driver 610)
+- NVIDIA Linux x86_64 driver `595.58.03` (version tested by NVIDIA for Isaac Sim 6.2.0). [Official requirements](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/installation/requirements.html)
 - GPU `>= RTX 4080` (or equivalent), VRAM `>= 16 GB`
 - Docker + nvidia-container-toolkit
-- ~50 GB free disk. The built image is ~31 GB, of which 20.7 GB is the NGC base image and ~10 GB is Isaac Lab and tooling; the other stages share those layers. Building needs headroom for the BuildKit cache, and the cache dirs grow another 5–10 GB after first launch
+- ~50 GB free disk. A runtime image is about 21 GB, including the 20.7 GB NGC base. Stages share layers. Allow extra space for BuildKit and 5–10 GB for caches after the first launch.
 
 NGC image (`nvcr.io/nvidia/isaac-sim:6.2.0.1`, the 6.2.0 GA build -- see the `Dockerfile` `BASE_IMAGE` comment for why not `:6.2.0`) is publicly pullable — no `docker login nvcr.io` required.
 
@@ -36,7 +36,7 @@ Then pick **one** path. The stages are independent: build only the stage you are
 | An interactive shell to develop in | `just docker build` (devel) | `just docker run` |
 | Watch the sim over WebRTC | `just docker build -t stream` | `just docker run -t stream -d`, then [Connecting to the WebRTC livestream](#connecting-to-the-webrtc-livestream) |
 
-A cold first build takes about an hour. It pulls the 20.7 GB NGC base image and then installs Isaac Lab; GitHub-hosted CI builds took 45 to 84 min ([45 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237), [58 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953), [84 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)). Later builds reuse the layer cache, and the other stages share those layers, so building a second stage takes seconds to minutes.
+A cold build pulls the 20.7 GB NGC base image. Pull time depends on network speed. Later builds reuse cached layers across stages.
 
 Production stages (both idle on startup — exec driver scripts into the running container):
 
@@ -95,7 +95,7 @@ Every checkout of this repo on a host used to resolve the same image tag (`<hub>
 - `./script/checkout_identity.sh isolate` writes `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) into the gitignored `setup.local.toml`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
 - The pre build / run / stop hooks refuse to act on the shared names. `ISAAC_ALLOW_SHARED_IDENTITY=1` overrides that; CI's build steps use it.
 - `just docker run` does not rebuild an image that already exists (base#1552). After pulling changes, run `just docker build -t <stage>` before `just docker run -t <stage>`.
-- Disk cost: each checkout or worktree that builds has its own image tags (`<hub>/isaac-<dir>-<hash>:<stage>`). The nominal size shown by `docker images` is about 31 GB per stage tag. Shared layers mean removing a tag reclaims less disk space. Deleting the checkout directory leaves the images in the Docker daemon.
+- Disk cost: each checkout or worktree that builds has its own image tags (`<hub>/isaac-<dir>-<hash>:<stage>`). The nominal size shown by `docker images` is about 21 GB per stage tag. Shared layers mean removing a tag reclaims less disk space. Deleting the checkout directory leaves the images in the Docker daemon.
 - Cleaning up a deleted checkout: take the `isaac-<dir>-<hash>` name from `./script/checkout_identity.sh show` (run it before deleting the directory; it needs `.env.generated`) or from `docker images`. A custom `PROJECT_NAME` can differ from `<hub>-<slug>`. Copy the project from the label output on the row for the deleted checkout's image.
 
   ```bash
@@ -126,11 +126,13 @@ Available GPU memory sets the practical instance count. On a 32607 MiB card, eac
 
 Isaac ships no example models. Use USD models from `sim_asset` or the output of `asset_converter`.
 
+To validate a USD asset, use Isaac Sim’s [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html) tool.
+
 1. Run `cp setup.isaac_sample.toml setup.local.toml` to create the gitignored local configuration. If you already have a local configuration, merge the sample into it to keep your checkout settings.
 2. Edit the model mount’s `source` to point to your models. Keep its read-only target at `/home/${USER_NAME}/models/sim_asset` so scenes resolve the same paths on every machine. If you add model mounts, add their container paths to `MODEL_PATH`, separated by colons.
 3. Start the container with `just docker run -t headless -d`.
 
-Base replaces the entire `[[volumes]]` list when it applies the local configuration. Keep every mount from `setup.toml` in your copy and update it whenever the repo adds a mount.
+Base replaces the entire `[[volumes]]` list when it applies the local configuration. Keep every mount from `setup.toml` in your copy and update it whenever the repo adds a mount. Before starting the container, `just docker run` warns about missing source and target pairs and continues startup. A local configuration without a volume list inherits the repository mounts.
 
 ## Connecting to the WebRTC livestream
 
@@ -187,7 +189,7 @@ Notes:
 
 ### Deterministic stream-source producer (GHCR image, isaac#223)
 
-For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, camera framed at `eye=[15,-15,11]` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
+For CI and the browser-based visual e2e ([`omniverse_web_viewer#48`](https://github.com/ycpss91255-lab/omniverse_web_viewer/issues/48)), a pullable, pinned producer image publishes a *guaranteed non-black* WebRTC source without a live desktop Isaac session. On boot it renders a deterministic empty-but-lit stage — a dome + distant key light over a 12×12 checkerboard floor, the perspective camera set to `eye=[15,-15,11]` and aimed at `target=[0,0,0]` via Isaac Sim’s `ViewportManager.set_camera_view` — and livestreams it forever, so a browser can connect at any time and always see a reproducible frame. The whole scene is authored programmatically (no external asset), so the image is self-contained.
 
 - **Image**: `ghcr.io/ycpss91255-lab/isaac-stream-source:<tag>` (pinned, immutable tag — not `:latest`). Built from the `producer` Dockerfile stage.
 - **Driver**: `src/script/stream_source_producer.py`, baked at `/opt/isaac-producer/stream_source_producer.py` and launched by the image `CMD`.
@@ -315,7 +317,7 @@ Every test belongs to exactly one scope group (`core`, `gui`, `stream`, `headles
 
 The stream group’s `stream-visual-e2e` GPU job boots the stream stage and checks that Chromium receives advancing frames showing the red test cube.
 
-The core group’s `core-official-nativepython` GPU job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
+The nightly and manually dispatched `CI: Official Native Python` workflow runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
 
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 

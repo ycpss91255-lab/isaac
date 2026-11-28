@@ -384,36 +384,15 @@ class TestRpyToQuat:
         assert norm == pytest.approx(1.0)
 
 
-class TestOrientationXyzw:
-    """(w,x,y,z) -> (x,y,z,w) reorder for the sim_utils spawners.
-
-    Regression guard. ``rpy_to_quat`` returns (w,x,y,z) -- the convention
-    Isaac Lab uses for quaternions nearly everywhere -- but the spawners
-    (``spawn_from_usd`` / ``spawn_from_urdf``) document their ``orientation``
-    argument as (x,y,z,w). Passing (w,x,y,z) straight through sends the
-    identity (1,0,0,0) as x=1, w=0: a 180-degree rotation about X, which
-    spawns the entire scene upside-down (authored z becomes -z).
-    """
-
-    def test_identity_stays_identity(self):
-        assert scene_builder._orientation_xyzw((1.0, 0.0, 0.0, 0.0)) == (
-            0.0, 0.0, 0.0, 1.0
-        )
-
-    def test_reorders_general_quaternion(self):
-        assert scene_builder._orientation_xyzw((0.1, 0.2, 0.3, 0.4)) == (
-            0.2, 0.3, 0.4, 0.1
-        )
-
-    def test_composes_with_rpy_to_quat_yaw_90(self):
-        # 90 deg about Z: (w,x,y,z) = (s,0,0,s) -> (x,y,z,w) = (0,0,s,s).
-        s = math.sqrt(2) / 2
-        out = scene_builder._orientation_xyzw(scene_builder.rpy_to_quat([0, 0, 90]))
-        assert out == pytest.approx((0.0, 0.0, s, s))
-
-    def test_norm_preserved(self):
-        out = scene_builder._orientation_xyzw(scene_builder.rpy_to_quat([30, 45, 60]))
-        assert math.sqrt(sum(c * c for c in out)) == pytest.approx(1.0)
+@pytest.mark.parametrize(("rpy", "expected"), [
+    ([0, 0, 0], (1, 0, 0, 0)),
+    ([90, 0, 0], (math.sqrt(0.5), math.sqrt(0.5), 0, 0)),
+    ([0, 0, 90], (math.sqrt(0.5), 0, 0, math.sqrt(0.5))),
+    ([90, 90, 0], (0.5, 0.5, 0.5, -0.5)),
+])
+def test_spawn_spec_orientation_is_scalar_first(repo_root, rpy, expected):
+    scene = _scene_dict(robot={"pose": {"xyz": [0, 0, 0], "rpy": rpy}})
+    assert scene_builder.to_spawn_specs(scene, repo_root)[-1].orientation == pytest.approx(expected)
 
 
 def _scene_dict(robot=None, objects=None, environment=None):
@@ -431,18 +410,18 @@ def _scene_dict(robot=None, objects=None, environment=None):
     return scene
 
 
-class TestToIsaaclabCfg:
+class TestToSpawnSpecs:
     """Pure YAML -> SpawnSpec mapping; asserted without a live stage."""
 
     def test_default_environment_emits_light_only(self, repo_root):
         # No environment block -> no ground, but a default light is emitted.
-        specs = scene_builder.to_isaaclab_cfg(_scene_dict(), repo_root)
+        specs = scene_builder.to_spawn_specs(_scene_dict(), repo_root)
         kinds = [s.kind for s in specs]
         assert "ground_plane" not in kinds
         assert kinds[0] == "distant_light"
 
     def test_ground_plane_spec(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(environment={"ground_plane": True}), repo_root
         )
         ground = next(s for s in specs if s.kind == "ground_plane")
@@ -450,7 +429,7 @@ class TestToIsaaclabCfg:
         assert ground.mobility is None
 
     def test_default_light_when_absent(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(environment={"ground_plane": True}), repo_root
         )
         light = next(s for s in specs if s.kind == "distant_light")
@@ -458,7 +437,7 @@ class TestToIsaaclabCfg:
         assert light.kwargs.get("intensity") == 3000.0
 
     def test_curated_light_fields(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 environment={
                     "light": {
@@ -476,7 +455,7 @@ class TestToIsaaclabCfg:
         assert light.kwargs["angle"] == 0.3
 
     def test_emits_specs_in_order(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 environment={"ground_plane": True},
                 objects=[
@@ -493,7 +472,7 @@ class TestToIsaaclabCfg:
         assert kinds == ["ground_plane", "distant_light", "usd", "usd"]
 
     def test_robot_usd_spec(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(robot={"pose": {"xyz": [1.0, 2.0, 3.0], "rpy": [0, 0, 0]}}),
             repo_root,
         )
@@ -505,7 +484,7 @@ class TestToIsaaclabCfg:
         assert robot.mobility is None
 
     def test_object_usd_spec_translation_and_path(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -526,7 +505,7 @@ class TestToIsaaclabCfg:
         assert obj.mobility == "dynamic"
 
     def test_object_static_mobility(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -544,7 +523,7 @@ class TestToIsaaclabCfg:
         assert obj.mobility == "static"
 
     def test_object_rpy_to_orientation(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -562,7 +541,7 @@ class TestToIsaaclabCfg:
         assert obj.orientation == pytest.approx((s, 0.0, 0.0, s))
 
     def test_instance_expansion_flows_through(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -587,34 +566,25 @@ class TestToIsaaclabCfg:
         assert all(o.mobility == "dynamic" for o in objs)
 
     def test_spawn_overrides_spread_onto_kwargs(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 robot={
                     "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
-                    "spawn_overrides": {"scale": (2.0, 2.0, 2.0)},
+                    "spawn_overrides": {"scales": (2.0, 2.0, 2.0)},
                 }
             ),
             repo_root,
         )
         robot = next(s for s in specs if s.prim_path == "/World/Robot")
-        assert robot.kwargs["scale"] == (2.0, 2.0, 2.0)
+        assert robot.kwargs["scales"] == (2.0, 2.0, 2.0)
 
-    def test_spawn_overrides_win_over_curated(self, repo_root):
-        # An override on usd_path beats the curated resolved path.
-        specs = scene_builder.to_isaaclab_cfg(
-            _scene_dict(
-                robot={
-                    "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
-                    "spawn_overrides": {"usd_path": "/override/path.usd"},
-                }
-            ),
-            repo_root,
-        )
-        robot = next(s for s in specs if s.prim_path == "/World/Robot")
-        assert robot.kwargs["usd_path"] == "/override/path.usd"
+    def test_spawn_overrides_reject_unknown_options(self, repo_root):
+        scene = _scene_dict(robot={"spawn_overrides": {"usd_path": "/override/path.usd"}})
+        with pytest.raises(ValueError, match="Unsupported usd spawn override: usd_path"):
+            scene_builder.to_spawn_specs(scene, repo_root)
 
     def test_variant_carried_as_variants_kwarg(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -634,7 +604,7 @@ class TestToIsaaclabCfg:
     def test_specs_are_json_serializable(self, repo_root):
         import json
 
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(environment={"ground_plane": True}), repo_root
         )
         # NamedTuple -> list of fields; every field is plain data.
@@ -653,7 +623,7 @@ class TestToIsaaclabCfg:
         }
         mat_path = repo_root / "model" / "usd" / "object" / "pallet" / "mat.yaml"
         mat_path.write_text(yaml.dump(material))
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -673,7 +643,7 @@ class TestToIsaaclabCfg:
         )
 
     def test_no_material_no_diffuse_key(self, repo_root):
-        specs = scene_builder.to_isaaclab_cfg(
+        specs = scene_builder.to_spawn_specs(
             _scene_dict(
                 objects=[
                     {
@@ -688,3 +658,46 @@ class TestToIsaaclabCfg:
             s for s in specs if s.prim_path.startswith("/World/Objects/")
         )
         assert "visual_material_diffuse" not in obj.kwargs
+
+
+@pytest.mark.parametrize("key", [
+    "rigid_props", "mass_props", "collision_props", "physics_material",
+    "physics_material_path",
+])
+@pytest.mark.parametrize("entry", ["robot", "object", "light", "ground"])
+def test_spawn_overrides_reject_asset_physics(repo_root, key, entry):
+    overrides = {key: {}}
+    scene = _scene_dict(environment={})
+    if entry == "robot":
+        scene["robot"]["spawn_overrides"] = overrides
+    elif entry == "object":
+        scene["objects"] = [{
+            "model": "object/pallet/pallet.usd",
+            "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
+            "spawn_overrides": overrides,
+        }]
+    elif entry == "light":
+        scene["environment"]["light"] = {"spawn_overrides": overrides}
+    else:
+        scene["environment"].update(ground_plane=True, ground_overrides=overrides)
+
+    with pytest.raises(ValueError, match=rf"{key}.*sim_asset.*asset_converter"):
+        scene_builder.to_spawn_specs(scene, repo_root)
+
+
+def test_scene_runtime_uses_experimental_api(repo_root):
+    root = Path(scene_builder.__file__).parent
+    for filename in ("scene.py", "usd_model.py"):
+        assert "isaaclab" not in (root / filename).read_text()
+        assert "isaacsim.core.experimental" in (root / filename).read_text()
+
+
+def test_load_scene_rejects_asset_physics_before_resolving_models(repo_root, tmp_path):
+    path = tmp_path / "invalid.yaml"
+    scene = _scene_dict(robot={
+        "model": "unavailable.usd",
+        "spawn_overrides": {"physics_material": None},
+    })
+    path.write_text(yaml.safe_dump(scene))
+    with pytest.raises(ValueError, match="physics_material.*sim_asset.*asset_converter"):
+        scene_builder.load_scene(path, repo_root)

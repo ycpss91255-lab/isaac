@@ -6,8 +6,7 @@ headless ``SimulationApp``, builds an in-memory scene around the official
 Jetbot (robot) and NVIDIA cube (``mobility: dynamic`` object) USDs passed
 on the CLI (fetched by the pytest layer through ``test/test_assets.py``,
 #325 -- no repo-bundled scaffold files), and calls
-the FRAMEWORK ``isaac_devkit.scene.build_scene`` -- the new
-``to_isaaclab_cfg`` -> ``sim_utils`` cfg -> ``cfg.func()`` spawn path --
+the framework ``isaac_devkit.scene.build_scene`` via Core Experimental,
 then reports the spawned prims as marker lines. This is the dedicated GPU
 coverage for the adapter.
 
@@ -74,6 +73,8 @@ def _main() -> None:
                     "model": object_usd,
                     "pose": {"xyz": [1.0, 0.0, 0.5], "rpy": [0.0, 0.0, 0.0]},
                     "mobility": "dynamic",
+                    # Shared scene entries may name a variant set absent on this asset.
+                    "variant": {"shape": "tall"},
                 }
             ],
         }
@@ -96,7 +97,7 @@ def _main() -> None:
             print(f"[ADAPTER PRIM] path={path} valid={_valid(path)}", flush=True)
 
         # The Jetbot USD has a defaultPrim (/jetbot), so the adapter's
-        # UsdFileCfg reference brings in the referenced content and its
+        # USD reference brings in the referenced content and its
         # articulation body lands at /World/Robot/chassis (the Jetbot has no
         # base_link). Asserted strictly by the test.
         chassis = _valid("/World/Robot/chassis")
@@ -131,6 +132,13 @@ def _main() -> None:
             has_rb = bool(prim.HasAPI(UsdPhysics.RigidBodyAPI))
             print(
                 f"[ADAPTER OBJECT] path={p} valid=True rigidbody={has_rb}",
+                flush=True,
+            )
+
+        ground_mesh = stage.GetPrimAtPath("/World/ground/geometry/mesh")
+        for prim in [ground_mesh, *obj_children]:
+            print(
+                f"[ADAPTER COLLIDER] path={prim.GetPath()} schemas={','.join(prim.GetAppliedSchemas())}",
                 flush=True,
             )
 

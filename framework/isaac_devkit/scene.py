@@ -1,20 +1,9 @@
 """Declarative scene composition from YAML config.
 
 Reads a Scene YAML that lists robot + objects + sensors, resolves model
-paths relative to repo root, and assembles the scene at runtime via Isaac
-Lab ``sim_utils`` config-dataclass spawners (ADR-0018 decisions 1, 3).
-
-The host-side surface is pure (no Isaac / pxr import): ``load_scene``,
-``resolve_model_path``, ``generate_instances``, ``resolve_sensor_configs``
-and the new ``to_isaaclab_cfg`` adapter, which maps a validated scene dict
-to a neutral, JSON-serializable list of ``SpawnSpec`` records. Only
-``build_scene`` materializes those specs into real ``isaaclab.sim`` cfg
-objects and spawns them, and it imports ``isaaclab.sim`` function-locally
-(ADR-0017 section 8 import-safety invariant).
-
-``SpawnSpec`` is the stable seam (ADR-0018 decision 1): the same spec list
-can later be collected into an ``InteractiveSceneCfg`` ("C") without
-changing the YAML schema or this adapter contract.
+paths relative to repo root, and assembles the scene via Isaac Sim Core
+Experimental. The pure ``to_spawn_specs`` adapter returns JSON-serializable
+records. Runtime imports stay inside the stage authoring functions.
 
 Usage from an IsaacDriver subclass:
 
@@ -23,6 +12,7 @@ Usage from an IsaacDriver subclass:
     build_scene(scene, stage, repo_root)
 """
 
+import logging
 import math
 import os
 from pathlib import Path
@@ -34,15 +24,10 @@ import yaml
 class SpawnSpec(NamedTuple):
     """A neutral, GPU-free description of one prim to spawn.
 
-    Pure / JSON-serializable: ``to_isaaclab_cfg`` returns these so a hosted
-    unit test can assert the YAML -> cfg mapping without a live stage.
-    ``build_scene`` materializes each into the matching ``isaaclab.sim``
-    cfg dataclass and spawns it via ``cfg.func``.
-
     Fields:
         prim_path: USD prim path the spec spawns at (e.g. "/World/Robot").
         kind: One of "ground_plane", "distant_light", "usd".
-        kwargs: Constructor kwargs for the cfg dataclass (incl. any
+        kwargs: Spawn options (incl. any
             ``spawn_overrides`` and, for "usd", ``usd_path``).
         translation: (x, y, z) in meters.
         orientation: (w, x, y, z) quaternion.
@@ -79,11 +64,19 @@ def _validate_scene(scene, source):
     if "pose" not in robot:
         raise ValueError(f"{source}: robot needs 'pose'")
 
+    _spawn_options(robot.get("spawn_overrides", {}), "usd")
+    environment = scene.get("environment") or {}
+    _spawn_options(environment.get("ground_overrides", {}), "ground")
+    light = environment.get("light")
+    if isinstance(light, dict):
+        _spawn_options(light.get("spawn_overrides", {}), "light")
+
     for i, obj in enumerate(scene.get("objects", [])):
         if "model" not in obj:
             raise ValueError(f"{source}: objects[{i}] needs 'model'")
         if "pose" not in obj:
             raise ValueError(f"{source}: objects[{i}] needs 'pose'")
+        _spawn_options(obj.get("spawn_overrides", {}), "usd")
 
 
 def _model_search_roots(repo_root):
@@ -272,9 +265,7 @@ def _material_diffuse_for(entry, repo_root):
     The entry may carry a ``material`` key pointing to a material YAML
     (repo-relative) plus an optional ``variant`` selection. We reuse the
     pure ``materials.material_cfg_from_yaml`` mapper (#153) and take the
-    diffuse color of the FIRST prim that declares one -- the minimal hook
-    so ``build_scene`` can attach a ``PreviewSurfaceCfg``. Full per-prim
-    material GPU coverage is #154. No material key -> None (skip).
+    first declared diffuse color for the spawn-time PreviewSurfaceMaterial.
     """
     material_rel = entry.get("material")
     if not material_rel:
@@ -307,9 +298,6 @@ def _usd_spec(prim_path, entry, usd_abs, repo_root, mobility=None):
     variant selection, ADR-0018 decision 7), and an optional material
     diffuse color recorded under ``visual_material_diffuse``.
 
-    ``spawn_overrides`` (raw passthrough) is spread onto kwargs LAST so
-    overrides win over curated fields (intentional power-user control,
-    ADR-0018 decision 3).
     """
     pose = entry["pose"]
     kwargs = {"usd_path": str(usd_abs)}
@@ -322,8 +310,7 @@ def _usd_spec(prim_path, entry, usd_abs, repo_root, mobility=None):
     if diffuse is not None:
         kwargs["visual_material_diffuse"] = diffuse
 
-    # Raw passthrough wins over curated fields (overrides-win).
-    kwargs.update(entry.get("spawn_overrides", {}))
+    kwargs.update(_spawn_options(entry.get("spawn_overrides", {}), "usd"))
 
     return SpawnSpec(
         prim_path=prim_path,
@@ -335,7 +322,7 @@ def _usd_spec(prim_path, entry, usd_abs, repo_root, mobility=None):
     )
 
 
-def to_isaaclab_cfg(scene, repo_root):
+def to_spawn_specs(scene, repo_root):
     """Map a validated scene dict to a neutral list of ``SpawnSpec``.
 
     PURE: imports no Isaac module. Emits, in order:
@@ -351,15 +338,12 @@ def to_isaaclab_cfg(scene, repo_root):
     4. one USD spec per object instance at
        ``/World/Objects/<modelstem>_<idx>_<instidx>``, carrying mobility.
 
-    ``spawn_overrides`` on any entry is spread onto that spec's kwargs
-    (overrides-win). The returned list is the stable seam (ADR-0018
-    decision 1): a hosted unit test asserts on it without a live stage.
     """
     specs = []
 
     environment = scene.get("environment", {}) or {}
+    ground_kwargs = _spawn_options(environment.get("ground_overrides", {}), "ground")
     if environment.get("ground_plane"):
-        ground_kwargs = dict(environment.get("ground_overrides", {}))
         specs.append(
             SpawnSpec(
                 prim_path="/World/ground",
@@ -377,7 +361,7 @@ def to_isaaclab_cfg(scene, repo_root):
         for key in ("intensity", "color", "angle"):
             if key in light:
                 light_kwargs[key] = light[key]
-        light_kwargs.update(light.get("spawn_overrides", {}))
+        light_kwargs.update(_spawn_options(light.get("spawn_overrides", {}), "light"))
     else:
         # Default SunLight: enough to keep headless debug renders readable.
         light_kwargs = {"intensity": 3000.0}
@@ -417,180 +401,114 @@ def to_isaaclab_cfg(scene, repo_root):
     return specs
 
 
-def _orientation_xyzw(wxyz):
-    """Reorder a (w, x, y, z) quaternion to the (x, y, z, w) the spawners want.
+_SHARED_SPAWN_OPTIONS = {"visible", "labels", "taxonomy"}
+_SPAWN_OPTIONS = {
+    "usd": {"scales"},
+    "light": {"angles", "colors", "intensities"},
+    "ground": {"size", "usd_path"},
+}
 
-    ``rpy_to_quat`` returns (w, x, y, z) -- the convention Isaac Lab uses for
-    quaternions nearly everywhere. The ``sim_utils`` SPAWNERS are the
-    exception: ``spawn_from_usd`` documents its
-    ``orientation`` argument as ``(x, y, z, w)``.
 
-    Passing (w, x, y, z) straight through therefore rotates every spawned prim.
-    For the common ``rpy: [0, 0, 0]`` it sends (1, 0, 0, 0), which reads as
-    x=1, w=0 -- a 180-degree rotation about X. The whole scene spawns
-    upside-down: authored z becomes -z. A symmetric cube can hide this
-    rotation, so the GPU test checks the authored orientation.
-
-    PURE (no Isaac import) so the reorder is unit-testable on the host.
-    """
-    w, x, y, z = wxyz
-    return (x, y, z, w)
+def _spawn_options(options, kind):
+    """Validate the small scene-specific set of spawn options."""
+    if not isinstance(options, dict):
+        raise ValueError(f"{kind} spawn overrides must be a mapping")
+    for key in options:
+        if key in {"rigid_props", "mass_props", "collision_props"} or (
+            isinstance(key, str) and key.startswith("physics_material")
+        ):
+            raise ValueError(
+                f"{key}: configure physics in sim_asset so asset_converter writes it into USD"
+            )
+        if key not in _SHARED_SPAWN_OPTIONS and key not in _SPAWN_OPTIONS[kind]:
+            raise ValueError(f"Unsupported {kind} spawn override: {key}")
+    return dict(options)
 
 
 def build_scene(scene, stage, repo_root):
-    """Assemble the scene on the active USD stage. Requires Isaac Lab.
+    """Assemble a scene and its sensors on the supplied or current USD stage."""
+    specs = to_spawn_specs(scene, repo_root)
 
-    Rewritten (ADR-0018 decisions 1, 3) to spawn via Isaac Lab
-    ``sim_utils`` config-dataclass spawners instead of raw ``pxr``
-    ``DefinePrim`` / ``GetReferences().AddReference``. The pure
-    ``to_isaaclab_cfg`` adapter produces the spec list; this function
-    materializes each ``SpawnSpec`` into the matching cfg dataclass and
-    calls ``cfg.func(prim_path, cfg, translation=, orientation=)``.
+    from isaacsim.core.experimental.utils import backend, stage as stage_utils
 
-    Physics props (ADR-0018):
-      * ``mobility == "dynamic"`` -> rigid body + mass + collision props.
-      * ``mobility == "static"``  -> collision props only (static
-        collider, no rigid body).
-      * ``mobility is None``      -> no physics props.
-
-    Isaac Lab 3.0 API (spawn stage binding): the ``sim_utils`` spawners
-    resolve their target stage from a thread-local context via
-    ``get_current_stage()`` (``isaaclab/sim/utils/stage.py:496``), NOT from
-    the ``omni.usd`` context. Opening the stage on the ``omni.usd`` context
-    (the driver's ``_open_stage``) no longer populates that thread-local, so
-    in 3.0 ``cfg.func()`` -> ``_spawn_geom_from_prim_type``
-    (``shapes.py:284``) reaches ``get_current_stage()`` returning ``None`` and
-    raises ``AttributeError: 'NoneType' ... GetPrimAtPath``. Isaac Lab 2.3
-    resolved the stage internally; 3.0 requires the caller to bind it. We
-    wrap the spawn loop in ``sim_utils.use_stage(stage)``
-    (``isaaclab/sim/utils/stage.py:229``), which sets ``_context.stage`` for
-    the spawn duration so ``get_current_stage()`` returns the real stage.
-
-    Sensors (unchanged) are resolved and set up via ``isaac_devkit.sensors``.
-    """
-    import contextlib
-
-    import isaaclab.sim as sim_utils
-
-    _set_active_stage(stage)
     if stage is None:
-        try:
-            import omni.usd
-
-            stage = omni.usd.get_context().get_stage()
-        except Exception:  # noqa: BLE001  (spawners still use the active context)
-            stage = None
-
-    # Bind the thread-local spawn stage the Isaac Lab 3.0 way (see docstring).
-    # ``use_stage`` asserts a real ``Usd.Stage``; fall back to a no-op context
-    # when no stage is available so spawning still attempts via any active
-    # context (matching the pre-3.0 best-effort behavior).
-    stage_ctx = (
-        sim_utils.use_stage(stage)
-        if stage is not None
-        else contextlib.nullcontext()
-    )
-    with stage_ctx:
-        for spec in to_isaaclab_cfg(scene, repo_root):
-            cfg = _materialize_cfg(sim_utils, spec)
-            cfg.func(
-                spec.prim_path,
-                cfg,
-                translation=spec.translation,
-                orientation=_orientation_xyzw(spec.orientation),
-            )
-            _apply_mobility_physics(spec, stage)
+        stage = stage_utils.get_current_stage(backend="usd")
+    with stage_utils.use_stage(stage), backend.use_backend("usd"):
+        for spec in specs:
+            _spawn(spec)
 
     sensor_paths = resolve_sensor_configs(scene, repo_root)
     if sensor_paths:
         from isaac_devkit.sensors import load_config, setup_sensor
-        for sp in sensor_paths:
-            cfg = load_config(sp)
-            setup_sensor(cfg, stage)
+
+        for path in sensor_paths:
+            setup_sensor(load_config(path), stage)
 
 
-def _set_active_stage(stage):
-    """Make ``stage`` the active USD context stage, best-effort.
+def _spawn(spec):
+    """Author one spawn spec on the current USD stage."""
+    from isaacsim.core.experimental.objects import Cube, DistantLight
+    from isaacsim.core.experimental.prims import XformPrim
+    from isaacsim.core.experimental.utils import prim as prim_utils, semantics, stage
 
-    The ``sim_utils`` spawners author into the active USD context; the
-    driver already opens the stage on that context, so this is normally a
-    no-op. Guarded so a None / detached stage does not break spawning.
-    """
-    if stage is None:
-        return
-    try:
-        import omni.usd
-
-        ctx = omni.usd.get_context()
-        if ctx.get_stage() is not stage:
-            ctx.attach_stage(stage)
-    except Exception:  # noqa: BLE001  (best-effort; spawners use the context)
-        pass
-
-
-def _materialize_cfg(sim_utils, spec):
-    """Turn a SpawnSpec into the concrete ``sim_utils`` cfg dataclass."""
-    if spec.kind == "ground_plane":
-        # Isaac Lab's GroundPlaneCfg defaults usd_path to a nucleus asset
-        # (ISAAC_NUCLEUS_DIR/Environments/Grid/default_environment.usd). The
-        # base repo runs OFFLINE (no nucleus): that path resolves to None and
-        # the spawn dies with ArgumentError GetPrimAtPath(Stage, NoneType).
-        # Spawn a procedural collision cuboid floor instead -- fully
-        # offline-safe, no external asset. A caller that has a ground USD
-        # can pass ``usd_path`` via ``environment.ground_overrides`` -> a
-        # UsdFileCfg path, but the default is procedural.
-        kwargs = dict(spec.kwargs)
-        if "usd_path" in kwargs:
-            return sim_utils.UsdFileCfg(**kwargs)
-        kwargs.setdefault("size", (50.0, 50.0, 0.1))
-        kwargs.setdefault("collision_props", sim_utils.CollisionPropertiesCfg())
-        return sim_utils.CuboidCfg(**kwargs)
-
+    path = spec.prim_path
+    options = dict(spec.kwargs)
+    visible = options.pop("visible", None)
+    labels = options.pop("labels", None)
+    taxonomy = options.pop("taxonomy", "class")
+    pose = {"translations": spec.translation, "orientations": spec.orientation}
     if spec.kind == "distant_light":
-        return sim_utils.DistantLightCfg(**spec.kwargs)
+        prim = DistantLight(path, angles=options.get("angles", options.get("angle", 0.53)), **pose)
+        prim.set_intensities(options.get("intensities", options.get("intensity", 1.0)))
+        prim.set_colors(options.get("colors", options.get("color", (1.0, 1.0, 1.0))))
+    elif spec.kind == "ground_plane" and "usd_path" not in options:
+        stage.define_prim(path)
+        prim = XformPrim(path, reset_xform_op_properties=True, **pose)
+        dims = options.get("size", (50.0, 50.0, 0.1))
+        size = min(dims)
+        mesh_path = f"{path}/geometry/mesh"
+        Cube(mesh_path, sizes=size, scales=[dim / size for dim in dims])
+        _apply_mobility(mesh_path, dynamic=False)
+    else:
+        reference = stage.add_reference_to_stage(options["usd_path"], path)
+        variants = options.get("variants")
+        if isinstance(variants, dict):
+            for name, selection in variants.items():
+                if name in prim_utils.get_prim_variant_collection(reference):
+                    prim_utils.set_prim_variants(reference, variants=[(name, selection)])
+                else:
+                    logging.getLogger(__name__).warning(
+                        "Variant set %r does not exist on %s", name, path
+                    )
+        prim = XformPrim(
+            path, reset_xform_op_properties=True, scales=options.get("scales"), **pose
+        )
+        if spec.mobility in {"dynamic", "static"}:
+            _apply_mobility(path, dynamic=spec.mobility == "dynamic")
+        if "visual_material_diffuse" in options:
+            from isaacsim.core.experimental.materials import PreviewSurfaceMaterial
 
-    if spec.kind == "usd":
-        kwargs = dict(spec.kwargs)
-        diffuse = kwargs.pop("visual_material_diffuse", None)
-        if diffuse is not None:
-            kwargs["visual_material"] = sim_utils.PreviewSurfaceCfg(
-                diffuse_color=tuple(diffuse)
-            )
-        # NOTE (ADR-0018): mobility physics is DEFINED post-spawn in
-        # ``_apply_mobility_physics``, NOT via UsdFileCfg props. Isaac Lab's
-        # UsdFileCfg ``rigid_props`` / ``collision_props`` go through
-        # ``schemas.modify_*`` -- they only EDIT an EXISTING RigidBodyAPI, so
-        # they cannot turn a geometry-only USD into a rigid
-        # body. The three-file schema declares mobility at the SCENE
-        # (object.yaml: "physics level declared at the scene, not baked into
-        # the model"), so build_scene applies the schema itself after spawn.
-        return sim_utils.UsdFileCfg(**kwargs)
-
-    raise ValueError(f"unknown SpawnSpec kind: {spec.kind!r}")
+            material = PreviewSurfaceMaterial(f"{path}/material")
+            material.set_input_values("diffuseColor", options["visual_material_diffuse"])
+            prim.apply_visual_materials(material)
+    if visible is not None:
+        prim.set_visibilities(visible)
+    if labels is not None:
+        semantics.add_labels(prim.prims[0], labels=labels, taxonomy=taxonomy)
 
 
-def _apply_mobility_physics(spec, stage):
-    """DEFINE physics schemas for a scene-declared mobility (post-spawn).
+def _apply_mobility(path, *, dynamic):
+    from isaacsim.core.experimental.prims import GeomPrim, RigidPrim
 
-    Isaac Lab's ``UsdFileCfg`` rigid/collision props only MODIFY an existing
-    ``RigidBodyAPI`` (``schemas.modify_*``), so they cannot make a
-    geometry-only USD a rigid body. The three-file schema declares mobility
-    at the SCENE, not in the model, so apply the schema on the spawned prim:
+    geom = GeomPrim(path)
+    prim = geom.prims[0]
+    existing = set(prim.GetAppliedSchemas())
+    if dynamic:
+        RigidPrim(path)
+    geom.apply_collision_apis()
 
-      * ``dynamic`` -> ``RigidBodyAPI`` + ``CollisionAPI`` (a free rigid body);
-      * ``static``  -> ``CollisionAPI`` only (a static collider);
-      * ``None``     -> nothing.
-
-    This function authors physics properties on the stage. Simulation stepping
-    is the caller's responsibility.
-    """
-    if spec.kind != "usd" or spec.mobility is None or stage is None:
-        return
-    from pxr import UsdPhysics
-
-    prim = stage.GetPrimAtPath(spec.prim_path)
-    if not prim or not prim.IsValid():
-        return
-    UsdPhysics.CollisionAPI.Apply(prim)
-    if spec.mobility == "dynamic":
-        UsdPhysics.RigidBodyAPI.Apply(prim)
+    # The wrappers apply bundles and offer no selective removal API.
+    # Keep the asset's own schemas and the existing scene schema contract.
+    for schema in ("PhysxRigidBodyAPI", "PhysicsMeshCollisionAPI", "PhysxCollisionAPI"):
+        if schema not in existing and schema in prim.GetAppliedSchemas():
+            prim.RemoveAppliedSchema(schema)

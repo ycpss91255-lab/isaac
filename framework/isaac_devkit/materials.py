@@ -1,24 +1,9 @@
-"""Material setup — YAML-config-driven material cfg parameters.
+"""Load material YAML and resolve a flat mapping of per-prim properties.
 
-Reads a material YAML per model and maps it to the cfg-param structure
-the Isaac Lab spawn adapter consumes (ADR-0018 decision 7): visual
-material (including color) is applied at SPAWN time as an Isaac Lab
-``sim_utils`` material cfg parameter, NOT as a USD variant set.
-
-Color-only "variants" (e.g. the iron / green / blue boards) are no
-longer USD variant sets -- color is a material parameter on the same
-mesh/texture, varied at spawn (and randomized there for
-domain-randomization image generation). The variant *naming* in the YAML
-schema is retained only for structurally-distinct variants (different
-mesh / topology / texture file); ``material_cfg_from_yaml`` collapses a
-chosen variant down to a flat per-prim cfg-param mapping the spawn
-adapter (#152) attaches to ``sim_utils.PreviewSurfaceCfg`` /
-``visual_material``.
-
-This module is entirely pure / host-runnable: it reads and validates the
-YAML and produces a plain, JSON-serializable, GPU-free mapping. The
-actual spawn-time material binding (the Isaac Sim / GPU side) lives in
-the spawn adapter (#152) and gets its GPU coverage there (#154).
+The scene builder uses the first declared diffuse color to configure a
+Core Experimental PreviewSurfaceMaterial at spawn time. Structural
+variants can still use USD variant sets. The mapping is JSON-serializable
+and can be prepared without loading Isaac Sim.
 
 Usage:
 
@@ -84,23 +69,10 @@ def resolve_texture_path(texture_rel, model_dir):
 
 
 def material_cfg_from_yaml(cfg, variant=None):
-    """Map a material YAML spec to spawn-time cfg parameters (ADR-0018 dec 7).
+    """Resolve a material YAML spec to per-prim properties for one variant.
 
-    Produces the cfg-param structure the Isaac Lab spawn adapter (#152)
-    attaches to a ``sim_utils`` visual material (e.g.
-    ``PreviewSurfaceCfg(diffuse_color=...)`` or an MDL/OmniPBR cfg with a
-    color param), instead of authoring a USD variant set. The result is a
-    plain, JSON-serializable, GPU-free mapping; no Isaac / pxr import.
-
-    Per prim, the returned dict carries:
-
-    * ``shader`` -- the shader name from the YAML (e.g. ``"OmniPBR"``),
-      so the adapter can pick the matching ``sim_utils`` cfg class;
-    * ``diffuse_color`` -- an ``(r, g, b)`` tuple of floats, when the
-      YAML declares one (this is the color-only randomization target);
-    * ``albedo_texture`` / ``roughness`` / ``metallic`` -- passed through
-      verbatim when present (textures stay relative paths; the adapter
-      resolves them against the model dir at spawn).
+    The mapping includes the shader name, an optional RGB diffuse color,
+    and any relative albedo texture, roughness, and metallic values.
 
     Args:
         cfg: A loaded material config (from ``load_material_config``).

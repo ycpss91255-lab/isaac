@@ -11,22 +11,23 @@ ROOT = Path(__file__).resolve().parents[3]
 JOB = "official-nativepython"
 
 
-def test_scope_and_required_gate():
-    jobs = yaml.safe_load((ROOT / ".github/workflows/main.yaml").read_text())["jobs"]
-    job = jobs[f"core-{JOB}"]
-    assert job["needs"] == ["changes", "core-unit"]
-    assert "needs.changes.outputs.core == 'true'" in job["if"]
-    assert "github.event.pull_request.head.repo.full_name == github.repository" in job["if"]
-    assert f"core-{JOB}" in jobs["gate"]["needs"]
+def test_official_bucket_is_independent_of_required_gate():
+    main = (ROOT / ".github/workflows/main.yaml").read_text()
+    jobs = yaml.safe_load(main)["jobs"]
+    assert "ci-official-native-python.yaml" not in main
+    assert f"core-{JOB}" not in jobs
+    assert f"core-{JOB}" not in jobs["gate"]["needs"]
 
 
-def test_gpu_workflow_uploads_results_even_on_failure():
-    workflow = yaml.safe_load(
-        (ROOT / ".github/workflows/ci-official-native-python.yaml").read_text()
-    )
-    assert set(workflow[True]) == {"workflow_call", "workflow_dispatch"}
+def test_nightly_gpu_workflow_shares_runner_and_uploads_results_even_on_failure():
+    workflows = ROOT / ".github/workflows"
+    workflow = yaml.safe_load((workflows / "ci-official-native-python.yaml").read_text())
+    stream = yaml.safe_load((workflows / "ci-stream-smoke.yaml").read_text())
+    assert set(workflow[True]) == {"schedule", "workflow_dispatch"}
+    assert workflow[True]["schedule"] == [{"cron": "17 18 * * *"}]
     assert "concurrency" not in workflow
     job = workflow["jobs"][f"core-{JOB}"]
+    assert job["uses"] == stream["jobs"]["stream-smoke"]["uses"]
     assert "/gpu-self-hosted.yml@" in job["uses"]
     assert job["with"]["artifact-when"] == "always"
     assert job["with"]["artifact-path"] == f"artifacts/{JOB}"

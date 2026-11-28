@@ -283,20 +283,11 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository)
     uses: ./.github/workflows/ci-headless-smoke.yaml
 
-  # Standalone SimulationApp tests exercise the shared Isaac runtime.
-  core-official-nativepython:
-    needs: [changes, core-unit]
-    if: >-
-      needs.changes.outputs.core == 'true' &&
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository)
-    uses: ./.github/workflows/ci-official-native-python.yaml
-
   # The single required check. Runs always() so a skipped scope cannot hold
   # it pending, and fails when any job failed or was cancelled, or when
   # `changes` itself did not succeed (script/ci/gate_result.py).
   gate:
-    needs: [changes, docs-unit, core-unit, stream-unit, core-build, core-gpu, stream-smoke, stream-visual-e2e, headless-smoke, core-official-nativepython]
+    needs: [changes, docs-unit, core-unit, stream-unit, core-build, core-gpu, stream-smoke, stream-visual-e2e, headless-smoke]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:

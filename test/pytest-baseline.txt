@@ -306,8 +306,15 @@
 # isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (859 -> 863, core 716 -> 720).
 # isaac#474 adds 40 core cases (ownership guard 27, UID setup 13): 863 -> 903.
 # isaac#429: hosted 903 -> 921 and core 760 -> 778.
-# isaac#437: 新增 11 項 core 測試（hosted 921 -> 932）。
-HOSTED_UNIT_BASELINE = 932
+# isaac#536: add two core removal guards.
+# isaac#535 adds one stream camera API case (hosted 923 -> 924, stream 54 -> 55).
+# isaac#478: hosted 924 -> 946 and core 780 -> 802.
+# isaac#480 replaces four NumPy pin tests with two base-dependency guards.
+# isaac#528 adds 7 core cases for operator volume coverage (hosted 944 -> 951).
+# isaac#399: 4 core cases for smoke paths, empty matrix and Docker lint coverage.
+# Hosted 951 -> 955, core 807 -> 811.
+# isaac#437 adds ten core cases for the nightly standalone workflow and runner.
+HOSTED_UNIT_BASELINE = 965
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -315,7 +322,7 @@ HOSTED_UNIT_BASELINE = 932
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 932。
+#   以下五組的測試數量下限合計為 965。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -358,9 +365,9 @@ HOSTED_UNIT_BASELINE = 932
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 789
+HOSTED_UNIT_BASELINE_CORE = 821
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 54
+HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#289 adds 24 docs cases (docs 44 -> 68).
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).
@@ -443,7 +450,8 @@ HOSTED_UNIT_BASELINE_DOCS = 83
 # isaac#276 removes two in-container ROS cases and two host round-trip cases.
 #   The 35 remaining cases all run in the Isaac test container.
 #   isaac#429 keeps all 35 cases and moves two I/O checks to no_ros/.
-GPU_INTEGRATION_BASELINE = 35
+# isaac#478: pin the collision schema contract on the live stage.
+GPU_INTEGRATION_BASELINE = 36
 
 # AGGREGATE_TARGET -- the PRD parity baseline (115 unit + 11 integration =
 #   126). Enforced across the hosted and GPU legs by assert_pytest_baseline.sh --gpu.
@@ -467,7 +475,8 @@ AGGREGATE_TARGET = 126
 #   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 223 -> 219), then isaac#436 adds 5 (core 115 -> 120, total 224).
 #   isaac#474 adds six UID matrix cases (core 120 -> 126).
 #   isaac#429 adds four GPU baseline guard cases (core 126 -> 130).
-BATS_BASELINE_CORE = 130
+# isaac#480 replaces two package pin checks with one standalone Python smoke.
+BATS_BASELINE_CORE = 129
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13

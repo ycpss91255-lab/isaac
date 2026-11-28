@@ -32,6 +32,10 @@ cd isaac
 
 接著依 [根目錄 README](../../../README.md) 的 Quick Start build 並啟動 Isaac Sim 容器。repo 根目錄會掛到容器內的 `/home/<你的使用者>/work`，也是容器的工作目錄，所以本目錄在容器內是 `~/work/src/`，script 以 `/isaac-sim/python.sh src/script/<name>.py` 執行。
 
+### 串流來源產生器
+
+CI 與瀏覽器端測試使用的 WebRTC 串流來源產生器會建立 12×12 棋盤場景，並透過 Isaac Sim 的 `ViewportManager.set_camera_view` 將透視相機設在 `[15, -15, 11]`，朝向 `[0, 0, 0]`。
+
 ## 授權
 
 [Apache-2.0](../../LICENSE)

@@ -4,16 +4,16 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 开发环境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身为 `ycpss91255-lab/template`）为基础构建。
 
-镜像包含 Isaac Sim 本体和 NVIDIA Isaac Lab 3.0（`v3.0.0`），后者用作 scene-spawn backend（`sim_utils` spawner；ADR-0018）。`IsaacDriver` 通过 `isaacsim.SimulationApp` 启动 Kit。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
+场景生成与 articulation drive 默认值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。资产物理参数在 sim_asset 中配置，由 asset_converter 写入 USD。`IsaacDriver` 通过 `isaacsim.SimulationApp` 启动 Kit。下游应用节点（CoreSAM、AGV bring-up）以及给 Noetic interop 用的 ROS 1 / ROS 2 bridge 放在相邻的 docker folder。
 
 本 repo 同时收纳 Isaac Sim workspace 内容（driver script、ADR、USD 模型）于 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是运行该 workspace 的开发环境。两者原本分属 `ycpss91255-lab/isaac` 与 `ycpss91255-lab/isaac`（research wraps docker via submodule），按 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合并至此。
 
 ## 前置需求
 
-- NVIDIA driver `>= 580`（Isaac Lab 3.0 会装 CUDA 13 版 PyTorch；NVIDIA 以 595.58.03 测过 Isaac Sim 6.2.0；本 repo 已在 driver 610 验证）
+- NVIDIA Linux x86_64 驱动程序 `595.58.03`（NVIDIA 验证 Isaac Sim 6.2.0 的版本）。[官方要求](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/installation/requirements.html)
 - GPU `>= RTX 4080`（或同级），VRAM `>= 16 GB`
 - Docker + nvidia-container-toolkit
-- 约 50 GB 空闲空间。build 出来的 image 约 31 GB，其中 20.7 GB 是 NGC base image，约 10 GB 是 Isaac Lab 与工具链；其他 stage 共用这些 layer。build 时还需要预留 BuildKit cache 的空间，首次启动后 cache 目录再增长 5–10 GB
+- 约 50 GB 空闲空间。运行镜像约 21 GB，包含 20.7 GB 的 NGC 基础镜像。各 stage 共享镜像层。请预留 BuildKit 空间，以及首次启动后的 5–10 GB 缓存。
 
 NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；为何不用 `:6.2.0` 见 `Dockerfile` `BASE_IMAGE` 注释）公开可拉，无需 `docker login nvcr.io`。
 
@@ -36,7 +36,7 @@ NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；为何不�
 | 一个用来开发的交互 shell | `just docker build`（devel） | `just docker run` |
 | 通过 WebRTC 看仿真画面 | `just docker build -t stream` | `just docker run -t stream -d`，接着看「连接 WebRTC livestream」 |
 
-冷启动的第一次 build 大约要一小时：先 pull 20.7 GB 的 NGC base image，再安装 Isaac Lab。GitHub-hosted CI 的 build 花了 45 到 84 分钟（[45 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)）。之后的 build 会复用 layer cache，其他 stage 也共用这些 layer，所以 build 第二个 stage 只要几秒到几分钟。
+首次构建会下载 20.7 GB 的 NGC 基础镜像，所需时间取决于网络速度。后续构建可跨 stage 复用缓存层。
 
 Production stage（两个 stage 启动后都 idle — driver 脚本用 exec 送进运行中的 container）：
 
@@ -95,7 +95,7 @@ Kit 每次启动都会打印几种不影响运行的警告：
 - `./script/checkout_identity.sh isolate` 会把 `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) 写进 gitignored 的 `setup.local.toml`。image tag、compose project 与 container 名称都跟着它走。`./script/checkout_identity.sh show` 会打印这个 checkout 解析出的名称。
 - pre build / run / stop hook 会拒绝对共用名称操作。`ISAAC_ALLOW_SHARED_IDENTITY=1` 可以跳过；CI 的 build 步骤就是这样用。
 - `just docker run` 不会重新 build 已存在的 image（base#1552）。pull 新变更后，先 `just docker build -t <stage>` 再 `just docker run -t <stage>`。
-- 磁盘占用：每个会 build 的 checkout 或 worktree 都有自己的 image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）。`docker images` 显示每个 stage tag 名义上约 31 GB。因为有共享层，移除 tag 时实际回收的空间较少。删掉 checkout 目录后，image 仍留在 Docker daemon。
+- 磁盘占用：每个会 build 的 checkout 或 worktree 都有自己的 image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）。`docker images` 显示每个 stage tag 名义上约 21 GB。因为有共享层，移除 tag 时实际回收的空间较少。删掉 checkout 目录后，image 仍留在 Docker daemon。
 - 清理已删除的 checkout：从 `./script/checkout_identity.sh show`（删目录前执行；需要 `.env.generated`）或 `docker images` 获取 `isaac-<dir>-<hash>` 名称。自定义的 `PROJECT_NAME` 可能与 `<hub>-<slug>` 不同。请在标签输出中找到已删除 checkout 的 image，复制同一行的 project 名称。
 
   ```bash
@@ -126,11 +126,13 @@ Kit 每次启动都会打印几种不影响运行的警告：
 
 Isaac 不附带示例模型。请使用 `sim_asset` 中的 USD 模型或 `asset_converter` 的转换输出。
 
+如需验证 USD 资产，请使用 Isaac Sim 官方的 [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html) 工具。
+
 1. 运行 `cp setup.isaac_sample.toml setup.local.toml`，创建 Git 会忽略的本地配置文件。如果已有本地配置文件，请将示例合并进去，以保留当前 checkout 的配置。
 2. 将模型挂载的 `source` 改为模型所在的目录。只读挂载的目标保持为 `/home/${USER_NAME}/models/sim_asset`，让场景在每台机器上都能解析相同的路径。如果添加模型挂载，请将对应的容器内路径加入 `MODEL_PATH`，并用冒号分隔。
 3. 运行 `just docker run -t headless -d` 启动容器。
 
-Base 应用本地配置时会替换整个 `[[volumes]]` 列表。请在本地配置文件中保留 `setup.toml` 的所有挂载，并在项目添加挂载时同步更新。
+Base 应用本地配置时会替换整个 `[[volumes]]` 列表。请在本地配置文件中保留 `setup.toml` 的所有挂载，并在项目添加挂载时同步更新。 `just docker run` 会在启动容器前列出缺少的来源与目标配对，发出警告后继续启动。未声明挂载列表的本地配置会继承项目挂载。
 
 ## 连接 WebRTC livestream
 
@@ -315,7 +317,7 @@ out.step(sim_time_seconds)
 
 stream 组的 `stream-visual-e2e` GPU job 会启动 stream stage，验证 Chromium 持续收到能看到红色测试方块的视频帧。
 
-core 组的 `core-official-nativepython` GPU job 会执行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+`CI: Official Native Python` 工作流每晚或通过手动触发运行 NVIDIA 官方的 standalone Python 测试桶，以及 livestream 和 hello_world 示例。本机运行方式和产物请见 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
 
 Workflow 与 job 的命名规则见 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 检查。
 

@@ -4,16 +4,16 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開発環境。[`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（旧名 `ycpss91255-lab/template`）をベースに構築。
 
-イメージには Isaac Sim 本体と、scene-spawn backend（`sim_utils` spawner；ADR-0018）として使う NVIDIA Isaac Lab 3.0（`v3.0.0`）が含まれます。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
+シーン生成と articulation drive の既定値には Isaac Sim Core Experimental（`isaacsim.core.experimental`）を使用します。アセットの物理パラメータは sim_asset で設定し、asset_converter が USD に書き込みます。`IsaacDriver` は `isaacsim.SimulationApp` で Kit を起動する。下流のアプリケーションノード（CoreSAM、AGV bring-up）と Noetic 互換用の ROS 1 / ROS 2 bridge は隣接する docker folder に配置。
 
 本リポジトリは Isaac Sim ワークスペース（driver スクリプト、ADR、USD モデル）も [`src/`](../src/README.md) に同梱する。root の Dockerfile + base subtree がそのワークスペースを動かす開発環境。元々は `ycpss91255-lab/isaac` と `ycpss91255-lab/isaac`（research が docker を submodule として包む構成）に分かれていたが、 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) に従い本リポジトリへ統合した。
 
 ## 前提条件
 
-- NVIDIA driver `>= 580`（Isaac Lab 3.0 は CUDA 13 版 PyTorch を導入；NVIDIA は Isaac Sim 6.2.0 を 595.58.03 で検証；本 repo は driver 610 で検証済み）
+- NVIDIA Linux x86_64 ドライバー `595.58.03`（NVIDIA が Isaac Sim 6.2.0 の検証に使用したバージョン）。[公式要件](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/installation/requirements.html)
 - GPU `>= RTX 4080`（または同等）、VRAM `>= 16 GB`
 - Docker + nvidia-container-toolkit
-- 約 50 GB の空き領域。build 後のイメージは約 31 GB で、そのうち 20.7 GB が NGC base image、約 10 GB が Isaac Lab と tooling；他の stage はこれらの layer を共有する。build には BuildKit cache 用の余裕が必要で、初回起動後に cache ディレクトリがさらに 5–10 GB 増加
+- 約 50 GB の空き領域。実行用イメージは約 21 GB で、20.7 GB の NGC ベースイメージを含みます。各 stage はレイヤーを共有します。BuildKit 用の領域に加え、初回起動後のキャッシュ用に 5–10 GB を確保してください。
 
 NGC イメージ（`nvcr.io/nvidia/isaac-sim:6.2.0.1`、6.2.0 GA ビルド；`:6.2.0` を使わない理由は `Dockerfile` の `BASE_IMAGE` コメント参照）は公開取得可能、`docker login nvcr.io` 不要。
 
@@ -36,7 +36,7 @@ clone した直後の repo で、まず repo root から次の 2 つの初回手
 | 開発用の対話 shell | `just docker build`（devel） | `just docker run` |
 | WebRTC でシミュレーションを見る | `just docker build -t stream` | `just docker run -t stream -d`、続いて「WebRTC livestream への接続」 |
 
-コールド状態の初回 build には約 1 時間かかる。20.7 GB の NGC base image を pull してから Isaac Lab をインストールするためである。GitHub-hosted CI の build は 45〜84 分だった（[45 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)）。以降の build は layer cache を再利用し、他の stage もそれらの layer を共有するので、2 つ目の stage の build は数秒から数分で済む。
+初回ビルドでは 20.7 GB の NGC ベースイメージをダウンロードします。所要時間はネットワーク速度に依存します。以降のビルドでは stage 間でキャッシュ済みレイヤーを再利用します。
 
 Production stage（両 stage とも起動後は idle — driver スクリプトを exec で実行中の container に送り込む）：
 
@@ -95,7 +95,7 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 - `./script/checkout_identity.sh isolate` が `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) を gitignore 済みの `setup.local.toml` に書き込む。image tag・compose project・container 名はすべてこれに従う。`./script/checkout_identity.sh show` でこの checkout の解決結果を表示できる。
 - pre build / run / stop hook は共有名のままでは実行を拒否する。`ISAAC_ALLOW_SHARED_IDENTITY=1` で上書きできる（CI の build ステップが使用）。
 - `just docker run` は既存の image を再 build しない（base#1552）。変更を pull したら `just docker run -t <stage>` の前に `just docker build -t <stage>` を実行する。
-- ディスク使用量：build する checkout または worktree ごとに独自の image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）を持つ。`docker images` に表示される stage tag あたり約 31 GB は名目上のサイズ。共有レイヤーがあるため、tag を削除して実際に回収できる容量はそれより少ない。checkout ディレクトリを削除しても image は Docker daemon に残る。
+- ディスク使用量：build する checkout または worktree ごとに独自の image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）を持つ。`docker images` に表示される stage tag あたり約 21 GB は名目上のサイズ。共有レイヤーがあるため、tag を削除して実際に回収できる容量はそれより少ない。checkout ディレクトリを削除しても image は Docker daemon に残る。
 - 削除済み checkout の後始末：`./script/checkout_identity.sh show`（ディレクトリ削除前に実行。`.env.generated` が必要）または `docker images` から `isaac-<dir>-<hash>` の名前を確認する。`PROJECT_NAME` を独自に設定すると `<hub>-<slug>` と異なる場合がある。ラベルの出力から削除済み checkout の image を探し、その行の project 名をコピーする。
 
   ```bash
@@ -126,11 +126,13 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 
 Isaac にはサンプルモデルが同梱されていません。`sim_asset` の USD モデル、または `asset_converter` で変換した USD モデルを使ってください。
 
+USD アセットの検証には Isaac Sim 公式の [Asset Validation](https://docs.isaacsim.omniverse.nvidia.com/latest/robot_setup/asset_validation.html) ツールを使用してください。
+
 1. `cp setup.isaac_sample.toml setup.local.toml` を実行して、Git の管理対象外のローカル設定ファイルを作成します。すでにファイルがある場合は、このチェックアウトの設定を保持するため、既存のファイルにサンプルの設定を統合してください。
 2. モデルのマウント設定の `source` を、モデルがあるディレクトリに変更します。どのマシンでもシーンから同じパスを参照できるように、読み取り専用のマウント先は `/home/${USER_NAME}/models/sim_asset` のままにします。モデルのマウントを追加する場合は、対応するコンテナ内のパスをコロン区切りで `MODEL_PATH` に追加します。
 3. `just docker run -t headless -d` でコンテナを起動します。
 
-Base はローカル設定を適用するときに `[[volumes]]` のリスト全体を置き換えます。ローカル設定には `setup.toml` のマウントをすべて残し、リポジトリにマウントが追加されたら反映してください。
+Base はローカル設定を適用するときに `[[volumes]]` のリスト全体を置き換えます。ローカル設定には `setup.toml` のマウントをすべて残し、リポジトリにマウントが追加されたら反映してください。 `just docker run` は、起動前に不足しているマウント元とマウント先の組み合わせを警告し、そのまま起動を続けます。ローカル設定にマウント一覧がなければ、リポジトリの設定が引き継がれます。
 
 ## WebRTC livestream への接続
 
@@ -315,7 +317,7 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 
 stream グループの GPU ジョブ `stream-visual-e2e` は stream ステージを起動し、赤いテスト用キューブが映ったフレームを Chromium が継続して受信できることを確認します。
 
-core グループの `core-official-nativepython` GPU ジョブは、NVIDIA 公式の standalone Python テスト一式と livestream、hello_world のサンプルを実行します。ローカル実行手順と成果物は [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437) を参照してください。
+毎晩または手動で起動する `CI: Official Native Python` ワークフローは、NVIDIA 公式の standalone Python テスト一式と livestream、hello_world のサンプルを実行します。ローカル実行手順と成果物は [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437) を参照してください。
 
 Workflow と job の命名規則は [doc/workflow-naming.md](workflow-naming.md) を参照。`script/ci/lint_workflow_names.py` が検査します。
 
