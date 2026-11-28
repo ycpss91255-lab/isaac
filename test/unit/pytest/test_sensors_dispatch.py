@@ -98,3 +98,42 @@ def test_custom_camera_dispatch_returns_mount_and_creates_camera_prims(monkeypat
         call(f"{mount}/depth", "Camera"),
     ]
     assert "isaacsim.ros2.bridge" not in enabled
+
+
+def test_imu_dispatch_creates_sensor_and_returns_authored_path(monkeypatch):
+    config = Path(__file__).resolve().parents[3] / "src/config/imu/default.yaml"
+    cfg = sensor_setup.load_config(config)
+    cfg["sensor"]["filter"] = {"linear_acceleration": 3, "angular_velocity": 5, "orientation": 7}
+    requested_path = f"{cfg['mount']['parent_prim']}/imu_mount/imu_sensor"
+    created_path = f"{requested_path}_01"
+
+    stage = Mock()
+    parent = stage.GetPrimAtPath.return_value
+    parent.IsValid.return_value = True
+    parent.HasAPI.return_value = True
+    monkeypatch.setitem(sys.modules, "pxr", Mock())
+    monkeypatch.setattr(sensor_prim, "set_xform_pose", Mock())
+    monkeypatch.setitem(sys.modules, "omni.kit.commands", None)
+
+    extension = "isaacsim.sensors.experimental.physics"
+    physics = Mock()
+    physics.IMU.create = Mock(spec=lambda path, **kwargs: None, return_value=Mock(paths=[created_path]))
+    monkeypatch.setitem(sys.modules, extension, None)
+    enabled = []
+
+    def enable_extensions(*names):
+        enabled.extend(names)
+        if extension in names:
+            monkeypatch.setitem(sys.modules, extension, physics)
+
+    monkeypatch.setattr(sensor_setup, "_enable_extensions", enable_extensions)
+    result = sensor_setup.setup_sensor(cfg, stage)
+
+    assert extension in enabled
+    physics.IMU.create.assert_called_once_with(
+        requested_path,
+        linear_acceleration_filter_size=3,
+        angular_velocity_filter_size=5,
+        orientation_filter_size=7,
+    )
+    assert result == created_path

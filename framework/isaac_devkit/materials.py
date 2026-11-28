@@ -10,7 +10,7 @@ Usage:
     from isaac_devkit.materials import (
         load_material_config, material_cfg_from_yaml,
     )
-    cfg = load_material_config("model/usd/object/pallet/material.yaml")
+    cfg = load_material_config("model/usd/object/obstacle/material.yaml")
     spawn_material = material_cfg_from_yaml(cfg, variant="blue")
 """
 

@@ -2,8 +2,8 @@
 
 This repo converges from a research+env monorepo into the Isaac robot-simulation **base repo**:
 env (Dockerfile / `.base` / compose) + a mounted `isaac_devkit` Python framework +
-ROS 2 application templates. Application content (the forklift scenario and its
-models / drivers / scenes) migrates to `ycpss91255-research/isaac-forklift` (#136). The full
+ROS 2 application templates. Application content remains in the repository as
+runnable examples pending the deferred migration (#136). The full
 rationale lives in the convergence PRD (`doc/PRD-template-convergence.draft.md`); this ADR is
 the **committed architecture contract** (PRD "Finalized Issue Breakdown" row 2, issue #128):
 consumers code against the final shape from day one, while the implementation grows
@@ -23,14 +23,11 @@ from NVIDIA Isaac Sim (#327). Consumption model
 (PRD A6, decided): a parent workspace holds `src/docker` (a **git submodule** pinned to a
 semver tag of this repo) next to `src/isaac` (the consumer's own robot content); the whole
 workspace mounts into the container. The workspace scaffold was retired in #326.
-Target state: zero application-specific content in base (purity grep, M3 metric, enforced in
-#137 after the migration in #136).
-
-> **Narrowed (2026-09-07).** The purity scope is narrowed from the entire repo
-> to `framework/` -- the contract layer that downstream consumers import via
-> submodule. `src/` is retained as example/application content outside the
-> submodule contract (owner decision, #137 rationale update, #273). Complete
-> separation of application content is deferred to a later version (#136).
+The v1.0.0 purity gate (#137, #273) applies to the downstream framework
+contract. Core CI scans `framework/isaac_devkit/*.py` and
+`framework/pyproject.toml`. The root `src/` continues to host runnable examples
+and application assets outside that contract. The application migration is
+deferred to a later version (#136).
 
 ### 2. Framework install = mount, not baked
 
@@ -349,11 +346,11 @@ have been extracted to `ycpss91255-docker/isaac_physics_test` (isaac#309, isaac#
 | 0003 | Two-track simulation strategy | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0003-two-track-simulation-strategy.md) (isaac#309) | `isaac_physics_test` | — |
 | 0004 | Model A-hybrid block model | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0004-model-a-hybrid-forklift-block-model.md) (isaac#309) | `isaac_physics_test` | — |
 | 0005 | Standalone-with-livestream entrypoint | kept (light editorial de-application) | base | — |
-| 0006 | Per-sensor-type YAML config | **supersede** (this ADR section 5 + restatement above; stub header added) | extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0006-per-sensor-yaml-camera-config.md) (isaac#342) | — |
+| [0006](0006-per-sensor-yaml-camera-config.md) | Per-sensor-type YAML config | **supersede** (this ADR section 5 and restatement above) | extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0006-per-sensor-yaml-camera-config.md) (isaac#342) | — |
 | 0007 | Custom streaming Kit experience | kept (light editorial de-application) | base | — |
-| 0008 | L2/L3 physics vocabulary | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md) (isaac#309); generic restatement above still applies | `isaac_physics_test` | — |
+| [0008](0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md) | L2/L3 physics vocabulary | **DONE** -- extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md) (isaac#309), with the generic restatement above | `isaac_physics_test` | — |
 | 0009 | IsaacDriver lifecycle-only pattern | kept (light editorial de-application; `USD` class attr replaced by `SCENE` per section 9) | base | — |
-| 0010 | 4-layer Isaac Dev Kit | **supersede** (restated as the module set above; stub header added) | extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0010-isaac-dev-kit-standardized-development-environment.md) (isaac#342) | — |
+| [0010](0010-isaac-dev-kit-standardized-development-environment.md) | 4-layer Isaac Dev Kit | **supersede** (restated as the module set above) | extracted to [`isaac_physics_test`](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0010-isaac-dev-kit-standardized-development-environment.md) (isaac#342) | — |
 | 0011 | CI hosted/self-hosted split | kept (already revised inline by ADR-0012 + its own 2026-06-02 update) | base | — |
 | 0012 | Research org split, dual runners | **amend** (update appended: org-axis re-derivation, below) | base | — |
 | 0013 | Test ownership + tool sublayer | **amend** (update appended: re-derivation, below) | base | — |
@@ -409,10 +406,8 @@ section in ADR-0012.
 - Consumers (the example, #130-#135, and future scenario repos) code against the shapes in
   sections 4, 5, and 9 from day one; interface churn is traded for `NotImplementedError` on
   not-yet-implemented paths.
-- Nothing moves physically in this change: superseded files keep their paths (with stub
-  headers pointing here) until #136, so every existing cross-reference to ADR-0006 / 0008 /
-  0010 still resolved; those ADRs have since been extracted to `isaac_physics_test` (isaac#342).
-- The purity grep (M3, #137) excludes stub pointer lines by design.
+- ADR-0006, ADR-0008 and ADR-0010 have local pointers to their archived
+  decisions in `isaac_physics_test` and to the successor sections of this ADR.
 - ADR-0009's lifecycle-only pattern is reaffirmed; its `USD` class attr is replaced by `SCENE`
   (section 9) as part of the contract, recorded here rather than as a 0009 rewrite.
 - The pytest parity baseline (126) becomes a committed CI artifact in #130; TEST.md +
