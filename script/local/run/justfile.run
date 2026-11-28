@@ -1,0 +1,6 @@
+set working-directory := '../../..'
+set positional-arguments
+
+# Play a USD in the running headless container.
+scene usd *args:
+    @./script/exec.sh -t headless /isaac-sim/python.sh framework/isaac_devkit/run_scene.py "$@"

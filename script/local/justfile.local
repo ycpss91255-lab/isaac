@@ -22,3 +22,5 @@
 # --repo OWNER/REPO. Prints a final `removed=N skipped=M` summary.
 cleanup-merged *args:
     @bash script/git/cleanup-merged-all.sh {{args}}
+
+mod? run 'run/justfile.run'

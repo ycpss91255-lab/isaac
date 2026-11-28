@@ -164,6 +164,40 @@ teardown() {
   rm -rf "${FAKE}"
 }
 
+assert_kit_launch_ports() {
+  local signal_port="$1" media_port="$2" launch
+  write_kit110_log "${FAKE}/kit.log"
+  export STUB_KIT_LOG="${FAKE}/kit.log" STUB_ALIVE=1 SMOKE_CLIENT_CMD=true SMOKE_DWELL=1
+  run "${FAKE}/script/ci/stream_smoke.sh"
+  [ "${status}" -eq 0 ]
+
+  launch="$(grep -E '\] exec -d .*cid0 sh -c .*runheadless-host-config\.sh' "${DOCKER_ARGS_FILE}")"
+  # Only options before the container ID configure the exec environment.
+  local options="${launch%% cid0 *} "
+  [[ "${options}" == *" -e ISAAC_SIGNAL_PORT=${signal_port} "* ]]
+  [[ "${options}" == *" -e ISAAC_MEDIA_PORT=${media_port} "* ]]
+}
+
+@test "stream_smoke: passes custom signal and media ports to Kit (isaac#563)" {
+  export ISAAC_SIGNAL_PORT=49200 ISAAC_MEDIA_PORT=47999
+  assert_kit_launch_ports 49200 47999
+}
+
+@test "stream_smoke: passes default signal and media ports to Kit (isaac#563)" {
+  assert_kit_launch_ports 49100 47998
+}
+
+@test "stream_smoke: host.yaml overrides the environment signal port passed to Kit (isaac#563)" {
+  export ISAAC_SIGNAL_PORT=49200
+  mkdir -p "${FAKE}/config"
+  cat > "${FAKE}/config/host.yaml" <<'YAML'
+livestream:
+  ports:
+    signal: 49291
+YAML
+  assert_kit_launch_ports 49291 47998
+}
+
 @test "stream_smoke: brings the stack up under a distinct PROJECT_NAME, no --instance (owv#55)" {
   export SMOKE_PROJECT=alice-isaac-demo
   run "${FAKE}/script/ci/stream_smoke.sh"

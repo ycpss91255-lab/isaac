@@ -102,6 +102,5 @@ def test_readme_mentions_sample(readme):
 
 
 @pytest.mark.parametrize("readme", _READMES)
-def test_readme_omits_unavailable_scene_recipe(readme):
-    assert "just run scene" not in (_REPO_ROOT / readme).read_text(encoding="utf-8")
-    assert "just run scene" not in _SAMPLE.read_text(encoding="utf-8")
+def test_readme_documents_scene_recipe(readme):
+    assert "just run scene" in (_REPO_ROOT / readme).read_text(encoding="utf-8")
