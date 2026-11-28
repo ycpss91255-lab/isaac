@@ -1,6 +1,6 @@
 # TEST.md
 
-**224 tests** total (bats). Hosted pytest collects **859 tests**.
+**224 tests** total (bats). Hosted pytest collects **863 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 120 | 716 | 35 | 871 |
+| core | 120 | 720 | 35 | 875 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 54 | 0 | 145 |
 | headless | 13 | 6 | 0 | 19 |
@@ -390,10 +390,11 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **859 tests** on a host without Isaac Sim. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total up from 885. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **863 tests** on a host without Isaac Sim. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#446 adds four core cases for the NumPy pin. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total up from 885. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
+| `test_dockerfile_numpy_pin.py` | 4 | `core`. The numpy restore RUN (isaac#446) must follow the Isaac Lab install and precede the `pip_prebundle` integrity check. It pins numpy to the version read from Isaac Sim's `pip_prebundle` numpy dist-info, asserts `numpy.__version__` at build time, and uses no shell pipe (hadolint DL4006). No docker/GPU. |
 | `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and sample references and no references to the unavailable `just run scene` recipe in all four READMEs (isaac#338). |
 | `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream` and the standalone livestream SOP and ZED installation guide for retired stage names, the `isaac-headless` container name and stale headless prose. Requires the SOP to include both `run -t stream -d` (start the idle container) and `exec -t stream /isaac-sim/runheadless.sh` (start Kit inside it). |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |

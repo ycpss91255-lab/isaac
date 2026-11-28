@@ -303,7 +303,8 @@
 # isaac#484 adds 3 hosted tests on top of main's 885 -> 888 (core 744 -> 745, stream 52 -> 54).
 # isaac#276 removes ROS I/O and its host round-trip guards (888 -> 853, all core).
 # isaac#375: test_sim_version.py adds 6 core cases (hosted 853 -> 859, core 710 -> 716).
-HOSTED_UNIT_BASELINE = 859
+# isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (859 -> 863, core 716 -> 720).
+HOSTED_UNIT_BASELINE = 863
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -352,7 +353,8 @@ HOSTED_UNIT_BASELINE = 859
 #   adds 1 core case (core 744 -> 745).
 #   isaac#276 removes 35 net core cases (745 -> 710).
 #   isaac#375 adds 6 core cases (core 710 -> 716).
-HOSTED_UNIT_BASELINE_CORE = 716
+#   isaac#446 adds 4 core cases (core 716 -> 720).
+HOSTED_UNIT_BASELINE_CORE = 720
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
