@@ -306,7 +306,8 @@
 # isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (859 -> 863, core 716 -> 720).
 # isaac#474 adds 40 core cases (ownership guard 27, UID setup 13): 863 -> 903.
 # isaac#429: hosted 903 -> 921 and core 760 -> 778.
-HOSTED_UNIT_BASELINE = 921
+# isaac#535 adds one stream camera API case (hosted 921 -> 922, stream 54 -> 55).
+HOSTED_UNIT_BASELINE = 922
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -314,7 +315,7 @@ HOSTED_UNIT_BASELINE = 921
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 921。
+#   以下五組的測試數量下限合計為 922。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -359,7 +360,7 @@ HOSTED_UNIT_BASELINE = 921
 #   isaac#474 adds 40 core cases (720 -> 760).
 HOSTED_UNIT_BASELINE_CORE = 778
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 54
+HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#289 adds 24 docs cases (docs 44 -> 68).
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).

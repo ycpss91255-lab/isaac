@@ -32,6 +32,10 @@ cd isaac
 
 接着按 [根目录 README](../../../README.md) 的 Quick Start build 并启动 Isaac Sim 容器。repo 根目录会挂到容器内的 `/home/<你的用户>/work`，也是容器的工作目录，所以本目录在容器内是 `~/work/src/`，script 以 `/isaac-sim/python.sh src/script/<name>.py` 运行。
 
+### 流媒体源生成器
+
+CI 和浏览器端测试使用的 WebRTC 流媒体源生成器会创建 12×12 棋盘场景，并通过 Isaac Sim 的 `ViewportManager.set_camera_view` 将透视相机设在 `[15, -15, 11]`，朝向 `[0, 0, 0]`。
+
 ## 许可
 
 [Apache-2.0](../../LICENSE)
