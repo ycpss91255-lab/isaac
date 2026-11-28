@@ -72,6 +72,35 @@ def test_each_navigation_keeps_a_30_second_frame_polling_window():
     assert re.search(rf"while\s*\([^{{;]*\b{window[1]}\b", attempt[window.end():])
 
 
+def test_failed_navigation_backs_off_and_caps_recorded_attempts():
+    probe = _probe()
+    retry = _navigation_loop(probe)
+    body = re.split(rf"^{retry['indent']}\}}", probe[retry.end():], maxsplit=1, flags=re.M)[0]
+    catch = re.search(r"\bcatch\s*\([^)]*\)\s*\{", body)
+    assert catch, "handle a failed navigation inside the retry loop"
+    tail = body[catch.end():]
+    integer = r"[1-9][\d_]*"
+    delay = rf"(?:{integer}|[A-Za-z_$][\w$]*)"
+    # A refused connection skips the wait in the frame polling loop.
+    remaining = r"deadline\s*-\s*Date\.now\(\)"
+    assert re.search(
+        rf"await\s+page\.waitForTimeout\(\s*Math\.min\(\s*"
+        rf"(?:{delay}\s*,\s*{remaining}|{remaining}\s*,\s*{delay})\s*\)\s*\)", tail,
+    ), "back off after a failed attempt within the remaining total budget"
+
+    # Accept a literal cap or a named integer constant for either retention policy.
+    constants = re.findall(rf"\bconst\s+(\w+)\s*=\s*{integer}\s*;", probe)
+    cap = "(?:" + "|".join([integer, *constants]) + ")"
+    attempts = r"result\.attempts"
+    guard = r"\s*\)\s*\{?\s*"
+    keep_first = rf"\bif\s*\(\s*(?:n|{attempts}\.length)\s*<=?\s*{cap}{guard}{attempts}\.push\("
+    drop_oldest = rf"\bif\s*\(\s*{attempts}\.length\s*>=?\s*{cap}{guard}{attempts}\.shift\("
+    keep_last = rf"{attempts}\s*=\s*{attempts}\.slice\(\s*-{cap}\s*\)"
+    assert any(re.search(pattern, tail) for pattern in (keep_first, drop_oldest, keep_last)), (
+        "limit recorded attempts to a constant number"
+    )
+
+
 @pytest.mark.parametrize("value", [
     pytest.param(r"elapsed\w*|waited\w*|totalWait\w*|Date\.now\(\)\s*-", id="total-wait"),
     pytest.param(r"last_?(?:frame_?)?verdict\b", id="last-frame-verdict"),

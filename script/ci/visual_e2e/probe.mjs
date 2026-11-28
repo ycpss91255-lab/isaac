@@ -2,11 +2,13 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
+const MAX_RECORDED_ATTEMPTS = 20;
+const RETRY_BACKOFF_MS = 1000;
 const out = process.env.OUT_DIR ?? '/out';
 const budgetMs = Number(process.env.VISUAL_E2E_TOTAL_TIMEOUT_S ?? 600) * 1000;
 const start = Date.now();
 const deadline = start + budgetMs;
-const result = { pass: false, attempts: [] };
+const result = { pass: false, attemptCount: 0, attempts: [] };
 mkdirSync(out, { recursive: true });
 
 // This runs in each new document before the viewer creates its peer.
@@ -62,7 +64,8 @@ try {
   await context.tracing.start({ screenshots: true, snapshots: true });
   await context.addInitScript(observePeer);
   page = await context.newPage();
-  for (let n = 1; Date.now() < deadline && !result.pass; n++) {
+  while (Date.now() < deadline && !result.pass) {
+    result.attemptCount++;
     const samples = [];
     let attemptError;
     try {
@@ -92,8 +95,13 @@ try {
       attemptError = String(error);
     }
     const attempt = { samples, error: attemptError };
-    result.attempts.push(attempt);
-    console.log(`Attempt ${n}: ${JSON.stringify(attempt)}`);
+    if (result.attempts.length < MAX_RECORDED_ATTEMPTS) {
+      result.attempts.push(attempt);
+      console.log(`Attempt ${result.attemptCount}: ${JSON.stringify(attempt)}`);
+    }
+    if (!result.pass && Date.now() < deadline) {
+      await page.waitForTimeout(Math.min(RETRY_BACKOFF_MS, deadline - Date.now()));
+    }
   }
 } catch (error) {
   result.error = String(error);
