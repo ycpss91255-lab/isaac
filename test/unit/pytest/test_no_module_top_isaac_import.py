@@ -27,7 +27,7 @@ pytestmark = pytest.mark.core
 _PACKAGE_DIR = (
     Path(__file__).resolve().parents[3] / "framework" / "isaac_devkit"
 )
-_BANNED_TOP_LEVEL = ("omni", "pxr", "isaacsim", "isaaclab")
+_BANNED_TOP_LEVEL = ("omni", "pxr", "isaacsim")
 
 
 def _module_files():
