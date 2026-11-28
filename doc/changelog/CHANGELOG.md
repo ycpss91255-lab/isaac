@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **框架純淨度檢查與基礎 repo 契約（isaac#137）。** Core CI 檢查框架原始碼與套件設定中的應用專屬詞彙。四語 README 說明下游透過 submodule 匯入共用框架，以及 `src/` 保留可執行範例的定位。補上 ADR 搬遷指引與九項 hosted 測試。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
