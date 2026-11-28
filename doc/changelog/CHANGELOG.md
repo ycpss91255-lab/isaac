@@ -6,6 +6,7 @@
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
+- **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。
 - **串流來源產生器改用 Isaac Sim 的 `ViewportManager.set_camera_view`（isaac#535）。** 移除舊版視窗 API 與備援匯入，新增一項 hosted 測試驗證相機路徑、位置和對準目標（924 項，stream 55 項）。
 - **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 119 -> 123（併入 main 後重算）。
