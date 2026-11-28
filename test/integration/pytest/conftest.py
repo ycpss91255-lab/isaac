@@ -1,13 +1,21 @@
-"""Load the shared group guard (isaac#434): see test/group_markers.py."""
+"""Load the shared group guard and GPU timing hooks."""
 
 import importlib.util
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location(
-    "group_markers", Path(__file__).resolve().parents[2] / "group_markers.py"
-)
-_markers = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_markers)
+
+def _load(name):
+    path = Path(__file__).resolve().parents[2] / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_markers = _load("group_markers")
+_timing = _load("kit_timing")
 
 pytest_configure = _markers.pytest_configure
 pytest_collection_modifyitems = _markers.pytest_collection_modifyitems
+pytest_runtest_protocol = _timing.pytest_runtest_protocol
+pytest_terminal_summary = _timing.pytest_terminal_summary

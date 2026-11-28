@@ -16,6 +16,8 @@ CLI:
 import argparse
 import sys
 
+from _kit_boot import time_kit_boot
+
 
 def _main() -> None:
     parser = argparse.ArgumentParser()
@@ -40,7 +42,8 @@ def _main() -> None:
                 print("[OK] minimal driver main reached", flush=True)
                 self._should_quit = True
 
-        _MinimalDriver().run()
+        with time_kit_boot():
+            _MinimalDriver().run()
     except Exception as exc:  # noqa: BLE001
         print(f"[RAISED] {type(exc).__name__}: {exc}", flush=True)
         raise

@@ -170,9 +170,10 @@ def _metrics(raw):
 
 
 def main():
-    from isaacsim import SimulationApp
+    from _kit_boot import time_kit_boot
 
-    app = SimulationApp({"headless": True})
+    with time_kit_boot() as SimulationApp:
+        app = SimulationApp({"headless": True})
     failed = False
 
     try:

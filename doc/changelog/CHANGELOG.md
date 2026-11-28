@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **GPU 整合測試依檔案列出 Kit 啟動與測試耗時（isaac#527）。** 計時範圍僅限 `test/integration/pytest/`，`test/integration/no_ros/` 的 GPU 測試檔案尚未納入。每次建立 `SimulationApp` 時計時，共用 fixture 的啟動時間只計一次。pytest 摘要列出各檔與總計的秒數，可用 `KIT_TIMING_JSON` 指定 JSON 報表路徑。新增 4 項 hosted 測試，基準由 1047 提高至 1051（core 888 → 892）。此 PR 僅提供量測工具，驗收項目仍在 #527 追蹤，尚待完成。
 - **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
 - **新增 standalone smoke 就緒訊息的回歸測試（isaac#562）。** 模擬第一次檢查未找到 `READY`，而探針在存活檢查前已輸出 `READY` 並結束的情況。測試要求腳本回報 `PASS probe.py`。Hosted 基準由 1039 增至 1040，core 組由 887 增至 888。
 - **加強 GPU 工作流程的容器清理測試（isaac#408）。** 驗證 `core-gpu` 依序呼叫六個腳本替身，並確認新增的 Docker 呼叫會被攔截。分別改動腳本與工作流程的專案前綴，驗證兩者不一致時會比對失敗。所有依執行編號設定 Compose 專案的入口腳本，其呼叫端都須傳入含執行編號與嘗試次數的清理篩選器。新增 5 項 core 案例，hosted 基準由 1018 增至 1023，core 由 874 增至 879。
