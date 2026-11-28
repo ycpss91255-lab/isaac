@@ -314,8 +314,8 @@
 # isaac#399: 4 core cases for smoke paths, empty matrix and Docker lint coverage.
 # Hosted 951 -> 955, core 807 -> 811.
 # isaac#440: official Python buckets add 9 core cases (hosted 955 -> 964, core 811 -> 820).
-# isaac#403 新增 13 項 GPU 工作流程版本與清理輸入測試（hosted 964 → 977，core 820 → 833）。
-HOSTED_UNIT_BASELINE = 977
+# isaac#403 新增 13 項 GPU 工作流程版本與清理輸入測試（hosted 973 → 986，core 829 → 842）。
+HOSTED_UNIT_BASELINE = 986
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -366,7 +366,7 @@ HOSTED_UNIT_BASELINE = 977
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 833
+HOSTED_UNIT_BASELINE_CORE = 842
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6
