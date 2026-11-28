@@ -100,7 +100,7 @@ Kit は起動のたびに、実行に影響しない警告をいくつか出力�
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-素の `pkill -f <script>` は使わないこと。container は `pid: host` で動作しているため、その pattern は host や他の container の process にもマッチする。すべてを停止したい場合は、`just docker stop` でこの checkout の container を削除すれば、内部で動いている Kit もまとめて停止する。
+各 container は独立した PID 名前空間を使うため、container 内の `pkill` から見えるのはその container の process だけ。同じ container 内の別の process にもマッチする可能性があるため、素の `pkill -f <script>` は使わないこと。すべてを停止したい場合は、`just docker stop` でこの checkout の container を削除すれば、内部で動いている Kit もまとめて停止する。
 
 ### checkout ごとに 1 つの image と 1 つの compose project
 
@@ -318,6 +318,27 @@ container は health status を報告しない（`HEALTHCHECK NONE`）。NGC bas
 ## コンテナ User
 
 コンテナは host UID と整合した非 root ユーザーで実行（`USER_NAME` は `.env` から読み取り、デフォルト UID 1000）。このユーザーは base イメージの公式アカウント（`USER` から検出、固定値なし）の group に数値 gid で追加され、`/isaac-sim/*`（mode `0750`）が読み取り可能。MJCF インポーターとその UI の `data` ディレクトリ、およびインポーターの `data/mjcf` にはこのグループの書き込み権限があり、UI は入力 XML と同じ場所に USD を出力できる。`/home/${USER_NAME}/work`（host 側 `${WS_PATH}` に mount）経由で書いたファイルは host 側 owner を保持、`chown` 不要。
+
+## コンテナの権限
+
+デフォルトの権限は、ヘッドレスシミュレーションとライブ配信に必要な最小限のものです。GUI や特殊なデバイスで追加の権限が必要な場合は、以下の例から必要な設定だけを `setup.local.toml` に追加してください。単一のデバイスを公開する場合は、`/dev:/dev` を `/dev/video0:/dev/video0` のように対象のデバイスに合わせて変更してください。
+
+```toml
+[security]
+privileged = true
+
+[[devices.bindings]]
+path = "/dev:/dev"
+
+[[security.cap_add]]
+cap = "SYS_ADMIN"
+
+[[security.cap_add]]
+cap = "NET_ADMIN"
+
+[[security.cap_add]]
+cap = "MKNOD"
+```
 
 ## EULA
 
