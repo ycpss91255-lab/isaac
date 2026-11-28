@@ -62,7 +62,7 @@ def test_deleted_checkout_cleanup(readme, warning, size_terms, label_output, lay
         " ".join(block.split()) for item in section.split("\n- ") for block in item.split("\n\n")
     ]
     assert any(
-        all(word in block.lower() for word in ("31 gb", "tag", "docker images", *size_terms))
+        all(word in block.lower() for word in ("21 gb", "tag", "docker images", *size_terms))
         for block in paragraphs
     ), "Explain why shared layers reduce the space reclaimed versus the nominal per-tag size"
 

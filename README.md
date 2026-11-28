@@ -4,16 +4,16 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker development environment, built on top of [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base) (previously `ycpss91255-lab/template`).
 
-Scene spawning and articulation drive defaults use Isaac Sim Core Experimental (`isaacsim.core.experimental`). The image also includes NVIDIA Isaac Lab 3.0 (`v3.0.0`). Configure asset physics in sim_asset for asset_converter to write into USD. `IsaacDriver` starts Kit with `isaacsim.SimulationApp`. Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
+Scene spawning and articulation drive defaults use Isaac Sim Core Experimental (`isaacsim.core.experimental`). Configure asset physics in sim_asset for asset_converter to write into USD. `IsaacDriver` starts Kit with `isaacsim.SimulationApp`. Downstream application nodes (CoreSAM, AGV bring-up) and the ROS 1 / ROS 2 bridge for Noetic interop live in sibling docker folders.
 
 The repo also carries the Isaac Sim workspace content (driver scripts, ADRs, USD models) under [`src/`](src/README.md); the Dockerfile + base subtree at root is the development environment that runs that workspace. Both used to live in `ycpss91255-lab/isaac` and `ycpss91255-lab/isaac` as a research-wraps-docker submodule pair, merged here per [#78](https://github.com/ycpss91255-lab/isaac/issues/78).
 
 ## Prerequisites
 
-- NVIDIA driver `>= 580` (Isaac Lab 3.0 installs the CUDA 13 PyTorch build; NVIDIA tested Isaac Sim 6.2.0 on 595.58.03; verified here on driver 610)
+- NVIDIA Linux x86_64 driver `595.58.03` (version tested by NVIDIA for Isaac Sim 6.2.0). [Official requirements](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/installation/requirements.html)
 - GPU `>= RTX 4080` (or equivalent), VRAM `>= 16 GB`
 - Docker + nvidia-container-toolkit
-- ~50 GB free disk. The built image is ~31 GB, of which 20.7 GB is the NGC base image and ~10 GB is Isaac Lab and tooling; the other stages share those layers. Building needs headroom for the BuildKit cache, and the cache dirs grow another 5–10 GB after first launch
+- ~50 GB free disk. A runtime image is about 21 GB, including the 20.7 GB NGC base. Stages share layers. Allow extra space for BuildKit and 5–10 GB for caches after the first launch.
 
 NGC image (`nvcr.io/nvidia/isaac-sim:6.2.0.1`, the 6.2.0 GA build -- see the `Dockerfile` `BASE_IMAGE` comment for why not `:6.2.0`) is publicly pullable — no `docker login nvcr.io` required.
 
@@ -36,7 +36,7 @@ Then pick **one** path. The stages are independent: build only the stage you are
 | An interactive shell to develop in | `just docker build` (devel) | `just docker run` |
 | Watch the sim over WebRTC | `just docker build -t stream` | `just docker run -t stream -d`, then [Connecting to the WebRTC livestream](#connecting-to-the-webrtc-livestream) |
 
-A cold first build takes about an hour. It pulls the 20.7 GB NGC base image and then installs Isaac Lab; GitHub-hosted CI builds took 45 to 84 min ([45 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237), [58 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953), [84 min](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)). Later builds reuse the layer cache, and the other stages share those layers, so building a second stage takes seconds to minutes.
+A cold build pulls the 20.7 GB NGC base image. Pull time depends on network speed. Later builds reuse cached layers across stages.
 
 Production stages (both idle on startup — exec driver scripts into the running container):
 
@@ -95,7 +95,7 @@ Every checkout of this repo on a host used to resolve the same image tag (`<hub>
 - `./script/checkout_identity.sh isolate` writes `[[image.rules]] rule = "string:isaac-<dir>-<hash>"` (and `[project] name`) into the gitignored `setup.local.toml`. The image tag, the compose project and the container names all follow it. `./script/checkout_identity.sh show` prints what this checkout resolves to.
 - The pre build / run / stop hooks refuse to act on the shared names. `ISAAC_ALLOW_SHARED_IDENTITY=1` overrides that; CI's build steps use it.
 - `just docker run` does not rebuild an image that already exists (base#1552). After pulling changes, run `just docker build -t <stage>` before `just docker run -t <stage>`.
-- Disk cost: each checkout or worktree that builds has its own image tags (`<hub>/isaac-<dir>-<hash>:<stage>`). The nominal size shown by `docker images` is about 31 GB per stage tag. Shared layers mean removing a tag reclaims less disk space. Deleting the checkout directory leaves the images in the Docker daemon.
+- Disk cost: each checkout or worktree that builds has its own image tags (`<hub>/isaac-<dir>-<hash>:<stage>`). The nominal size shown by `docker images` is about 21 GB per stage tag. Shared layers mean removing a tag reclaims less disk space. Deleting the checkout directory leaves the images in the Docker daemon.
 - Cleaning up a deleted checkout: take the `isaac-<dir>-<hash>` name from `./script/checkout_identity.sh show` (run it before deleting the directory; it needs `.env.generated`) or from `docker images`. A custom `PROJECT_NAME` can differ from `<hub>-<slug>`. Copy the project from the label output on the row for the deleted checkout's image.
 
   ```bash

@@ -1,6 +1,6 @@
 # TEST.md
 
-**234 tests** total (bats). Hosted pytest collects **946 tests**.
+**233 tests** total (bats). Hosted pytest collects **944 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 130 | 802 | 36 | 968 |
+| core | 129 | 800 | 36 | 965 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -178,7 +178,7 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `NVIDIA's full streaming Kit experience is present and readable` | Checks that the image user can read the bundled `/isaac-sim/apps/isaacsim.exp.full.streaming.kit`. |
 | `devel stage drops the NGC Kit healthcheck (idle containers are not 'unhealthy')` | The NGC base image's HEALTHCHECK greps a Kit log for `App is loaded`. devel / headless / stream / test idle with no Kit by design, so the devel stage (inherited by the others) resets it with `HEALTHCHECK NONE`. |
 
-## test/bats/smoke/isaac_smoke.bats (10)
+## test/bats/smoke/isaac_smoke.bats (9)
 
 | Test | Description |
 |------|-------------|
@@ -189,8 +189,7 @@ Pass/fail decision logic of the Tier A stream smoke (`script/ci/stream_smoke_lib
 | `HOME is writable` | `${HOME}` is owned by the runtime user — required for cache / logs / Documents writes |
 | `bundled ROS 2 humble + jazzy libs are both readable` | `librmw_fastrtps_cpp.so` present under both `humble/lib/` and `jazzy/lib/` in the official base image |
 | `bundled ROS 2 humble + jazzy rclpy are both readable (Python 3.12)` | `rclpy/` Python bindings present under both distros; kit-side `import rclpy` resolves to whichever the bridge extension activates |
-| `Isaac Lab targets the Isaac Sim release the image bundles` | Isaac Lab's `[tool.isaaclab.versions] isaacsim` (root `pyproject.toml`) names the same `X.Y.Z` as `/isaac-sim/VERSION` -- bumping `BASE_IMAGE` without `ISAACLAB_VERSION` (or the reverse) fails at build time, not at first Kit boot (isaac#295) |
-| `Isaac python torch is Isaac Lab's pinned CUDA 13 build` | The torch distribution on the Isaac python is exactly Isaac Lab's pinned version with `+cu130` (sm_120 kernels for the RTX 5090 runner); any other build means a later pip step overrode Isaac Lab's install (isaac#295) |
+| `optional training and URDF packages are absent from standalone Sim Python` | Each package import raises a top-level `ModuleNotFoundError` in the NVIDIA Python launcher (isaac#480). |
 | `no pip_prebundle package lost its __init__.py (isaac#288)` | No dangling `__init__.py` symlink under any `pip_prebundle` -- the 6.0.1 build left `packaging` dangling under `omni.services.pip_archive`, breaking matplotlib plots and the Newton experience |
 
 ## test/bats/smoke/init_isaac_dirs_spec.bats (13)
@@ -414,11 +413,11 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **946 tests** on a host without Isaac Sim. isaac#478 adds 22 core cases for the scene backend and override contract. isaac#535 adds one stream case for camera framing. isaac#536 adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#446 adds four core cases for the NumPy pin. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **944 tests** on a host without Isaac Sim. isaac#478 adds 22 core cases for the scene backend and override contract. isaac#535 adds one stream case for camera framing. isaac#536 adds two core removal guards. isaac#429 adds 18 net core cases. isaac#474 adds 40 core cases for host UID/GID setup and the recursive ownership guard. isaac#375 adds 6 core cases for AST-based detection of hard-coded variants. isaac#480 replaces four NumPy pin cases with two base-dependency guards. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total from 885 to 888 before isaac#276 removed 35 core tests. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
-| `test_dockerfile_numpy_pin.py` | 4 | `core`. The numpy restore RUN (isaac#446) must follow the Isaac Lab install and precede the `pip_prebundle` integrity check. It pins numpy to the version read from Isaac Sim's `pip_prebundle` numpy dist-info, asserts `numpy.__version__` at build time, and uses no shell pipe (hadolint DL4006). No docker/GPU. |
+| `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
 | `test_setup_isaac_sample.py` | 16 | `core`. Checks the documented TOML sample, model search path, read-only model mount, repo mounts after merging, absence of personal paths and URDF references, and sample references and no references to the unavailable `just run scene` recipe in all four READMEs (isaac#338). |
 | `test_stage_names_docs.py` | 4 | `docs` (isaac#86). Checks the driver for `headless-stream` and the standalone livestream SOP and ZED installation guide for retired stage names, the `isaac-headless` container name and stale headless prose. Requires the SOP to include both `run -t stream -d` (start the idle container) and `exec -t stream /isaac-sim/runheadless.sh` (start Kit inside it). |
 | `test_check_stale_naming.py` | 14 | `core`. Checks retired-name boundaries, path exclusions, and one allowed occurrence per phrase per line. Covers working-tree edits, file and line diagnostics, missing Git or checkout, and the move from Bats to a `core-unit` step after checkout (isaac#458). |

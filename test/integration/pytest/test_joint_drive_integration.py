@@ -17,7 +17,7 @@ RUNNER = Path(__file__).parent / "_joint_drive_runner.py"
 PYTHON_SH = "/isaac-sim/python.sh"
 RUN_TIMEOUT_SEC = 240
 
-# Isaac Lab scales the angular gains by pi/180 when writing the DriveAPI.
+# Core Experimental scales angular gains by pi/180 when writing the DriveAPI.
 STIFFNESS = 800.0
 DAMPING = 40.0
 _DEG2RAD = math.pi / 180.0

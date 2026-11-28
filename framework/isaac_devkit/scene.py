@@ -265,9 +265,7 @@ def _material_diffuse_for(entry, repo_root):
     The entry may carry a ``material`` key pointing to a material YAML
     (repo-relative) plus an optional ``variant`` selection. We reuse the
     pure ``materials.material_cfg_from_yaml`` mapper (#153) and take the
-    diffuse color of the FIRST prim that declares one -- the minimal hook
-    so ``build_scene`` can attach a ``PreviewSurfaceCfg``. Full per-prim
-    material GPU coverage is #154. No material key -> None (skip).
+    first declared diffuse color for the spawn-time PreviewSurfaceMaterial.
     """
     material_rel = entry.get("material")
     if not material_rel:

@@ -51,43 +51,24 @@ setup() {
   assert_dir_exists /isaac-sim/exts/isaacsim.ros2.core/jazzy/rclpy/rclpy
 }
 
-# Isaac Lab is installed against the bundled Isaac Sim (the _isaac_sim
-# symlink), so the two must be the release pair NVIDIA ships together.
-# Isaac Lab 3.0 records the Isaac Sim it targets in its root pyproject
-# ([tool.isaaclab.versions] isaacsim = "X.Y.Z.N"); /isaac-sim/VERSION
-# reads "X.Y.Z-rc.N+...". Bumping one pin without the other fails here
-# instead of at the first Kit boot (isaac#295).
-@test "Isaac Lab targets the Isaac Sim release the image bundles" {
-  local sim lab
-  sim="$(cut -d- -f1 /isaac-sim/VERSION)"
-  run /isaac-sim/kit/python/bin/python3 -c '
-import tomllib
-with open("/opt/IsaacLab/pyproject.toml", "rb") as f:
-    print(tomllib.load(f)["tool"]["isaaclab"]["versions"]["isaacsim"])
-'
-  assert_success
-  lab="${output}"
-  [[ "${lab}" == "${sim}" || "${lab}" == "${sim}".* ]] || {
-    echo "Isaac Lab targets isaacsim ${lab}, image bundles ${sim}" >&2
-    return 1
-  }
-}
+@test "optional training and URDF packages are absent from standalone Sim Python" {
+  for module in isaaclab torch xa"cro"; do
+    run /isaac-sim/python.sh -c '
+from importlib import import_module
+from sys import argv
 
-# Isaac Lab's installer owns the torch install and pulls its pinned
-# version from the CUDA 13 index (cu130 carries sm_120 kernels for the
-# RTX 5090 runner). A different build on the Isaac python means another
-# pip step overrode it (isaac#295).
-@test "Isaac python torch is Isaac Lab's pinned CUDA 13 build" {
-  local pin
-  pin="$(/isaac-sim/kit/python/bin/python3 -c '
-import tomllib
-with open("/opt/IsaacLab/pyproject.toml", "rb") as f:
-    print(tomllib.load(f)["tool"]["isaaclab"]["versions"]["torch"])
-')"
-  run /isaac-sim/kit/python/bin/python3 -c \
-    'import importlib.metadata as m; print(m.version("torch"))'
-  assert_success
-  assert_output "${pin}+cu130"
+try:
+    import_module(argv[1])
+except ModuleNotFoundError as error:
+    if error.name != argv[1]:
+        raise
+    print(f"ModuleNotFoundError: {error}")
+else:
+    raise SystemExit(f"{argv[1]} unexpectedly imports")
+' "${module}"
+    assert_success
+    assert_output "ModuleNotFoundError: No module named '${module}'"
+  done
 }
 
 # Isaac Sim shares prebundled packages between extensions as symlink

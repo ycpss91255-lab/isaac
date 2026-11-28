@@ -4,16 +4,16 @@
 
 NVIDIA Isaac Sim 6.2.0 Docker 開發環境，以 [`ycpss91255-lab/base`](https://github.com/ycpss91255-lab/base)（前身為 `ycpss91255-lab/template`）為基礎建立。
 
-場景生成與 articulation drive 預設值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。映像檔也包含 NVIDIA Isaac Lab 3.0（`v3.0.0`）。資產物理參數在 sim_asset 設定，由 asset_converter 寫入 USD。`IsaacDriver` 透過 `isaacsim.SimulationApp` 啟動 Kit。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
+場景生成與 articulation drive 預設值使用 Isaac Sim Core Experimental（`isaacsim.core.experimental`）。資產物理參數在 sim_asset 設定，由 asset_converter 寫入 USD。`IsaacDriver` 透過 `isaacsim.SimulationApp` 啟動 Kit。下游 application node（CoreSAM、AGV bring-up）以及對接 Noetic 的 ROS 1 / ROS 2 bridge 放在相鄰的 docker folder。
 
 本 repo 同時內含 Isaac Sim workspace 內容（driver script、ADR、USD 模型）於 [`src/`](../src/README.md)；root 的 Dockerfile + base subtree 是執行該 workspace 的開發環境。兩者原本分屬 `ycpss91255-lab/isaac` 與 `ycpss91255-lab/isaac`（research wraps docker via submodule），依 [#78](https://github.com/ycpss91255-lab/isaac/issues/78) 合併至此。
 
 ## 前置需求
 
-- NVIDIA driver `>= 580`（Isaac Lab 3.0 會裝 CUDA 13 版 PyTorch；NVIDIA 以 595.58.03 測過 Isaac Sim 6.2.0；本 repo 已在 driver 610 驗證）
+- NVIDIA Linux x86_64 驅動程式 `595.58.03`（NVIDIA 驗證 Isaac Sim 6.2.0 的版本）。[官方需求](https://docs.isaacsim.omniverse.nvidia.com/6.2.0/installation/requirements.html)
 - GPU `>= RTX 4080`（或同等級），VRAM `>= 16 GB`
 - Docker + nvidia-container-toolkit
-- 約 50 GB 空閒空間。build 出來的 image 約 31 GB，其中 20.7 GB 是 NGC base image、約 10 GB 是 Isaac Lab 與工具鏈；其他 stage 共用這些 layer。build 時還需要預留 BuildKit cache 的空間，首次啟動後 cache 目錄會再長 5–10 GB
+- 約 50 GB 空閒空間。執行映像約 21 GB，包含 20.7 GB 的 NGC 基底。各 stage 共用映像層。請預留 BuildKit 空間，以及首次啟動後的 5–10 GB 快取。
 
 NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；為何不用 `:6.2.0` 見 `Dockerfile` `BASE_IMAGE` 註解）公開可拉，不需 `docker login nvcr.io`。
 
@@ -36,7 +36,7 @@ NGC image（`nvcr.io/nvidia/isaac-sim:6.2.0.1`，即 6.2.0 GA build；為何不�
 | 一個用來開發的互動 shell | `just docker build`（devel） | `just docker run` |
 | 透過 WebRTC 看模擬畫面 | `just docker build -t stream` | `just docker run -t stream -d`，接著看「連接 WebRTC livestream」 |
 
-冷啟動的第一次 build 大約要一小時：先 pull 20.7 GB 的 NGC base image，再安裝 Isaac Lab。GitHub-hosted CI 的 build 花了 45 到 84 分鐘（[45 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42550974606/job/128946327237)、[58 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42545601510/job/128929863953)、[84 分](https://github.com/ycpss91255-lab/isaac/actions/runs/42491566385/job/128764928999)）。之後的 build 會重用 layer cache，其他 stage 也共用這些 layer，所以 build 第二個 stage 只要幾秒到幾分鐘。
+首次建置會下載 20.7 GB 的 NGC 基底映像，所需時間取決於網路速度。後續建置可跨 stage 重用快取層。
 
 Production stage（兩個 stage 啟動後都 idle — driver 腳本用 exec 送進執行中的 container）：
 
@@ -95,7 +95,7 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 - `./script/checkout_identity.sh isolate` 會把 `[[image.rules]] rule = "string:isaac-<dir>-<hash>"`（含 `[project] name`） 寫進 gitignored 的 `setup.local.toml`。image tag、compose project 與 container 名稱都跟著它走。`./script/checkout_identity.sh show` 會印出這個 checkout 解析出的名稱。
 - pre build / run / stop hook 會拒絕對共用名稱動作。`ISAAC_ALLOW_SHARED_IDENTITY=1` 可以略過；CI 的 build 步驟就是這樣用。
 - `just docker run` 不會重 build 已存在的 image（base#1552）。pull 新變更後，先 `just docker build -t <stage>` 再 `just docker run -t <stage>`。
-- 磁碟用量：每個會 build 的 checkout 或 worktree 都有自己的 image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）。`docker images` 顯示每個 stage tag 名義上約 31 GB。因為有共用層，移除 tag 時實際回收的空間較少。刪掉 checkout 目錄後，image 仍留在 Docker daemon。
+- 磁碟用量：每個會 build 的 checkout 或 worktree 都有自己的 image tag（`<hub>/isaac-<dir>-<hash>:<stage>`）。`docker images` 顯示每個 stage tag 名義上約 21 GB。因為有共用層，移除 tag 時實際回收的空間較少。刪掉 checkout 目錄後，image 仍留在 Docker daemon。
 - 清理已刪除的 checkout：從 `./script/checkout_identity.sh show`（刪目錄前執行；需要 `.env.generated`）或 `docker images` 取得 `isaac-<dir>-<hash>` 名稱。自訂的 `PROJECT_NAME` 可能與 `<hub>-<slug>` 不同。請在標籤輸出中找到已刪除 checkout 的 image，複製同一行的 project 名稱。
 
   ```bash
