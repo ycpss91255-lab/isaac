@@ -324,12 +324,17 @@
 # isaac#408 再新增 5 項 GPU 工作流程清理測試（hosted 1018 → 1023，core 874 → 879）。
 # isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
 # isaac#336: USD driver and launcher (+12 core) and per-module import guards (+2 core) (hosted 1004 -> 1018, core 860 -> 874).
+# isaac#562 adds one core case for a standalone probe that exits after writing READY (hosted 1039 -> 1040, core 887 -> 888).
+# isaac#274: test_arch_overview.py adds 8 docs cases (hosted 1023 -> 1031).
+# isaac#558 adds eight core cases for the step timeout, process-group timeout,
+# watchdog default, runner assumption and four READMEs (hosted 1031 -> 1039, core 879 -> 887).
+# isaac#556 adds seven stream probe cases (hosted 1040 -> 1047, stream 55 -> 62).
+# isaac#527 adds 4 core tests for GPU timing reports (hosted 1047 -> 1051, core 888 -> 892).
+# isaac#549 adds ten core container-default cases and four README cases (1023 -> 1037).
+# isaac#549 adds four core README checks for stale host PID claims (core +14, docs +4 in total; merged with main: hosted 1051 -> 1069).
 # isaac#567 retires the material suite, two diffuse-color cases, and three
-# per-module checks. Asset-owned materials add 14 core and 2 stream cases.
-# Hosted 1023 -> 1013, core 879 -> 859, stream 55 -> 57.
-# isaac#567 adds 5 cases for material keys on the robot, environment, light and scene root (hosted 1013 -> 1018, core 859 -> 864).
-HOSTED_UNIT_BASELINE = 1018
-# isaac#274: test_arch_overview.py adds 8 docs cases.
+# per-module checks, adds 14 core and 2 stream cases, then 5 core cases for material keys on robot/environment/light/scene root (merged with main: hosted 1069 -> 1056, core 906 -> 891, stream 62 -> 64).
+HOSTED_UNIT_BASELINE = 1056
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -337,7 +342,7 @@ HOSTED_UNIT_BASELINE = 1018
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1018。
+#   以下五組的測試數量下限合計為 1056。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -380,15 +385,15 @@ HOSTED_UNIT_BASELINE = 1018
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 864
+HOSTED_UNIT_BASELINE_CORE = 891
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 57
+HOSTED_UNIT_BASELINE_STREAM = 64
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#289 adds 24 docs cases (docs 44 -> 68).
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).
 #   isaac#86 adds 4 docs cases (docs 79 -> 83).
 #   isaac#274 adds 8 docs cases (docs 83 -> 91).
-HOSTED_UNIT_BASELINE_DOCS = 91
+HOSTED_UNIT_BASELINE_DOCS = 95
 
 # GPU_INTEGRATION_BASELINE -- the self-hosted GPU integration suite
 #   (test/integration/). NOT enforced at M1 (a skipped GPU job is
@@ -496,6 +501,6 @@ AGGREGATE_TARGET = 126
 # isaac#480 replaces two package pin checks with one standalone Python smoke.
 BATS_BASELINE_CORE = 129
 BATS_BASELINE_GUI = 0
-BATS_BASELINE_STREAM = 91
+BATS_BASELINE_STREAM = 94
 BATS_BASELINE_HEADLESS = 13
 BATS_BASELINE_DOCS = 0

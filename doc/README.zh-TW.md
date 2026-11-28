@@ -100,7 +100,7 @@ Kit 每次啟動都會印出幾種不影響執行的警告：
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-不要直接用 `pkill -f <script>`。container 以 `pid: host` 執行，這個 pattern 也會比對到 host 與其他 container 裡的 process。若要全部停掉，`just docker stop` 會移除這個 checkout 的 container，連同裡面執行中的 Kit。
+每個 container 都有自己的 PID namespace，因此在裡面執行的 `pkill` 只看得到該 container 裡的 process。不要直接用 `pkill -f <script>`，因為這個 pattern 仍可能比對到同一個 container 裡的其他 process。若要全部停掉，用 `just docker stop` 移除這個 checkout 的 container，裡面執行中的 Kit 也會一起停止。
 
 ### 每個 checkout 一個 image 與一個 compose project
 
@@ -319,6 +319,27 @@ container 不回報 health 狀態（`HEALTHCHECK NONE`）。NGC base image 的 h
 
 容器以對齊 host UID 的非 root user 跑（`USER_NAME` 從 `.env` 讀，預設 UID 1000）。該 user 以數字 gid 加進 base image 官方帳號（從其 `USER` 探測，不寫死）的 group，可讀取 `/isaac-sim/*`（mode `0750`）。該群組可寫入 MJCF 匯入器與 UI 的 `data` 目錄，以及匯入器的 `data/mjcf`，讓 UI 能在輸入 XML 旁匯出 USD。透過 `/home/${USER_NAME}/work`（mount 到 host `${WS_PATH}`）寫的檔案會保留 host 端 owner，不需 `chown`。
 
+## 容器權限
+
+預設設定只授予無介面模擬與即時串流所需的最低權限。若 GUI 或特殊裝置需要額外權限，請從下列範例挑選所需的設定，加入 `setup.local.toml`。若只需開放單一裝置，請將 `/dev:/dev` 改為該裝置的路徑對應，例如 `/dev/video0:/dev/video0`。
+
+```toml
+[security]
+privileged = true
+
+[[devices.bindings]]
+path = "/dev:/dev"
+
+[[security.cap_add]]
+cap = "SYS_ADMIN"
+
+[[security.cap_add]]
+cap = "NET_ADMIN"
+
+[[security.cap_add]]
+cap = "MKNOD"
+```
+
 ## EULA
 
 `ACCEPT_EULA=Y` 與 `PRIVACY_CONSENT=Y` 透過 `setup.toml [environment]` 注入。注意：Isaac Sim 6.x 用 `OMNI_ENV_PRIVACY_CONSENT` 讀取 privacy consent（此名稱自 5.1 起採用，跟 5.1 之前的版本不同）；目前設的 `PRIVACY_CONSENT=Y` 無害但實際沒作用，要 telemetry opt-in 請另設正確的變數。
@@ -333,7 +354,7 @@ stream 組的 `stream-visual-e2e` GPU job 會啟動 stream stage，驗證 Chromi
 
 `core-gpu` 工作依序執行 Isaac Sim 官方 `asset` 與 `deprecated` Python 測試，並將兩份 JUnit 報告上傳至 `official-tests` 產物。
 
-`core-official-nativepython` 工作依 core 變更範圍執行 NVIDIA 官方的 standalone Python 測試桶，以及 livestream 與 hello_world 範例。本機執行方式與產物請見 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+`core-official-nativepython` 工作依 core 變更範圍執行 NVIDIA 官方的 standalone Python 測試桶，以及 livestream 與 hello_world 範例。測試桶中的每個案例預設限時 1500 秒，執行步驟限時 55 分鐘，整個工作限時 60 分鐘。本機執行方式與產物請見 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
 
 Workflow 與 job 的命名規則見 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 檢查。
 

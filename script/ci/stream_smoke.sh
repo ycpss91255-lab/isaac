@@ -46,7 +46,9 @@
 #   SMOKE_POLL             poll interval for both waits (default 5)
 #   SMOKE_LOG_TAIL         kit log lines printed on failure (default 60)
 #   SMOKE_SKIP_PORT_PREFLIGHT  set to 1 to skip the port checks before bring-up
-#   ISAAC_MEDIA_PORT       media port checked by the smoke (default 47998)
+#   ISAAC_SIGNAL_PORT      signal port unless host.yaml sets it (default 49100)
+#   ISAAC_MEDIA_PORT       media port (default 47998)
+#                          The smoke checks both resolved ports and passes them into the container.
 #   SMOKE_READY_MARKERS    newline-separated ordered kit-log markers that
 #                          define "the stream server is up and the app booted"
 #   SMOKE_STREAM_MARKERS   newline-separated ordered kit-log markers that
@@ -399,11 +401,10 @@ echo "[smoke] bring up stream stage (idle container + viewer)"
 cid="$(compose_smoke ps -q stream 2>/dev/null | head -1)"
 
 echo "[smoke] launch Isaac (detached) in ${cid:-<unresolved>}"
-# Source the per-host livestream port env the post-run hook copied in when
-# host.yaml pins any port (#231); absent => no-op, runheadless-host-config.sh
-# (unchanged) falls back to its ISAAC_*_PORT-from-env defaults.
+# Pass the resolved ports into the container. The shell then sources any
+# host.yaml port overrides copied in by the post-run hook (#231).
 launch_s=${SECONDS}
-docker exec -d "${cid}" \
+docker exec -d -e "ISAAC_SIGNAL_PORT=${signal_port}" -e "ISAAC_MEDIA_PORT=${media_port}" "${cid}" \
   sh -c 'set -a; [ -f /etc/isaac/livestream-ports.env ] && . /etc/isaac/livestream-ports.env; set +a; /usr/local/bin/runheadless-host-config.sh > /isaac-sim/kit/logs/stream-smoke.log 2>&1'
 
 echo "[smoke] wait up to ${timeout_s}s for the stream server + app boot:"

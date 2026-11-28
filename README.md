@@ -100,7 +100,7 @@ Ctrl+C in an interactive `just docker exec` reaches the script. Its SIGINT handl
 ./script/exec.sh -t headless bash -c 'pkill -INT -P "$(cat /tmp/isaac-driver.pid)"'
 ```
 
-Do not use a bare `pkill -f <script>`. The containers run with `pid: host`, so that pattern also matches processes on the host and in other containers. To stop everything instead, `just docker stop` removes this checkout's containers, and with them any Kit running inside.
+Each container uses a private PID namespace, so `pkill` inside it sees only that container's processes. Avoid a bare `pkill -f <script>` because it can still match other processes in the same container. To stop everything in this checkout, use `just docker stop` to remove its containers and stop any Kit running inside.
 
 ### One image and one compose project per checkout
 
@@ -319,6 +319,27 @@ First headless launch spends 1–3 min compiling shaders; subsequent launches st
 
 The container runs as a host-UID-aligned non-root user (`USER_NAME` from `.env`, UID 1000 by default). The user is added, by numeric gid, to the group of the base image's official account (probed from its `USER`, not hard-coded) so it can read `/isaac-sim/*` (mode `0750`). The MJCF importer and its UI grant this group write access to their `data` directories and the importer’s `data/mjcf` directory so the UI can export beside the source XML. Files written through `/home/${USER_NAME}/work` (mounted to `${WS_PATH}` on the host) keep their host owner — no `chown` dance.
 
+## Container permissions
+
+The defaults grant the minimum permissions needed for headless simulation and livestreaming. If your GUI or a special device needs more access, copy only the required settings below into `setup.local.toml`. To expose a single device, replace `/dev:/dev` with its mapping, such as `/dev/video0:/dev/video0`.
+
+```toml
+[security]
+privileged = true
+
+[[devices.bindings]]
+path = "/dev:/dev"
+
+[[security.cap_add]]
+cap = "SYS_ADMIN"
+
+[[security.cap_add]]
+cap = "NET_ADMIN"
+
+[[security.cap_add]]
+cap = "MKNOD"
+```
+
 ## EULA
 
 `ACCEPT_EULA=Y` and `PRIVACY_CONSENT=Y` are injected via `setup.toml [environment]`. Note: Isaac Sim 6.x reads privacy consent from `OMNI_ENV_PRIVACY_CONSENT` (the name adopted in 5.1, different from pre-5.1 versions); the `PRIVACY_CONSENT=Y` we currently set is harmless but has no effect — set explicitly if you want telemetry opt-in.
@@ -333,7 +354,7 @@ The stream group’s `stream-visual-e2e` GPU job boots the stream stage and chec
 
 The `core-gpu` job runs the official Isaac Sim `asset` and `deprecated` Python test buckets in sequence. Both JUnit reports are included in the `official-tests` artifact.
 
-The scoped `core-official-nativepython` job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
+The scoped `core-official-nativepython` job runs NVIDIA’s standalone Python test bucket and the livestream and hello_world examples. Each bucket case has a 1500-second timeout by default. The run step has a 55-minute limit within the 60-minute job. See [TEST.md](doc/test/TEST.md#official-isaac-sim-standalone-tests-437) for local execution and artifacts.
 
 Workflow and job names follow [doc/workflow-naming.md](doc/workflow-naming.md); `script/ci/lint_workflow_names.py` checks them.
 
