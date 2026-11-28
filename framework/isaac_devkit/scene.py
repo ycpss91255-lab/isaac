@@ -55,10 +55,14 @@ def load_scene(path, repo_root):
 
 
 def _validate_scene(scene, source):
+    for key in scene:
+        _reject_material_key(key)
     if "robot" not in scene:
         raise ValueError(f"{source}: missing 'robot' section")
 
     robot = scene["robot"]
+    for key in robot:
+        _reject_material_key(key)
     if "model" not in robot:
         raise ValueError(f"{source}: robot needs 'model'")
     if "pose" not in robot:
@@ -66,9 +70,13 @@ def _validate_scene(scene, source):
 
     _spawn_options(robot.get("spawn_overrides", {}), "usd")
     environment = scene.get("environment") or {}
+    for key in environment:
+        _reject_material_key(key)
     _spawn_options(environment.get("ground_overrides", {}), "ground")
     light = environment.get("light")
     if isinstance(light, dict):
+        for key in light:
+            _reject_material_key(key)
         _spawn_options(light.get("spawn_overrides", {}), "light")
 
     for i, obj in enumerate(scene.get("objects", [])):

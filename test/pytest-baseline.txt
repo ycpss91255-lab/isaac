@@ -327,7 +327,8 @@
 # isaac#567 retires the material suite, two diffuse-color cases, and three
 # per-module checks. Asset-owned materials add 14 core and 2 stream cases.
 # Hosted 1023 -> 1013, core 879 -> 859, stream 55 -> 57.
-HOSTED_UNIT_BASELINE = 1013
+# isaac#567 adds 5 cases for material keys on the robot, environment, light and scene root (hosted 1013 -> 1018, core 859 -> 864).
+HOSTED_UNIT_BASELINE = 1018
 # isaac#274: test_arch_overview.py adds 8 docs cases.
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
@@ -336,7 +337,7 @@ HOSTED_UNIT_BASELINE = 1013
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1013。
+#   以下五組的測試數量下限合計為 1018。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -379,7 +380,7 @@ HOSTED_UNIT_BASELINE = 1013
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 859
+HOSTED_UNIT_BASELINE_CORE = 864
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 57
 HOSTED_UNIT_BASELINE_HEADLESS = 6

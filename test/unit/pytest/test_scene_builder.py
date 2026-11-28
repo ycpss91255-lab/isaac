@@ -674,6 +674,28 @@ def test_load_scene_rejects_object_material_before_resolving_models(tmp_path, fi
     assert "URDF" in str(exc.value) and "USD" in str(exc.value)
 
 
+@pytest.mark.parametrize("field", [
+    "robot.material",
+    "robot.visual_material",
+    "environment.material",
+    "environment.light.material",
+    "material",
+])
+def test_load_scene_rejects_scene_material_before_resolving_models(tmp_path, field):
+    scene = _scene_dict(robot={"model": "missing-robot.usd"}, environment={"light": {}})
+    *sections, key = field.split(".")
+    target = scene
+    for section in sections:
+        target = target[section]
+    target[key] = None
+
+    path = tmp_path / "scene.yaml"
+    path.write_text(yaml.safe_dump(scene))
+    with pytest.raises(ValueError, match="material.*sim_asset.*asset_converter") as exc:
+        scene_builder.load_scene(path, tmp_path)
+    assert "URDF" in str(exc.value) and "USD" in str(exc.value)
+
+
 @pytest.mark.parametrize(("section", "key"), [
     ("object", "visual_material"),
     ("light", "material_path"),
