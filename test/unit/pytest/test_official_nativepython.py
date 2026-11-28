@@ -1,4 +1,5 @@
 """Hosted contracts for the Isaac Sim standalone CI job."""
+import importlib.util
 import os
 from pathlib import Path
 import signal
@@ -48,6 +49,31 @@ def test_gpu_workflow_step_timeout_leaves_time_for_artifacts():
     inputs = workflow["jobs"][f"core-{JOB}"]["with"]
     assert inputs["timeout-minutes"] == 60
     assert 55 <= inputs["step-timeout-minutes"] < inputs["timeout-minutes"]
+
+
+@pytest.fixture(scope="module")
+def watchdog():
+    """Load the watchdog from the script used by the workflow."""
+    spec = importlib.util.spec_from_file_location("bucket_watchdog", WATCHDOG)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_watchdog_default_case_timeout(watchdog):
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/ci-official-native-python.yaml").read_text()
+    )
+    inputs = workflow["jobs"][f"core-{JOB}"]["with"]
+    timeout = watchdog.DEFAULT_CASE_TIMEOUT_SECONDS
+    assert timeout == 1500
+    # Issue #437 recorded a 712-second Carter camera case under load.
+    assert 2 * 712 <= timeout < inputs["step-timeout-minutes"] * 60
+
+
+def test_watchdog_documents_runner_assumption(watchdog):
+    assert "subprocess.run" in watchdog.__doc__
+    assert "print_live_output" in watchdog.__doc__
 
 
 def test_watchdog_times_out_one_case_and_finishes_bucket(tmp_path):

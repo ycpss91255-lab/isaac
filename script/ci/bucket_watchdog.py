@@ -1,10 +1,19 @@
-"""Run the official bucket with a time limit on each case's process group."""
+"""Run the official bucket with a time limit on each case's process group.
+
+The watchdog replaces subprocess.run globally in the interpreter that runs
+NVIDIA's run_tests.py. It relies on the runner launching each case through
+subprocess.run. Both of the runner's call sites are in the print_live_output=True
+path used by its main(). Any new subprocess.run call in the runner would also
+inherit the limit. Recheck these assumptions when upgrading Isaac Sim.
+"""
 
 import os
 import runpy
 import signal
 import subprocess
 import sys
+
+DEFAULT_CASE_TIMEOUT_SECONDS = 1500
 
 
 def _run_case(
@@ -27,7 +36,9 @@ def _run_case(
         subprocess.TimeoutExpired: The case exceeded its time limit.
         subprocess.CalledProcessError: The case failed with check enabled.
     """
-    case_timeout = int(os.environ.get("CASE_TIMEOUT_SECONDS", "600"))
+    case_timeout = int(
+        os.environ.get("CASE_TIMEOUT_SECONDS", DEFAULT_CASE_TIMEOUT_SECONDS)
+    )
     timeout = case_timeout if timeout is None else min(timeout, case_timeout)
     if input is not None:
         if kwargs.get("stdin") is not None:
