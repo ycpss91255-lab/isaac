@@ -332,8 +332,9 @@
 # isaac#527 adds 4 core tests for GPU timing reports (hosted 1047 -> 1051, core 888 -> 892).
 # isaac#549 adds ten core container-default cases and four README cases (1023 -> 1037).
 # isaac#549 adds four core README checks for stale host PID claims (core +14, docs +4 in total; merged with main: hosted 1051 -> 1069).
-# isaac#88: add 12 core cases for 3D and 2D lidar callbacks (merged with main: hosted 1069 -> 1081, core 906 -> 918).
-HOSTED_UNIT_BASELINE = 1081
+# isaac#574 adds three core cases for Git metadata mounts (hosted 1069 -> 1072, core 906 -> 909).
+# isaac#88: add 12 core cases for 3D and 2D lidar callbacks (merged with main: hosted 1072 -> 1084, core 909 -> 921).
+HOSTED_UNIT_BASELINE = 1084
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -384,7 +385,7 @@ HOSTED_UNIT_BASELINE = 1081
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 918
+HOSTED_UNIT_BASELINE_CORE = 921
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 62
 HOSTED_UNIT_BASELINE_HEADLESS = 6
