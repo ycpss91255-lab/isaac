@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Added
-- **每晚執行 NVIDIA 官方 standalone 測試（isaac#437）。** 排程與手動派送共用 `stream-smoke` 的 GPU runner，驗證 headless 映像的 41 項 `nativepythontests:testing` 案例、livestream、hello_world 與 `IsaacDriver` 啟動設定。成功與失敗均上傳 JUnit、範例與 driver 日誌。Hosted pytest 從 955 增至 965 項（core 811 → 821）。
+- **在 core CI 執行 NVIDIA 官方 standalone 測試（isaac#437）。** 使用共用 GPU runner 驗證 headless 映像的 41 項 `nativepythontests:testing` 案例，以及 livestream 與 hello_world 範例。同一 job 透過既有 Kit 探針驗證 `IsaacDriver` 的啟動設定。成功與失敗均上傳 JUnit、範例與 driver 日誌。Hosted pytest 從 964 增至 975 項（core 820 增至 831）。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
