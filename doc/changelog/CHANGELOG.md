@@ -4,7 +4,7 @@
 
 ### Added
 - **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
-- **新增 standalone smoke 就緒訊息的回歸測試（isaac#562）。** 模擬第一次檢查未找到 `READY`，而探針在存活檢查前已輸出 `READY` 並結束的情況。測試要求腳本回報 `PASS probe.py`。Hosted 基準由 1031 增至 1032，core 組由 879 增至 880。
+- **新增 standalone smoke 就緒訊息的回歸測試（isaac#562）。** 模擬第一次檢查未找到 `READY`，而探針在存活檢查前已輸出 `READY` 並結束的情況。測試要求腳本回報 `PASS probe.py`。Hosted 基準由 1039 增至 1040，core 組由 887 增至 888。
 - **加強 GPU 工作流程的容器清理測試（isaac#408）。** 驗證 `core-gpu` 依序呼叫六個腳本替身，並確認新增的 Docker 呼叫會被攔截。分別改動腳本與工作流程的專案前綴，驗證兩者不一致時會比對失敗。所有依執行編號設定 Compose 專案的入口腳本，其呼叫端都須傳入含執行編號與嘗試次數的清理篩選器。新增 5 項 core 案例，hosted 基準由 1018 增至 1023，core 由 874 增至 879。
 - **新增 Python 輸出模式的 GPU 整合測試（isaac#390）。** 測試放在 `test/integration/no_ros/`，因為檢查內容需要提到 ROS 2 bridge 節點名稱。驗證 Jetbot 相機的 RGB 回呼能收到影格，並確認 OmniGraph 中的 ROS 2 bridge 節點數為零。暖機 30 步後量測 300 步的平均耗時與第 95 百分位數，要求後者低於 33.3 毫秒。GPU 測試基準由 36 提高至 39。
 - **`core-gpu` 執行 Isaac Sim 官方 core 與 sensors 測試（isaac#438）。** 串行驗證 18 支 core 與 14 支 sensors 腳本，並保留各桶的 JUnit 與 Kit log。檢查四個 RTX 回歸案例及兩個已知的 actuator skips，僅排除官方映像會崩潰的 tiled camera 案例。Hosted 基準由 1000 提高至 1002（core 856 → 858）。
@@ -34,6 +34,7 @@
 
 ### Fixed
 
+- **限制官方 standalone Python 測試的執行時間（isaac#558）。** 每個案例預設最多執行 1500 秒，可用 `CASE_TIMEOUT_SECONDS` 調整。暖機後且無資源競爭時，單一案例實測最長為 331 秒；#437 記錄的 Carter 相機案例在高負載下耗時 712 秒，預設上限約為其兩倍。逾時時會終止該案例的程序群組，讓 runner 能記錄 JUnit 失敗並繼續下一個案例。工作上限為 60 分鐘，執行步驟上限為 55 分鐘，以預留清理與上傳產物的時間。Hosted pytest 基準由 1000 增至 1008（core 856 → 864）。
 - **校正測試數量（isaac#416）。** 修正 `just cleanup-merged` 條目的 Bats 數量。TEST.md 的 hosted 總數集中在檔首，新增 2 個 core 測試防止舊數字與重複摘要再度出現。Hosted 基準由 986 提高至 988（core 842 → 844）。
 - **standalone smoke 使用可覆寫的 checkout 與容器腳本路徑（isaac#399）。** 預設使用腳本所在的 checkout，並在現行 `stream` 服務中從掛載的 checkout 讀取腳本。可用 `ISAAC_SMOKE_REPO_DIR` 與 `ISAAC_SMOKE_SCRIPT_DIR` 覆寫路徑。空矩陣會正常退出。Docker ShellCheck 納入此腳本，hosted 共 955 項（core 811）。
 - **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 859 -> 863（core 716 -> 720）。
