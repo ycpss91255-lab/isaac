@@ -174,7 +174,10 @@ def _run_gpu_job(tmp_path, mutation=None):
     stub_bin = tmp_path / "bin"
     stub_bin.mkdir()
     # PATH 僅開放共用腳本使用的系統工具，新增其他外部指令時會立即報錯。
-    for name in ("awk", "bash", "chmod", "dirname", "ln", "mkdir", "rm", "sed"):
+    for name in (
+        "awk", "bash", "chmod", "cp", "dirname", "find", "flock", "ln", "mkdir",
+        "mv", "rm", "sed", "sort",
+    ):
         (stub_bin / name).symlink_to(shutil.which(name, path="/usr/bin:/bin"))
     for name in ("docker", "git", "sudo", "ssh"):
         message = f"UNSTUBBED {name}"
