@@ -14,6 +14,7 @@ for file in testing.xml livestream.log hello_world.log driver.log; do
 done
 
 probe="test/integration/pytest/_kit_extra_args_runner.py"
+timing_helper="test/integration/pytest/_kit_boot.py"
 
 # Bridge networking lets the upstream scripts install their pip requirements.
 docker run --rm --gpus all --network bridge \
@@ -24,6 +25,7 @@ docker run --rm --gpus all --network bridge \
   -v "${artifacts}:/artifacts" \
   -v "${PWD}/framework:/workspace/framework:ro" \
   -v "${PWD}/${probe}:/workspace/${probe}:ro" \
+  -v "${PWD}/${timing_helper}:/workspace/${timing_helper}:ro" \
   -v "${PWD}/script/ci/bucket_watchdog.py:/tmp/bucket_watchdog.py:ro" \
   -v "${PWD}/script/ci/nativepython_in_container.sh:/tmp/nativepython_in_container.sh:ro" \
   --entrypoint bash "${DOCKER_HUB_USER:?}/${IMAGE_NAME:?}:headless" \

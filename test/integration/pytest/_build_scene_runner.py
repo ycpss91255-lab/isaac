@@ -48,9 +48,10 @@ def _main() -> None:
     # Disable livestreaming for the headless scene check.
     os.environ["ISAAC_LIVESTREAM"] = "0"
 
-    from isaacsim import SimulationApp
+    from _kit_boot import time_kit_boot
 
-    app = SimulationApp({"headless": True})
+    with time_kit_boot() as SimulationApp:
+        app = SimulationApp({"headless": True})
     # Default to failure so any escape that skips both branches below still
     # exits non-zero (the pytest layer asserts returncode == 0).
     exit_code = 1

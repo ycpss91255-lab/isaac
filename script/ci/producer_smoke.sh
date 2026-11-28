@@ -69,9 +69,9 @@ trap 'exit 143' TERM
 
 log "image=${IMAGE} signal_port=${SIGNAL_PORT}"
 
-# `--user 0:0` mirrors what consumers must do while isaac#244 is open, and
-# --ipc=host is required: Kit boots on the default 64 MB /dev/shm but the media
-# pipeline allocates on client ATTACH, so its absence is invisible until step 3.
+# `--user 0:0` mirrors what consumers must do while isaac#244 is open.
+# This standalone run keeps --ipc=host as the consumer baseline. Isaac defaults to
+# private IPC and passed stream-smoke with both the default 64 MB and 16g (isaac#549).
 docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
 docker run -d --name "${CONTAINER}" \
   --network=host --ipc=host --gpus all --user 0:0 \

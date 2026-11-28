@@ -1,6 +1,6 @@
 # ROS independence checks
 
-These reverse tests verify that Isaac can run without a ROS dependency and does not load any ROS modules when no I/O plugin is configured. This is deliberately the only directory under `test/integration/` where tests may name ROS modules. The suite runs in the same GPU job as the other integration tests.
+These reverse tests verify that Isaac can run without a ROS dependency and does not load any ROS modules when no I/O plugin is configured. This is deliberately the only directory under `test/integration/` where tests may name ROS modules. The suite runs in the same GPU job as the other integration tests. The `[FILE-TIMING]` report excludes the test files in this directory.
 
 | File | Purpose |
 | --- | --- |
