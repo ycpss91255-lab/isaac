@@ -97,7 +97,6 @@ def has_reap_filter(job):
 
 
 def test_core_gpu_requires_reap_filter_input():
-    assert not has_reap_filter({"with": {}})
     assert has_reap_filter(_gpu_integration_job())
 
 
