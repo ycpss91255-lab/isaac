@@ -119,6 +119,7 @@ def test_reap_filter_matches_script_baseline_project(tmp_path):
     for rel, body in (
         ("script/setup.sh", _STUB_SETUP),
         ("script/build.sh", _STUB_BUILD),
+        ("script/ci/official_startuptests.sh", "#!/usr/bin/env bash\ntrue\n"),
         ("test/assert_pytest_baseline.sh", _STUB_BASELINE),
     ):
         (tmp_path / rel).write_text(body, encoding="utf-8")

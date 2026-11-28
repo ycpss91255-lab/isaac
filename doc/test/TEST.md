@@ -1,6 +1,6 @@
 # TEST.md
 
-**223 tests** total (bats). Hosted pytest collects **885 tests**.
+**228 tests** total (bats). Hosted pytest collects **888 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 119 | 742 | 39 | 900 |
+| core | 124 | 745 | 39 | 908 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 54 | 0 | 145 |
 | headless | 13 | 6 | 0 | 19 |
@@ -264,13 +264,18 @@ Behavioral guard for `script/checkout_identity.sh` and the pre build/run/stop ho
 | `guard: no .env.generated yet -> nothing to check, passes` | No resolved identity means nothing to refuse. |
 | `pre hooks: build/run/stop refuse a shared checkout and pass an isolated one` | The real baked hooks exit non-zero on the shared identity and zero on an isolated one. |
 
-## test/bats/smoke/gpu_job_scripts_spec.bats (11)
+## test/bats/smoke/gpu_job_scripts_spec.bats (16)
 
-Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. Hermetic -- stub `setup.sh` / `build.sh` / `assert_pytest_baseline.sh`, no docker or GPU.
+Behavioral guard for the self-hosted GPU job scripts (`script/ci/gpu_integration_job.sh`, `script/ci/stream_smoke_job.sh`). Both jobs run through the org reusable workflow `gpu-self-hosted.yml`, which owns the runner, the fork-PR gate, the pre-checkout workspace reclaim and the checkout, and then runs one repo script. This spec pins what those steps do: the order, the `WS_PATH` pin, which env reaches which command, the writable cache dirs, and that a failing step fails the job. The Docker stub executes the mounted startup script with a temporary home directory. Its fixture `run_tests.py` writes JUnit to `/tmp/r.xml` and a Kit log under `$HOME/.nvidia-omniverse/logs/Kit/Isaac-Sim Streaming (Newton)/6.2/`. The spec runs without Docker or a GPU.
 
 | Test | Description |
 |------|-------------|
-| `gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline -- in order` | The five steps fire in the expected order with the expected env. |
+| `gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline, official startuptests -- in order` | The job runs the official suite once after a successful GPU baseline. A baseline failure stops the job before the suite. |
+| `gpu integration job: successful startuptests retain JUnit and the Kit log` | Checks the passing JUnit report in `artifacts/startuptests/r.xml` and the Kit log under `kit-logs/` with its app and version directories preserved. |
+| `gpu integration job: failed startuptests fail the job and retain JUnit and the Kit log` | Checks that the job returns the fixture's exit code 23 and retains both the failing JUnit report and that run's Kit log. |
+| `gpu integration job: JUnit failure fails the job even when run_tests.py exits zero` | A single `<testsuite>` reports one failure for `tests-startup.main.sh` with the message `Exit code: 55`. The job fails and retains the report and Kit log. |
+| `gpu integration job: an error inside testsuites fails the job even when run_tests.py exits zero` | A suite inside `<testsuites>` reports one error and zero failures. The job fails and retains the report and Kit log. |
+| `gpu integration job: a truncated JUnit report fails the job even when run_tests.py exits zero` | The report is missing its closing tag. The job fails and retains the truncated XML and Kit log. |
 | `gpu integration job: works from any cwd (resolves the repo root itself)` | Invoked from `/`, the script resolves its own repo root. |
 | `gpu integration job: a failed build fails the job before the GPU suite` | A build failure (`BUILD_RC=3`) exits non-zero and does not reach the baseline step. |
 | `stream smoke job: apply, pin WS_PATH, build stream, caches, smoke -- in order` | The five steps fire in the expected order with the expected env. |
@@ -396,7 +401,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **885 tests** on a host without Isaac Sim. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total up from 882. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **888 tests** on a host without Isaac Sim. Issue #484 adds two net stream tests for the official streaming experience and one core test for CI scope selection, bringing the total up from 885. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
@@ -435,6 +440,7 @@ The hosted suite collects **885 tests** on a host without Isaac Sim. Issue #484 
 | `test_stream_visual_verdict.py` | 12 | Pixel statistics, known-colour thresholds and WebRTC requirements. |
 | `test_stream_visual_wiring.py` | 5 | 驗證 stream 組觸發條件、GPU 工作流程、失敗時的產物上傳、必要檢查，以及容器清理篩選器只命中同一次執行與嘗試的容器。 |
 | `test_main_workflow_scope.py` | 28 | `core`. Structure of `main.yaml` after the split (isaac#434): exact job set; no `paths:` filter on any trigger and no `schedule`; PR / main / tag / dispatch triggers; `gate` needs every other job and runs `always()` and calls `gate_result.py` with `toJSON(needs)`; each scoped job needs `changes` and checks its own flag; `docs-unit` has no condition; `core-gpu` keeps the fork guard and needs `core-unit`; `stream-smoke` (stream group, isaac#434 PR3) calls `./.github/workflows/ci-stream-smoke.yaml`, needs `stream-unit` and has the same fork guard; `core-build` receives `stages` and `BATS_SKIP_GROUPS`; `release` waits for `gate`. The merge queue requests checks, and the job conditions admit every job through `gate` while reserving `release` for tags (isaac#453). |
+| `test_official_startuptests.py` | 3 | `core`. The per-PR GPU job calls the official Isaac Sim suite helper, the helper has no Isaac Lab dependency, and the reusable workflow uploads `artifacts/startuptests` on success and failure (isaac#436). |
 | `test_workflow_naming.py` | 42 | `core`. Workflow naming rule and lint (isaac#443), `script/ci/lint_workflow_names.py` + `doc/workflow-naming.md`: the real `.github/workflows/` follows the rule (and the glob finds `main.yaml` and `ci-stream-smoke.yaml`, no vacuous pass; the pre-rename stream smoke file is gone); detector self-tests on temp trees for bad file names (`.yml`, no category, uppercase, underscores), bad display names (parenthesised note, wrong case, wrong category), non-kebab job ids, a CI job with no group prefix, job-level `name:`; the allowed CI ids (`changes` / `gate` / `release` / `<group>-...`) and a bot job needing only kebab-case; exemptions are by exact file name and each carries a reason; `main.yaml` is exempt from file and display name but not from the job rule; base's `init.sh` still generates `base-version-monitor.yaml` under that name and only creates it when absent (the reason it keeps its name); the doc lists every category, group and exemption; retired names (`RETIRED_NAMES` in the lint: the old job ids, the old stream smoke file name and display name) are reported in docs while the new file name and history (changelog, ADRs) are not. |
 | `test_track_isaac_sim.py` | 24 | `core`. Official Isaac Sim stable tag filtering, version ordering, suite and script changes, Traditional Chinese PR text, deduplication and the Dockerfile pin (isaac#442). |
 | `test_bot_isaac_sim_version_workflow.py` | 13 | `core`. Weekly and manual triggers, optional version override, tracker invocation, gate independence, scoped permissions and built-in token (isaac#442). |
