@@ -322,7 +322,8 @@
 # isaac#437 adds eleven core cases for the scoped standalone workflow and runner (hosted 989 -> 1000, core 845 -> 856).
 # isaac#438 adds 2 Kit result validation tests (hosted 1000 -> 1002, core 856 -> 858).
 # isaac#136 adds repository text and default camera checks on top (hosted 1002 -> 1004, core 858 -> 860).
-HOSTED_UNIT_BASELINE = 1004
+# isaac#562 adds one core case for a standalone probe that exits after writing READY.
+HOSTED_UNIT_BASELINE = 1005
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -373,7 +374,7 @@ HOSTED_UNIT_BASELINE = 1004
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 860
+HOSTED_UNIT_BASELINE_CORE = 861
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 55
 HOSTED_UNIT_BASELINE_HEADLESS = 6

@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1004 tests**.
+**233 tests** total (bats). Hosted pytest collects **1005 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 860 | 39 | 1028 |
+| core | 129 | 861 | 39 | 1029 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 91 | 55 | 0 | 146 |
 | headless | 13 | 6 | 0 | 19 |
@@ -521,7 +521,7 @@ The hosted suite runs without Isaac Sim. isaac#438 adds two core cases for Kit r
 | `test_readme_multi_instance.py` | 24 | `docs`. Six checks per README across four languages (isaac#289) cover section placement, the ADR-0019 and multi_run#15 links, per-instance cache, memory and project guidance, headless ports, and the absence of personal identifiers. |
 | `test_no_ai_attribution.py` | 30 | PR commit checks (isaac#413, isaac#414). Clean commits, ordinary mentions, and human co-author names containing Claude pass. Model names and versions, anthropic.com co-author, author, or committer addresses, generation notices (including Markdown links), and session trailers flag the offending commit SHAs. Coverage includes indentation, mixed case, and versions written without a space (`Claude Sonnet4.5`, `Claude Opus4`, and `Claude-3`). With a stubbed git log, an empty range succeeds and an invalid range reports an error with exit code 2. Omitting both the range and `--stdin` is a usage error. |
 | `test_model_readme_layout.py` | 11 | `docs`. Checks the four current paths for the two listed robots, the removal of stale paths, and the sim_asset repository and README links (isaac#363). |
-| `test_standalone_smoke_matrix.py` | 11 | `core`. Three parametrized checks guard against reintroducing the USD gate. Two more verify that each case has three fields and that the runner passes `bash -n` (isaac#359). Two parser cases verify that both an empty matrix and a matrix containing only a comment yield an empty list. Four more checks cover the empty matrix exit, default paths from outside the checkout, environment overrides, and inclusion in Docker ShellCheck. |
+| `test_standalone_smoke_matrix.py` | 12 | `core`. Three parametrized checks guard against reintroducing the USD gate. Two more verify that each case has three fields and that the runner passes `bash -n` (isaac#359). Two parser cases verify that both an empty matrix and a matrix containing only a comment yield an empty list. Four more checks cover the empty matrix exit, default paths from outside the checkout, environment overrides, and inclusion in Docker ShellCheck. One regression test expects PASS when the first marker check misses and the probe writes READY and exits before the liveness check (isaac#562). |
 | `test_standalone_scripts.py` | 14 | Checks the pure helpers for Kit configuration, periodic timers, exit codes, removal of OpenBase-specific attributes, the smoke script’s workspace path, and the sensor and camera shim entry points. Also checks that the USD inspector stays removed and that tracked Python files contain no references to the retired extension. |
 | `test_ros_scripts_removed.py` | 25 | Guards against restoring retired ROS scripts and cross-container tests, checks the no-ROS integration layout, and verifies the documentation updates. |
 | `test_repo_config.py` | 3 | Repo-level config found by onboarding. `.dockerignore` keeps the host Isaac Sim cache tree `isaac-sim/` out of the build context; Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000, which made `just docker build` fail with `permission denied` after the first launch. `setup.toml` `[deploy]` uses `gpu_runtime`, not the deprecated `runtime` that base warns about on every setup. The Dockerfile pre-creates `/isaac-sim/extsUser`: the experience file lists it as an extension folder, the NGC image does not ship it, and the non-root user cannot create it, so Kit scanned `~/work` instead and warned `Extensions config 'extension.toml' doesn't exist` once per top-level directory. Pure file reads. |

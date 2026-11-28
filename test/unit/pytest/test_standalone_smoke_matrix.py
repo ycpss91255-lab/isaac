@@ -1,5 +1,6 @@
 """Hosted checks for the standalone smoke script's case matrix."""
 
+import os
 import re
 import shlex
 import subprocess
@@ -49,23 +50,16 @@ def test_empty_matrix_exits_from_outside_checkout(tmp_path):
     assert result.stdout == "No standalone smoke cases configured.\n"
 
 
-@pytest.mark.parametrize("override", [False, True], ids=["defaults", "overrides"])
-def test_configured_case_uses_checkout_and_container_paths(tmp_path, monkeypatch, override):
+def _configure_probe(tmp_path, monkeypatch, probe_command="echo READY"):
     checkout = tmp_path / "fresh checkout"
     runner = checkout / _SCRIPT.relative_to(_ROOT)
     runner.parent.mkdir(parents=True)
     source = _SCRIPT.read_text(encoding="utf-8")
     runner.write_text(source.replace("CASES=(\n", "CASES=(\n  'probe.py|READY|2'\n", 1))
 
-    repo_dir = tmp_path / "alternate checkout" if override else checkout
-    repo_dir.mkdir(exist_ok=True)
-    (repo_dir / "justfile").touch()
-    script_dir = "/mounted [scripts]" if override else "src/script"
+    (checkout / "justfile").touch()
     monkeypatch.delenv("ISAAC_SMOKE_REPO_DIR", raising=False)
     monkeypatch.delenv("ISAAC_SMOKE_SCRIPT_DIR", raising=False)
-    if override:
-        monkeypatch.setenv("ISAAC_SMOKE_REPO_DIR", str(repo_dir))
-        monkeypatch.setenv("ISAAC_SMOKE_SCRIPT_DIR", script_dir)
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
@@ -75,7 +69,7 @@ def test_configured_case_uses_checkout_and_container_paths(tmp_path, monkeypatch
         "printf '%s\\0' \"$PWD\" \"$@\" >> \"$SMOKE_LOG\"\n"
         "case \"$*\" in\n"
         "  'docker exec -T -t stream true') exit 1 ;;\n"
-        "  *'/isaac-sim/python.sh '*) echo READY ;;\n"
+        f"  *'/isaac-sim/python.sh '*) {probe_command} ;;\n"
         "esac\n"
     )
     sleep = bin_dir / "sleep"
@@ -83,15 +77,29 @@ def test_configured_case_uses_checkout_and_container_paths(tmp_path, monkeypatch
     for stub in (just, sleep):
         stub.chmod(0o755)
     monkeypatch.setenv("PATH", f"{bin_dir}:/usr/bin:/bin")
-    log = tmp_path / "calls"
-    monkeypatch.setenv("SMOKE_LOG", str(log))
+    monkeypatch.setenv("SMOKE_LOG", str(tmp_path / "calls"))
+    return runner
+
+
+@pytest.mark.parametrize("override", [False, True], ids=["defaults", "overrides"])
+def test_configured_case_uses_checkout_and_container_paths(tmp_path, monkeypatch, override):
+    runner = _configure_probe(tmp_path, monkeypatch)
+    repo_dir = tmp_path / "fresh checkout"
+    script_dir = "src/script"
+    if override:
+        repo_dir = tmp_path / "alternate checkout"
+        repo_dir.mkdir()
+        (repo_dir / "justfile").touch()
+        script_dir = "/mounted [scripts]"
+        monkeypatch.setenv("ISAAC_SMOKE_REPO_DIR", str(repo_dir))
+        monkeypatch.setenv("ISAAC_SMOKE_SCRIPT_DIR", script_dir)
 
     result = subprocess.run(
         ["bash", runner], cwd=tmp_path, capture_output=True, text=True, timeout=10
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert "PASS probe.py" in result.stdout
-    calls = log.read_text().rstrip("\0").split("\0")
+    calls = (tmp_path / "calls").read_text().rstrip("\0").split("\0")
     assert calls[:-1] == [
         str(repo_dir), "docker", "exec", "-T", "-t", "stream", "true",
         str(repo_dir), "docker", "run", "-t", "stream", "-d",
@@ -105,6 +113,32 @@ def test_configured_case_uses_checkout_and_container_paths(tmp_path, monkeypatch
     assert re.search(pattern, f"bash /isaac-sim/python.sh {script_dir}/probe.py")
     assert not re.search(pattern, f"/isaac-sim/kit/python/bin/python3 {script_dir}/probe.py.other")
 
+
+def test_marker_written_before_probe_exit_is_recognized(tmp_path, monkeypatch):
+    pid_fifo = tmp_path / "probe.pid"
+    os.mkfifo(pid_fifo)
+    monkeypatch.setenv("PROBE_PID_FIFO", str(pid_fifo))
+    runner = _configure_probe(tmp_path, monkeypatch, 'echo "$$" > "$PROBE_PID_FIFO"; echo READY')
+
+    # The first grep simulates a miss. Hold its return until the probe has exited.
+    grep = tmp_path / "bin" / "grep"
+    grep.write_text(
+        "#!/bin/bash\n"
+        'if [[ -p "$PROBE_PID_FIFO" ]]; then\n'
+        '  read -r pid < "$PROBE_PID_FIFO"\n'
+        '  rm "$PROBE_PID_FIFO"\n'
+        '  while kill -0 "$pid" 2>/dev/null; do /bin/sleep 0.01; done\n'
+        "  exit 1\n"
+        "fi\n"
+        'exec /usr/bin/grep "$@"\n'
+    )
+    grep.chmod(0o755)
+
+    result = subprocess.run(
+        ["bash", runner], cwd=tmp_path, capture_output=True, text=True, timeout=10
+    )
+    assert "PASS probe.py" in result.stdout, result.stdout + result.stderr
+    assert result.returncode == 0, result.stderr
 
 
 def test_docker_lint_checks_standalone_smoke():
