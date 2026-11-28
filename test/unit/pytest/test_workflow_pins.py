@@ -111,30 +111,91 @@ def test_gpu_integration_passes_run_scoped_reap_filter():
     )
 
 
-def test_run_scoped_project_callers_pass_reap_filter():
-    """入口腳本依執行編號設定 Compose 專案時，清理篩選器也須限定到該次執行。"""
-    # stream 與 headless 的 SMOKE_PROJECT 只傳給有清理 trap 的冒煙腳本。
-    project_assignment = re.compile(
-        r"^[ \t]*(?:export[ \t]+)?(?:BASELINE_PROJECT|(?:COMPOSE_)?PROJECT_NAME)="
-        r"[^\s#]*\$\{?GITHUB_RUN_ID\b",
-        re.MULTILINE,
-    )
-    checked = 0
-    for workflow, name, job in _gpu_reusable_jobs():
-        inputs = job["with"]
-        # publish 的入口以 bash 啟動，其餘入口直接執行腳本。
-        command = shlex.split(inputs["run-script"])
-        script = _REPO_ROOT / (command[1] if command[0] == "bash" else command[0])
-        if not project_assignment.search(script.read_text(encoding="utf-8")):
-            continue
+# stream 與 headless 的 SMOKE_PROJECT 由冒煙腳本的 trap 清理。
+_PROJECT_ASSIGNMENT = re.compile(
+    r'^[ \t]*(?:(?:export|local)[ \t]+)?'
+    r'(?:BASELINE_PROJECT|PROJECT_NAME|COMPOSE_PROJECT_NAME|project)='
+    r'"?([a-z0-9][a-z0-9_-]*)-\$\{?GITHUB_RUN_ID\b',
+    re.MULTILINE,
+)
+_BASH_CALL = re.compile(
+    r"""^[ \t]*(?:exec[ \t]+)?bash[ \t]+(["']?)"""
+    r"(?P<path>(?:\./)?script/ci/[\w.-]+\.sh)\1(?=[\s;&|]|$)",
+    re.MULTILINE,
+)
 
-        checked += 1
-        reap_filter = inputs.get("reap-container-filter", "")
-        for field in ("run_id", "run_attempt"):
-            assert re.search(r"\$\{\{\s*github\." + field + r"\s*\}\}", reap_filter), (
-                f"{workflow} 的 {name} 清理篩選器缺少 github.{field}：{reap_filter!r}"
-            )
-    assert checked > 0, "至少要檢查一個依執行編號設定 Compose 專案的作業"
+
+def _run_scoped_project_prefixes(root, run_script):
+    """沿入口與其 bash 呼叫收集依執行編號命名的 Compose 專案前綴。"""
+    command = shlex.split(run_script)
+    pending = [root / (command[1] if command[0] == "bash" else command[0])]
+    visited = set()
+    prefixes = set()
+    while pending:
+        script = pending.pop()
+        if script in visited:
+            continue
+        visited.add(script)
+        source = script.read_text(encoding="utf-8")
+        prefixes.update(_PROJECT_ASSIGNMENT.findall(source))
+        pending.extend(root / call["path"] for call in _BASH_CALL.finditer(source))
+    return prefixes
+
+
+def _check_run_scoped_reap_filter(root, inputs, job_name):
+    prefixes = _run_scoped_project_prefixes(root, inputs["run-script"])
+    reap_filter = inputs.get("reap-container-filter")
+    for prefix in prefixes:
+        assert reap_filter, f"{job_name} 缺少 reap-container-filter"
+        expected = (
+            r"(?<![\w-])" + re.escape(prefix)
+            + r"-\$\{\{\s*github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt\s*\}\}"
+        )
+        assert re.search(expected, reap_filter), (
+            f"{job_name} 的清理篩選器須含專案前綴 {prefix}、執行編號與嘗試次數：{reap_filter!r}"
+        )
+    return prefixes
+
+
+def test_run_scoped_project_callers_pass_reap_filter():
+    """基準、官方原生 Python 與串流畫面作業的清理篩選器須符合腳本的專案前綴與執行範圍。"""
+    checked = set()
+    for workflow, name, job in _gpu_reusable_jobs():
+        if _check_run_scoped_reap_filter(_REPO_ROOT, job["with"], f"{workflow}/{name}"):
+            checked.add((workflow, name))
+    assert len(checked) >= 3, f"至少要檢查三個依執行編號設定 Compose 專案的作業：{checked}"
+    assert {
+        ("main.yaml", "core-gpu"),
+        ("ci-official-native-python.yaml", "core-official-nativepython"),
+        ("ci-stream-visual-e2e.yaml", "stream-visual-e2e"),
+    } <= checked
+
+
+@pytest.mark.parametrize("missing_filter", [False, True], ids=["wrong-prefix", "missing-filter"])
+def test_run_scoped_reap_filter_rejects_invalid_workflow(tmp_path, missing_filter):
+    """逐層追蹤 bash 呼叫後，須能偵測篩選器前綴不符或工作流程漏傳篩選器。"""
+    ci = tmp_path / "script" / "ci"
+    ci.mkdir(parents=True)
+    (ci / "entry.sh").write_text("bash ./script/ci/wrapper.sh\n", encoding="utf-8")
+    (ci / "wrapper.sh").write_text("exec bash script/ci/check.sh\n", encoding="utf-8")
+    (ci / "check.sh").write_text(
+        'project="sample-run-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}"\n', encoding="utf-8"
+    )
+    inputs = yaml.safe_load(
+        "run-script: bash script/ci/entry.sh\n"
+        "reap-container-filter: name=^/sample-run-${{ github.run_id }}-${{ github.run_attempt }}-\n"
+    )
+    assert _check_run_scoped_reap_filter(tmp_path, inputs, "sample")
+    if missing_filter:
+        del inputs["reap-container-filter"]
+        message = "缺少 reap-container-filter"
+    else:
+        inputs["reap-container-filter"] = inputs["reap-container-filter"].replace(
+            "sample-run", "other-sample-run"
+        )
+        message = "須含專案前綴 sample-run"
+    with pytest.raises(AssertionError, match=message):
+        _check_run_scoped_reap_filter(tmp_path, inputs, "sample")
 
 
 _RUN_ID = "111"

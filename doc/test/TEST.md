@@ -1,6 +1,6 @@
 # TEST.md
 
-**239 tests** total (bats). Hosted pytest collects **1092 tests**.
+**239 tests** total (bats). Hosted pytest collects **1094 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 921 | 42 | 1092 |
+| core | 129 | 923 | 42 | 1094 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 97 | 62 | 0 | 159 |
 | headless | 13 | 6 | 0 | 19 |
@@ -527,7 +527,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_track_isaac_sim_inventory.py` | 10 | `core`. Offline tar-layer fixtures for `read_layer`, `image_layers`, `image_inventory` and `inventory_diff`: whiteout, opaque whiteout, oversized metadata, index manifests and history mismatch (isaac#442). |
 | `test_track_isaac_sim_run.py` | 20 | `core`. Offline `run()` flow with faked registry, git and gh: same version opens nothing, new version opens a PR and an inventory issue, an existing branch, PR or issue opens nothing, `--dry-run` writes nothing, and main.yaml is dispatched after the PR is created (isaac#442). |
 | `test_workflow_triggers.py` | 4 | `core`. No nightly run (isaac#434 PR3): only the upstream release trackers `base-version-monitor.yaml` and `bot-isaac-sim-version.yaml` may have a `schedule`; the glob must find workflows (no vacuous pass); `ci-stream-smoke.yaml` has no `schedule` but keeps `workflow_dispatch` and is callable (`workflow_call`) from `main.yaml`; it still runs `script/ci/stream_smoke_job.sh` through the pinned org `gpu-self-hosted.yml` with the 30 minute budget. |
-| `test_workflow_pins.py` | 23 | 核對六個 GPU 呼叫端（`main.yaml`、`ci-stream-smoke.yaml`、`ci-headless-smoke.yaml`、`ci-stream-visual-e2e.yaml`、`ci-official-native-python.yaml`、`publish-stream-source.yaml`）、共用版本標籤與 Dependabot 註解。11 個參數案例涵蓋 `v0.4.0` 版本下限、數字排序與無效標籤。檢查依執行編號設定 Compose 專案的入口腳本，其作業須傳入含執行編號與嘗試次數的清理篩選器。`core-gpu` 案例驗證六個替身的呼叫順序、攔截新增的 Docker 指令，並比對篩選器與實際專案名稱。單獨改動腳本或篩選器前綴均須比對失敗（isaac#344、#403、#408）。 |
+| `test_workflow_pins.py` | 25 | 核對六個 GPU 呼叫端（`main.yaml`、`ci-stream-smoke.yaml`、`ci-headless-smoke.yaml`、`ci-stream-visual-e2e.yaml`、`ci-official-native-python.yaml`、`publish-stream-source.yaml`）、共用版本標籤與 Dependabot 註解。11 個參數案例涵蓋 `v0.4.0` 版本下限、數字排序與無效標籤。從入口追蹤 bash 呼叫，比對基準、官方原生 Python 與串流畫面 E2E 作業的清理篩選器是否包含腳本設定的專案前綴、執行編號與嘗試次數。暫存腳本案例驗證前綴不符與缺少篩選器時均會失敗（isaac#564）。`core-gpu` 案例驗證六個替身的呼叫順序、攔截新增的 Docker 指令，並比對篩選器與實際專案名稱。單獨改動腳本或篩選器前綴均須比對失敗（isaac#344、#403、#408）。 |
 | `test_owv_published_image.py` | 8 | `docs`. Checks viewer submodule removal, script image tags, the hook’s release pin and published-image override instructions in all four READMEs (isaac#284). |
 | `test_readme_cleanup_text.py` | 4 | `docs`. One case per README language (isaac#381) checks the inline force-removal warning, the compose project label lookup, the nominal per-tag size and when shared layers can be reclaimed. |
 | `test_stream_source_producer.py` | 22 | Hosted import/CLI-contract for the deterministic WebRTC stream-source producer driver `src/script/stream_source_producer.py` (isaac#223 / owv#48 / isaac#173): the module imports on a non-Isaac host without pulling `omni`/`pxr`/`isaacsim`/`carb` into `sys.modules` (every Isaac import function-local), the argparse surface exposes `--public-ip`/`--port`/`--run-seconds`, `--public-ip`/`--port` default from the `PUBLIC_IP`/`ISAAC_SIGNAL_PORT` env vars (the `docker run -e` container contract) with an explicit flag overriding the env, and `python stream_source_producer.py --help` exits 0 on a bare host (argparse exits before any Isaac import). Loads the driver by file path and mocks the rendering manager to verify the camera path, eye and target (isaac#535). No Isaac runtime or GPU is required. Four checks from isaac#484 cover the official experience path in both streaming scripts, removal of the repo's `apps/` directory, and removal of the Dockerfile copy step. |
