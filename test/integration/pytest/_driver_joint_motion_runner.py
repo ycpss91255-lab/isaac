@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+from _kit_boot import time_kit_boot
+
 WHEEL_JOINTS = ["left_wheel_joint", "right_wheel_joint"]
 COMMAND_RAD_S = 10.0
 
@@ -154,7 +156,8 @@ def _main() -> None:
             left, right = displacement
             print(f"[WHEEL MOTION] {active_engine} {left} {right}", flush=True)
 
-    _Driver().run()
+    with time_kit_boot():
+        _Driver().run()
 
 
 if __name__ == "__main__":

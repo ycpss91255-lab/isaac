@@ -95,12 +95,13 @@ def _main() -> None:
             # -- Lifecycle (the SCENE shape the example driver walked) --
 
             def run(self) -> None:
-                from isaacsim import SimulationApp
+                from _kit_boot import time_kit_boot
 
                 kwargs = parse_livestream_env(
                     os.environ.get("ISAAC_LIVESTREAM")
                 )
-                self._app = SimulationApp(kwargs)
+                with time_kit_boot() as SimulationApp:
+                    self._app = SimulationApp(kwargs)
                 signal.signal(signal.SIGINT, self._on_signal)
                 signal.signal(signal.SIGTERM, self._on_signal)
                 try:

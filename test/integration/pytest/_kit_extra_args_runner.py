@@ -9,6 +9,8 @@ absent).
 import argparse
 import sys
 
+from _kit_boot import time_kit_boot
+
 
 def _main() -> None:
     parser = argparse.ArgumentParser()
@@ -32,7 +34,8 @@ def _main() -> None:
             print(f"[MARKER] {value}", flush=True)
             self._should_quit = True
 
-    _Driver().run()
+    with time_kit_boot():
+        _Driver().run()
 
 
 if __name__ == "__main__":

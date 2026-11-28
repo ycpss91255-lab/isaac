@@ -1,6 +1,6 @@
 # TEST.md
 
-**233 tests** total (bats). Hosted pytest collects **1049 tests**.
+**236 tests** total (bats). Hosted pytest collects **1069 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,11 +8,11 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 890 | 40 | 1059 |
+| core | 129 | 906 | 40 | 1075 |
 | gui | 0 | 0 | 0 | 0 |
-| stream | 91 | 62 | 0 | 153 |
+| stream | 94 | 62 | 0 | 156 |
 | headless | 13 | 6 | 0 | 19 |
-| docs | 0 | 91 | 0 | 91 |
+| docs | 0 | 95 | 0 | 95 |
 
 The total above counts Bats tests. The GUI configuration and PR policy checks (#428) run in `core` and read repository files. The `gui` group has no runtime tests. The `headless` group has the boot check (#461). The GPU integration tests run in `core` because they boot Isaac on the shared `devel` layer.
 
@@ -162,7 +162,7 @@ Behavioral guard for the headless boot check (`script/ci/headless_smoke.sh`, isa
 | `headless smoke job: apply, build headless, smoke under a per-run project -- in order` | job script order and per-run `SMOKE_PROJECT`. |
 | `headless smoke job: a failing smoke fails the job` | job exit status follows the smoke. |
 
-## test/bats/smoke/stream_smoke_isolation_spec.bats (17)
+## test/bats/smoke/stream_smoke_isolation_spec.bats (20)
 
 Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the remaining axis of `ycpss91255-lab/omniverse_web_viewer#55`). The nightly Tier A GPU smoke used to bring its stack up in the DEFAULT project and tear it down by name with `docker rm -f "${USER}-${IMAGE}-stream" owv` -- the exact name a manually-run DEFAULT stack uses, plus the stale pre-isaac#238 literal `owv` (which matched nothing, leaving the real viewer on the serve port). base v0.42.0 removed `--instance` (base#666); the smoke now pins a distinct `PROJECT_NAME` (default `<derived>-smoke`, overridable via `SMOKE_PROJECT`) in `.env.generated`, brings the stack up with a plain `run.sh -t stream -d`, resolves its stream container BY PROJECT (`docker compose -p <proj> ps -q stream`), and tears down project-scoped (`docker compose -p <proj> down`) plus the isaac-owned per-project viewer. The spec runs the real driver against a stub `run.sh` + stub `docker` (both record argv) -- behavioral, hermetic (no docker, no GPU). The driver is baked into `/smoke_test/` next to this spec by the devel-test stage.
 
@@ -185,6 +185,9 @@ Behavioral guard for `script/ci/stream_smoke.sh` compose-project isolation (the 
 | `stream_smoke: skipping preflight reaches bring-up with a busy signal port (isaac#497)` | With `SMOKE_SKIP_PORT_PREFLIGHT=1`, the same signal-port conflict allows `run.sh` to run. |
 | `stream_smoke: reports load at startup and elapsed time and load at readiness (isaac#497)` | Checks the three load averages before bring-up and again when Kit is ready, along with elapsed seconds. |
 | `stream_smoke: ready timeout reports load, marker progress and port holders (isaac#497)` | A live container logs only the first ready marker. The timeout diagnostic includes the wait duration, load, both markers and both ports' holders. |
+| `stream_smoke: passes custom signal and media ports to Kit (isaac#563)` | The Kit launch passes the exported ports 49200 and 47999 as Docker exec environment options. |
+| `stream_smoke: passes default signal and media ports to Kit (isaac#563)` | With both variables unset and no host.yaml, the launch passes 49100 and 47998. |
+| `stream_smoke: host.yaml overrides the environment signal port passed to Kit (isaac#563)` | With signal port 49291 in host.yaml and 49200 in the environment, the launch passes 49291. |
 
 ## test/bats/smoke/stream_smoke_lib_spec.bats (25)
 
@@ -466,6 +469,9 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 
 | File | Collected | Scope |
 |------|:---------:|-------|
+| `test_kit_timing.py` | 4 | `core`. Checks that every Kit runner in `test/integration/pytest/` times its boot, each boot counts once, file durations add up to the suite total, and the JSON report matches the terminal rows (isaac#527). |
+| `test_container_min_privilege.py` | 14 | `core`. Checks privileged mode, host device bindings, three added capabilities, seccomp, PID and IPC isolation, shared memory size and host networking. Checks all four READMEs for stale claims about using the host PID namespace (isaac#549). |
+| `test_readme_container_permissions.py` | 4 | `docs`. Checks that each README explains the local privilege override in its container permissions section (isaac#549). |
 | `test_repository_purity.py` | 2 | `core` (#136). Reports tracked text lines containing `forklift` or `modela` outside the documented exceptions and checks the default camera mount paths and ROS topic prefixes. |
 | `test_operator_volumes.py` | 7 | `core`. Checks the pre-run hook’s advisory volume coverage against base’s TOML merge rules (isaac#528). |
 | `test_dockerfile_sim_dependencies.py` | 2 | `core`. The Dockerfile omits optional training and URDF packages and uses the NumPy bundled by NVIDIA (isaac#480). |
@@ -490,7 +496,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_sensor_prim.py` | 23 | `isaac_devkit.sensor_prim` (layer a, ADR-0024): config loading, shared/per-category validation, `ros:` section optional (loads without `ros:`, validates `ros:` when present), host-pure helpers (`fov_to_aperture`, `role_to_helper_type`), `get_category`. |
 | `test_sensors_dispatch.py` | 10 | 驗證相容入口與感測器設定。自訂相機在有、無 `ros:` 的情況下均建立 color、depth 兩個 Camera prim，並回傳掛載路徑。 |
 | `test_material_setup.py` | 29 | `isaac_devkit.materials`: material YAML load / validate, variant enumeration, prim-material mapping, plus `material_cfg_from_yaml` (ADR-0018 decision 7) -- color-only variant -> per-prim spawn cfg-param mapping (`{prim: {shader, diffuse_color (r,g,b), ...}}`), JSON-serializable / GPU-free, the seam `build_scene` uses to set Preview Surface diffuse color. |
-| `test_scene_builder.py` | 76 | Checks YAML loading and validation, model path resolution (required `MODEL_PATH` roots, literal relative paths, and `package://` URIs), instance expansion and sensor config resolution. The pure `to_spawn_specs` adapter checks ordered ground, light, robot and prop specs, scalar-first orientation, mobility, variants, diffuse color, and JSON serialization. It also checks the override allowlist and rejects five physics keys across robot, prop, light and ground settings, with an error directing authors to sim_asset and asset_converter. |
+| `test_scene_builder.py` | 74 | Checks YAML loading and validation, model path resolution (including `MODEL_PATH` and `package://`), instance expansion and sensor config resolution. The pure `to_spawn_specs` adapter checks ordered ground, light, robot and prop specs, scalar-first orientation, mobility, variants, diffuse color, and JSON serialization. It also checks the override allowlist and rejects five physics keys across robot, prop, light and ground settings, with an error directing authors to sim_asset and asset_converter. |
 | `test_no_urdf_import.py` | 6 | Enforces the USD-only boundary and verifies that the USD helpers remain importable. |
 | `test_isaac_driver.py` | 57 | Tests both livestream helpers, USD resolution, boot extension ordering, Kit-free construction, and the `SCENE` class attribute. A fake `SimulationApp` records headless mode, streaming experience, and the boot arguments followed by whitespace-split `ISAAC_KIT_EXTRA_ARGS` in `extra_args`. The tests check caller `sys.argv` during and after construction, invalid livestream rejection before startup, signal registration and lifecycle order, traceback output before close, and `ISAAC_IO_PLUGIN` invocation and error handling before timeline play. `TestPlayTimeline` checks warm start callback preference, package fallback, and the warning when neither callback is available. It verifies all three settings (fixed time stepping, rate limiting enabled, and a 60 Hz limit) and the call order from disabling looping through setting the end time, starting playback, and running 10 warmup updates. |
 | `test_prim_summary.py` | 3 | Checks the `PrimSummary` fields, link and joint classification from USD prim records, and empty-stage handling. |
@@ -542,6 +548,8 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 
 The GPU suite collects **40 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
 
+For `test/integration/pytest/`, the terminal summary prints a `[FILE-TIMING]` row per file and a `TOTAL` row. Each row splits elapsed time, including fixture setup and teardown, into Kit construction (`kit_boot_sec`) and the remaining time (`test_body_sec`). Set `KIT_TIMING_JSON` to a file path to save the same measurements.
+
 | Test | Description |
 |------|-------------|
 | `test_camera_headless.py::test_camera_custom_yaml_creates_prims_headless` | 從 `custom.yaml` 建立相機，驗證 color、depth 兩個 USD Camera prim 的路徑、CUDA 與 Vulkan 初始化及正常結束標記。 |
@@ -556,6 +564,8 @@ The GPU suite collects **40 tests**, all inside the Isaac test container. `test/
 | `test_isaac_driver_integration.py` (1) | Exercises the driver lifecycle in Kit. |
 
 ### test/integration/no_ros/
+
+The `[FILE-TIMING]` report excludes the test files in this directory.
 
 [Suite files and purpose](../../test/integration/no_ros/README.md)
 
