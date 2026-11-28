@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
 - **加強 GPU 工作流程的容器清理測試（isaac#408）。** 驗證 `core-gpu` 依序呼叫六個腳本替身，並確認新增的 Docker 呼叫會被攔截。分別改動腳本與工作流程的專案前綴，驗證兩者不一致時會比對失敗。所有依執行編號設定 Compose 專案的入口腳本，其呼叫端都須傳入含執行編號與嘗試次數的清理篩選器。新增 5 項 core 案例，hosted 基準由 1018 增至 1023，core 由 874 增至 879。
 - **新增 Python 輸出模式的 GPU 整合測試（isaac#390）。** 測試放在 `test/integration/no_ros/`，因為檢查內容需要提到 ROS 2 bridge 節點名稱。驗證 Jetbot 相機的 RGB 回呼能收到影格，並確認 OmniGraph 中的 ROS 2 bridge 節點數為零。暖機 30 步後量測 300 步的平均耗時與第 95 百分位數，要求後者低於 33.3 毫秒。GPU 測試基準由 36 提高至 39。
 - **`core-gpu` 執行 Isaac Sim 官方 core 與 sensors 測試（isaac#438）。** 串行驗證 18 支 core 與 14 支 sensors 腳本，並保留各桶的 JUnit 與 Kit log。檢查四個 RTX 回歸案例及兩個已知的 actuator skips，僅排除官方映像會崩潰的 tiled camera 案例。Hosted 基準由 1000 提高至 1002（core 856 → 858）。
