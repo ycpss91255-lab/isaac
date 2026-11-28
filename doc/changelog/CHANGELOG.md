@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **新增 GPU 共用工作流程版本下限測試（isaac#403）。** 五個呼叫端須共用同一個正式版本標籤，下限為首次支援 `reap-container-filter` 的 `v0.4.0`。新增案例涵蓋較新版本、過舊或格式不符的標籤，以及 `core-gpu` 缺少清理輸入的情形。新增 13 項 core 測試。
+- **框架純淨度檢查與基礎 repo 契約（isaac#137）。** Core CI 檢查框架原始碼與套件設定中的應用專屬詞彙。四語 README 說明下游透過 submodule 匯入共用框架，以及 `src/` 保留可執行範例的定位。補上 ADR 搬遷指引與九項 hosted 測試。
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
@@ -24,7 +26,7 @@
 
 ### Fixed
 
-- **校正測試數量（isaac#416）。** 修正 `just cleanup-merged` 條目的 Bats 數量。TEST.md 的 hosted 總數集中在檔首，新增 2 個 core 測試防止舊數字與重複摘要再度出現。Hosted 基準由 964 提高至 966（core 820 → 822）。
+- **校正測試數量（isaac#416）。** 修正 `just cleanup-merged` 條目的 Bats 數量。TEST.md 的 hosted 總數集中在檔首，新增 2 個 core 測試防止舊數字與重複摘要再度出現。Hosted 基準由 986 提高至 988（core 842 → 844）。
 - **standalone smoke 使用可覆寫的 checkout 與容器腳本路徑（isaac#399）。** 預設使用腳本所在的 checkout，並在現行 `stream` 服務中從掛載的 checkout 讀取腳本。可用 `ISAAC_SMOKE_REPO_DIR` 與 `ISAAC_SMOKE_SCRIPT_DIR` 覆寫路徑。空矩陣會正常退出。Docker ShellCheck 納入此腳本，hosted 共 955 項（core 811）。
 - **Isaac Lab 安裝帶入的 numpy 2.5.5 改回 Isaac Sim 預打包版本（isaac#446）。** `isaaclab.sh --install none` 把 numpy 2.5.5 裝進 Kit 的 site-packages，蓋掉 Isaac Sim 在 `pip_prebundle` 自帶的 numpy，導致官方 `isaacsim.sensors.experimental.rtx` 有 4 個 case（`test_camera_property`、`test_wrap_regex_multiple_prims`、兩個 `test_data`）只在本映像失敗。Dockerfile 在 Isaac Lab 安裝後、`pip_prebundle` 完整性檢查前新增一個 RUN，從映像內的 `pip_prebundle` 讀出 numpy 版本（不寫死，Sim 升版自動跟隨）並重新安裝，再以 `numpy.__version__` 斷言，沒生效就讓 build 失敗。新增 `test_dockerfile_numpy_pin.py`（4，core，含「還原 RUN 不得用 shell pipe」以避開 hadolint DL4006）。Hosted baseline 859 -> 863（core 716 -> 720）。
 
