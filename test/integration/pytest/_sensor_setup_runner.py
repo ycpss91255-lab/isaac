@@ -88,8 +88,10 @@ if __name__ == "__main__":
 
     sys.path.insert(0, args.script_dir)
 
-    from isaacsim import SimulationApp
-    app = SimulationApp({"headless": True})
+    from _kit_boot import time_kit_boot
+
+    with time_kit_boot() as SimulationApp:
+        app = SimulationApp({"headless": True})
 
     # Capture the exit code BEFORE app.close() because Kit's shutdown
     # path can call _exit(0) on its own, swallowing whatever returncode
