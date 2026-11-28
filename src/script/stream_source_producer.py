@@ -16,13 +16,9 @@ always see a deterministic, guaranteed-non-black frame. It renders no
 external asset -- the whole scene is authored programmatically, so the image
 is self-contained and the frame is byte-reproducible across boots.
 
-Reuses the proven streaming boot from the standalone livestream smoke
-(`standalone_livestream_smoke.py`, isaac#19 / #21 fix-B / ADR-0007):
-  - pin the streaming experience (isaacsim.exp.base.python.streaming.kit) --
-    the default/importer experiences lack the WebRTC exts;
-  - inject publicEndpointAddress + signaling port + quitOnSessionEnded so a
-    remote browser connects and the app does not self-quit with no client;
-  - disable RTX auto-exposure so the lit stage reads true, not washed white.
+Like standalone_livestream_smoke.py, the producer boots NVIDIA's official
+full streaming experience. It sets the WebRTC endpoint and ports for remote
+clients, keeps running after disconnects, and disables RTX auto-exposure.
 
 Container contract: `--public-ip` / `--port` default from the `PUBLIC_IP` /
 `ISAAC_SIGNAL_PORT` env vars (what the Dockerfile `producer` CMD and
@@ -40,7 +36,7 @@ import os
 import sys
 import time
 
-STREAM_EXPERIENCE = "/isaac-sim/apps/isaacsim.exp.base.python.streaming.kit"
+STREAM_EXPERIENCE = "/isaac-sim/apps/isaacsim.exp.full.streaming.kit"
 
 DEFAULT_SIGNAL_PORT = 49100
 # 6.0 makes the WebRTC media port explicit and separately bindable. Two
@@ -186,40 +182,11 @@ def _frame_camera():
 
 
 def _kit_args(port, public_ip, media_port=DEFAULT_STREAM_PORT):
-    """The Kit argv the 6.0 livestream stack actually reads.
+    """Configure the primary WebRTC stream for this producer run.
 
-    Isaac Sim 6.0 moved this twice over, and both halves matter:
-
-    1. THE SETTINGS MOVED. 5.x read `--/app/livestream/port` and
-       `--/app/livestream/publicEndpointAddress`. 6.0 reads
-       `--/exts/omni.kit.livestream.app/primaryStream/{signalPort,publicIp,
-       streamPort}`. Kit does not reject an unknown setting, so the old
-       spelling is silently inert.
-
-    2. THE EXTENSION MUST BE LOADED. `omni.kit.livestream.app` "creates a
-       primary stream at startup if the streamType setting is defined" -- and
-       our experience layers only `livestream.core` + `livestream.webrtc` onto
-       `isaacsim.exp.base` (deliberately, to avoid the OmniGraph image bundle
-       that segfaults under the Python launcher: isaac#21 / ADR-0007). On
-       5.1.0 the webrtc extension started the server by itself; on 6.0 it does
-       not, and nothing logs the difference.
-
-    Measured against the published `:0.0.2` on an RTX 5090 (isaac#252):
-
-      5.x flags only .............................. no port bound
-      + 6.0 setting paths ......................... no port bound
-      + LIVESTREAM=2 .............................. no port bound
-      + streamType, stock experience .............. no port bound
-      stock experience + `--enable ...livestream.app` ... bound ~35 s
-      FIXED EXPERIENCE, no `--enable` ............. bound ~40 s
-
-    The last two lines are why there is no `--enable` here. Both work, but the
-    dependency belongs in the experience -- that is what an experience file
-    IS -- and passing it from the driver as well would be a second declaration
-    of the same fact, drifting the moment one of them changes. The `.kit`
-    dependency is the fix; this function only carries the settings, which
-    genuinely did move namespace and have to come from the caller because the
-    ports are per-run.
+    NVIDIA's full streaming experience loads omni.kit.livestream.app. The
+    extension reads the stream type, ports and optional public IP from its
+    primaryStream settings at startup.
     """
     args = [
         "--/app/livestream/nvcf/quitOnSessionEnded=false",
@@ -248,10 +215,6 @@ def main():
 
     from isaacsim import SimulationApp
 
-    # NOTE: no `"livestream": 2` here. That key does not exist in 6.0's
-    # DEFAULT_LAUNCHER_CONFIG and an unknown key is ignored, not rejected --
-    # it was doing nothing. Streaming is turned on by loading
-    # omni.kit.livestream.app and defining its streamType, both above.
     app = SimulationApp(
         {"headless": True},
         experience=STREAM_EXPERIENCE,

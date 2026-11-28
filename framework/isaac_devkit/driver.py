@@ -8,8 +8,7 @@ Subclass contract:
         USD = "model/usd/robot/openbase/openbase.usd"  # repo-relative
 
         def setup(self, stage):
-            self.init_rclpy()                          # optional
-            # create publishers, attach OmniGraph, etc.
+            self.stage = stage
 
         def main(self):
             while not self._should_quit and self._app.is_running():
@@ -17,7 +16,7 @@ Subclass contract:
                 self._app.update()
 
         def shutdown(self):
-            # release rclpy node, close files, etc.
+            # close files and release application resources
             pass
 
     if __name__ == "__main__":
@@ -86,9 +85,7 @@ def parse_livestream_env(env_value: Optional[str]) -> Dict[str, Any]:
       ``headless`` Docker stage where Kit boots without a window or
       WebRTC publisher.
     - ``"1"`` -> native streaming. Kit's legacy streaming protocol.
-    - ``"2"`` -> WebRTC streaming, raytraced lighting. Pairs with the
-      ``stream`` Docker stage and ADR-0007's custom Kit
-      experience (`isaacsim.exp.base.python.streaming.kit`).
+    - ``"2"`` -> WebRTC streaming with raytraced lighting.
 
     Raising on unknown values rather than silently defaulting catches
     typos in compose / .env files at boot time instead of producing a
@@ -185,21 +182,14 @@ class IsaacDriver:
         section 9); kept functional for the existing drivers until the
         forklift migration (#136). Subclass must set this for now.
         ``SCENE`` -- repo-relative path to a scene YAML (ADR-0017 A7
-        contract surface). Declared for the new contract shape; ``run()``
-        is rewired to the ``load_scene -> build_scene -> setup_sensors ->
-        setup_ros2_io`` lifecycle with the example (#131).
+        contract surface). Used by scene-based drivers.
 
     Override surface:
-        ``setup(stage)`` -- post-stage-open init (rclpy, publishers, OG).
+        ``setup(stage)`` -- post-stage-open initialization.
         ``main()``        -- the loop. Default: ``app.update()`` until
                              ``_should_quit`` flips or Kit reports
                              ``is_running()`` is False.
-        ``shutdown()``    -- pre-close cleanup (destroy rclpy node, etc.).
-
-    Helpers:
-        ``init_rclpy()``  -- safe rclpy init that suppresses rclpy's own
-                             signal handler so it does not race Kit's +
-                             ours into a 3-way SIGINT segfault.
+        ``shutdown()``    -- pre-close cleanup.
 
     Internals (subclass should not override):
         ``_on_signal``, ``_open_stage``, ``_ensure_scene_defaults``,
@@ -209,14 +199,12 @@ class IsaacDriver:
     USD: str = ""
     SCENE: str = ""
 
-    # Load the ROS 2 bridge at boot so sensor setup can reuse it. Subclasses
-    # can override the list or use () to enable extensions at runtime (#248).
-    BOOT_EXTENSIONS: tuple = ("isaacsim.core.nodes", "isaacsim.ros2.bridge")
+    # External plugins can specify additional Kit extensions via ISAAC_KIT_EXTRA_ARGS.
+    BOOT_EXTENSIONS: tuple = ("isaacsim.core.nodes",)
 
     def __init__(self) -> None:
         self._should_quit: bool = False
         self._app: Any = None
-        self._rclpy_inited: bool = False
 
     # -- Entry point ---------------------------------------------------------
 
@@ -280,25 +268,6 @@ class IsaacDriver:
 
     def shutdown(self) -> None:
         """Pre-close cleanup hook. Default is a no-op."""
-
-    # -- ROS 2 helper --------------------------------------------------------
-
-    def init_rclpy(self) -> None:
-        """Initialise rclpy without registering its signal handlers.
-
-        Isaac Sim's Kit installs SIGINT/SIGTERM during SimulationApp
-        construction; we then install our own. rclpy.init() also wants
-        to install handlers by default, and the 3-way race triggers
-        segfaults during driver shutdown. ``SignalHandlerOptions.NO``
-        keeps rclpy clean and lets Kit + our handler co-exist.
-        """
-        if self._rclpy_inited:
-            return
-        import rclpy
-        from rclpy.signals import SignalHandlerOptions
-
-        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
-        self._rclpy_inited = True
 
     # -- Internals -----------------------------------------------------------
 

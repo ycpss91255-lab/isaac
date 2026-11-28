@@ -1,14 +1,4 @@
-"""Sensor OmniGraph wiring dispatcher (L3) -- category dispatch, prim + ROS.
-
-Layer (b) of the three-layer sensor split (ADR-0024):
-  (a) sensor_prim  -- config I/O, validation, prim creation helpers
-  (b) sensors      -- OmniGraph wiring dispatcher (this module)
-  (c) sensor_ros   -- ROS 2 OmniGraph publish chain
-
-This module is the entry point for scene.py and standalone drivers.
-It delegates config loading and validation to sensor_prim (layer a),
-builds sensor prims on the USD stage, and -- when ``ros:`` config is
-present -- delegates ROS 2 OmniGraph wiring to sensor_ros (layer c).
+"""Create prims on the USD stage by sensor category and return the sensor or mount path.
 
 Backward compatibility: ``load_config``, ``get_category``,
 ``validate_camera`` are re-exported from ``sensor_prim`` so existing
@@ -17,7 +7,6 @@ callers (scene.py, example drivers, shim scripts) continue to work.
 Schema rules:
   - ADR-0006 (camera): isaac_physics_test:src/doc/adr/0006-per-sensor-yaml-camera-config.md
   - ADR-0010 L3 (lidar/imu): isaac_physics_test:src/doc/adr/0010-isaac-dev-kit-*.md
-  - ADR-0024 (three-layer split): src/doc/adr/0024-sensor-three-layer-split.md
 
 Usage from a SimulationApp standalone driver:
 
@@ -47,14 +36,7 @@ _STEREOLABS_EXTRA_PATH = "/isaac-sim/extra_exts/zed"
 
 
 def setup_sensor(cfg, stage):
-    """Dispatch to the per-category setup function.
-
-    Builds the sensor prim on the stage.  When ``cfg["ros"]`` is not None,
-    also wires the OmniGraph ROS 2 publish chain via sensor_ros (layer c).
-
-    Requires Isaac Sim (Kit-side modules).  Returns an identifier for
-    the created sensor (graph path, prim path, etc.).
-    """
+    """Create the sensor on the stage and return its prim or mount path."""
     category = get_category(cfg)
     if category == "camera":
         return _setup_camera_dispatch(cfg, stage)
@@ -70,8 +52,7 @@ def setup_sensors(stage, scene):
 
     ADR-0017 section 5: resolves each scene ``sensors[]`` entry through
     the three-tier catalog (user catalog -> base default catalog ->
-    NVIDIA Isaac builtin profiles), places it on the named robot link,
-    and wires the OmniGraph ROS 2 publish chain.  Contract error surface:
+    NVIDIA Isaac builtin profiles), and places it on the named robot link. Contract error surface:
     a catalog miss raises ``isaac_devkit.exceptions.SensorNotFoundError``;
     a missing placement link raises
     ``isaac_devkit.exceptions.LinkNotFoundError``.
@@ -108,8 +89,7 @@ def _enable_extensions(*names):
     runtime enablement in both experiences.
 
     Already-enabled extensions are skipped.  Raises ``RuntimeError`` when
-    Kit reports that an extension could not be enabled, so a missing
-    extension fails here rather than later as unknown OmniGraph node types.
+    Kit reports that an extension could not be enabled.
     """
     import omni.kit.app
 
@@ -127,11 +107,7 @@ def _setup_camera_dispatch(cfg, stage):
 
 
 def _setup_lidar(cfg, stage):
-    """Create RTX LiDAR sensor prim + optional ROS 2 publish chain.
-
-    Prim creation (layer a) always runs.  ROS 2 wiring (layer c) runs
-    only when ``cfg["ros"]`` is not None.
-    """
+    """Create an RTX LiDAR sensor and return its prim path."""
     from isaac_devkit.sensor_prim import set_xform_pose
 
     parent_path = cfg["mount"]["parent_prim"]
@@ -139,7 +115,7 @@ def _setup_lidar(cfg, stage):
         raise ValueError(f"parent_prim does not exist: {parent_path}")
 
     sensor = cfg["sensor"]
-    ros = cfg["ros"]
+    ros = cfg.get("ros")
 
     # Determine mount name: use frame_id_prefix from ros if available,
     # fall back to a default for prim-only mode.
@@ -148,11 +124,7 @@ def _setup_lidar(cfg, stage):
     mount_prim = stage.DefinePrim(mount_path, "Xform")
     set_xform_pose(mount_prim, cfg["mount"]["pose"])
 
-    # Enable extensions needed for prim creation.
-    ext_names = ["isaacsim.sensors.rtx"]
-    if ros:
-        ext_names = ["isaacsim.core.nodes", "isaacsim.ros2.bridge"] + ext_names
-    _enable_extensions(*ext_names)
+    _enable_extensions("isaacsim.sensors.rtx")
 
     import omni.kit.commands
     lidar_name = "lidar"
@@ -173,16 +145,11 @@ def _setup_lidar(cfg, stage):
             config=sensor["profile"],
         )
 
-    # Layer (c): ROS 2 OmniGraph wiring -- skip when ros is None.
-    if ros is None:
-        return lidar_path
-
-    from isaac_devkit.sensor_ros import setup_sensor_publish
-    return setup_sensor_publish(stage, lidar_path, ros, "lidar", cfg)
+    return lidar_path
 
 
 def _setup_imu(cfg, stage):
-    """Create IMU sensor prim + optional ROS 2 publish chain.
+    """Create an IMU sensor and return its prim path.
 
     Validates that parent_prim has RigidBodyAPI (physical constraint).
     """
@@ -203,15 +170,12 @@ def _setup_imu(cfg, stage):
         )
 
     sensor = cfg["sensor"]
-    ros = cfg["ros"]
+    ros = cfg.get("ros")
 
     frame_id_prefix = ros["frame_id_prefix"] if ros else "imu"
     mount_path = f"{parent_path}/{frame_id_prefix}_mount"
     mount_prim = stage.DefinePrim(mount_path, "Xform")
     set_xform_pose(mount_prim, cfg["mount"]["pose"])
-
-    if ros:
-        _enable_extensions("isaacsim.ros2.bridge")
 
     import omni.kit.commands
     frequency_hz = sensor.get("frequency_hz", 200)
@@ -228,34 +192,17 @@ def _setup_imu(cfg, stage):
         orientation_filter_size=filter_cfg.get("orientation", 10),
     )
 
-    imu_prim_path = f"{mount_path}/imu_sensor"
-
-    # Layer (c): ROS 2 OmniGraph wiring -- skip when ros is None.
-    if ros is None:
-        return imu_prim_path
-
-    from isaac_devkit.sensor_ros import setup_sensor_publish
-    return setup_sensor_publish(stage, imu_prim_path, ros, "imu", cfg)
+    return f"{mount_path}/imu_sensor"
 
 
 # -- Camera framework (former camera_setup.py, ADR-0006) --
 
 
 def setup_camera(cfg, stage):
-    """Dispatch to the per-sensor-type setup function.
-
-    Returns the OmniGraph path created for the camera publish chain,
-    or the mount prim path when ros is absent.
-    """
+    """Create the camera and return its mount prim path."""
     validate_camera(cfg, source=cfg.get("_source", "<cfg>"))
 
     sensor_type = cfg["sensor"]["type"]
-
-    # Enable extensions needed for prim creation; ROS bridge only when ros present.
-    ext_names = ["isaacsim.core.nodes"]
-    if cfg["ros"]:
-        ext_names.append("isaacsim.ros2.bridge")
-    _enable_extensions(*ext_names)
 
     if sensor_type == "realsense":
         return _setup_realsense(cfg, stage)
@@ -267,7 +214,7 @@ def setup_camera(cfg, stage):
 
 
 def _setup_realsense(cfg, stage):
-    """RealSense D455: create prim + optional ROS 2 publish chain.
+    """Create the RealSense D455 mount and reference the camera asset.
 
     Layout:
         <parent_prim>/RealSenseMount        Xform with mount.pose applied
@@ -310,16 +257,11 @@ def _setup_realsense(cfg, stage):
             near, far = float(depth_range[0]), float(depth_range[1])
             UsdGeom.Camera(depth_cam).CreateClippingRangeAttr(Gf.Vec2f(near, far))
 
-    # Layer (c): ROS 2 OmniGraph wiring -- skip when ros is None.
-    if cfg["ros"] is None:
-        return mount_path
-
-    from isaac_devkit.sensor_ros import setup_sensor_publish
-    return setup_sensor_publish(stage, mount_path, cfg["ros"], "camera", cfg)
+    return mount_path
 
 
 def _setup_custom(cfg, stage):
-    """Generic camera path: create prims + optional ROS 2 publish chain.
+    """Create each configured Camera prim under the mount.
 
     Layout:
         <parent_prim>/<frame_id_prefix>_mount      Xform with mount.pose
@@ -338,7 +280,7 @@ def _setup_custom(cfg, stage):
         raise ValueError(f"parent_prim does not exist: {parent_path}")
 
     sensors = cfg["sensors"]
-    ros = cfg["ros"]
+    ros = cfg.get("ros")
 
     frame_id_prefix = ros["frame_id_prefix"] if ros else "custom"
 
@@ -359,12 +301,7 @@ def _setup_custom(cfg, stage):
             range_m=entry.get("range_m"),
         )
 
-    # Layer (c): ROS 2 OmniGraph wiring -- skip when ros is None.
-    if ros is None:
-        return mount_path
-
-    from isaac_devkit.sensor_ros import setup_sensor_publish
-    return setup_sensor_publish(stage, mount_path, ros, "camera", cfg)
+    return mount_path
 
 
 def _setup_zed(cfg, stage):
@@ -373,7 +310,7 @@ def _setup_zed(cfg, stage):
     The extension is third-party and not bundled with the
     ycpss91255-lab/isaac container.  See src/doc/zed_install.md.
 
-    Raises NotImplementedError -- the OmniGraph topology depends on the
+    Raises NotImplementedError -- prim creation depends on the
     Stereolabs SDK API surface and is deferred until end-to-end verification.
     """
     parent_path = cfg["mount"]["parent_prim"]
@@ -394,7 +331,7 @@ def _setup_zed(cfg, stage):
 
     raise NotImplementedError(
         "zed dispatch: Stereolabs extension loaded successfully but the "
-        "OmniGraph build step is deferred until end-to-end verification can "
+        "prim creation step is deferred until end-to-end verification can "
         "happen against a real install.  In the meantime use realsense (D455) "
         "or custom (ZED-M baseline)."
     )
