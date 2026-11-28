@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **加強 GPU 工作流程的容器清理測試（isaac#408）。** 驗證 `core-gpu` 依序呼叫六個腳本替身，並確認新增的 Docker 呼叫會被攔截。分別改動腳本與工作流程的專案前綴，驗證兩者不一致時會比對失敗。所有依執行編號設定 Compose 專案的入口腳本，其呼叫端都須傳入含執行編號與嘗試次數的清理篩選器。新增 5 項 core 案例，hosted 基準由 1018 增至 1023，core 由 874 增至 879。
 - **新增 Python 輸出模式的 GPU 整合測試（isaac#390）。** 測試放在 `test/integration/no_ros/`，因為檢查內容需要提到 ROS 2 bridge 節點名稱。驗證 Jetbot 相機的 RGB 回呼能收到影格，並確認 OmniGraph 中的 ROS 2 bridge 節點數為零。暖機 30 步後量測 300 步的平均耗時與第 95 百分位數，要求後者低於 33.3 毫秒。GPU 測試基準由 36 提高至 39。
 - **`core-gpu` 執行 Isaac Sim 官方 core 與 sensors 測試（isaac#438）。** 串行驗證 18 支 core 與 14 支 sensors 腳本，並保留各桶的 JUnit 與 Kit log。檢查四個 RTX 回歸案例及兩個已知的 actuator skips，僅排除官方映像會崩潰的 tiled camera 案例。Hosted 基準由 1000 提高至 1002（core 856 → 858）。
 - **在 core CI 執行 NVIDIA 官方 standalone 測試（isaac#437）。** 使用共用 GPU runner 驗證 headless 映像的 41 項 `nativepythontests:testing` 案例，以及 livestream 與 hello_world 範例。同一 job 透過既有 Kit 探針驗證 `IsaacDriver` 的啟動設定。成功與失敗均上傳 JUnit、範例與 driver 日誌。Hosted pytest 從 964 增至 975 項（core 820 增至 831）。
