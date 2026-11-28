@@ -293,6 +293,10 @@ out.step(sim_time_seconds)
 | `isaac-sim/nvidia/computecache` | `/home/${USER_NAME}/.nv/ComputeCache` | CUDA compute cache |
 | `isaac-sim/documents` | `/home/${USER_NAME}/Documents` | User Documents（USD scenes 等）|
 
+セルフホスト GPU CI では、ジョブごとに Kit と CUDA 計算キャッシュのコピーをマウントします。キャッシュのコピー元は `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/seed` です。キーには Dockerfile の `BASE_IMAGE` タグ（`ISAAC_CI_CACHE_KEY` で上書き可能）と NVIDIA ドライバーのバージョンを使います。ドライバーのバージョンを取得できない場合は `nodriver` を使います。
+
+通常のジョブは同じ階層の `run-<GITHUB_RUN_ID>-<GITHUB_RUN_ATTEMPT>` にシードをコピーします。成功時にロックを取得してシードを置き換え、失敗時やキャンセル時にはコピーを破棄します。リリースタグ、手動実行の **final_acceptance**、または `ISAAC_CI_COLD_CACHE=1` を指定した場合は空のキャッシュで開始し、終了時に破棄します。ランナーは 1 日を過ぎた未使用の実行ディレクトリを削除し、最近使った 2 つのキーを保持します。
+
 2026-05-21 以前の layout（`cache/{kit,ov,pip,glcache,computecache}`、flat `logs/`、flat `data/`）はアップグレード後の初回 `./script/init_isaac_dirs.sh` 実行で新しい namespaced path に自動 migrate されます（issue #21 fix-A）。既存の shader / pip / compute cache は mv で保持されます。
 
 Kit は `isaac-sim/documents/Kit/shared/screenshots` がまだ存在しない場合、mode 000 で作成する。`init_isaac_dirs.sh` はこれを 0755 で事前作成し、mode 000 になっているものは修復する。

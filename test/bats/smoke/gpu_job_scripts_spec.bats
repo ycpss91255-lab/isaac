@@ -4,12 +4,13 @@
 # Behavioral guard for the self-hosted GPU job scripts:
 #   script/ci/gpu_integration_job.sh  (main.yaml gpu-integration)
 #   script/ci/stream_smoke_job.sh     (ci-stream-smoke.yaml stream-smoke)
+#   script/ci/stream_visual_e2e_job.sh (visual stream acceptance)
 #
-# Both jobs now run through the org reusable workflow
+# These jobs run through the org reusable workflow
 # ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml, which owns
 # the runner, the fork-PR gate, the pre-checkout workspace reclaim and the
 # checkout, and then runs ONE repo script. These scripts hold the step logic
-# the two workflows used to carry inline, so this spec pins what those steps
+# the workflows used to carry inline, so this spec pins what those steps
 # did: the order, the WS_PATH pin, which env reaches which command, the
 # writable cache dirs, and that a failing step fails the job.
 #
@@ -23,12 +24,13 @@ bats_require_minimum_version 1.5.0
 
 setup() {
   FAKE="$(mktemp -d)"
-  local scripts="${BATS_TEST_DIRNAME}"
-  if [ ! -f "${scripts}/gpu_integration_job.sh" ]; then
-    scripts="${BATS_TEST_DIRNAME}/../../../script/ci"
+  local scripts="${BATS_TEST_DIRNAME}/../../../script/ci" f
+  # devel-test includes the complete CI script directory under /lint.
+  if [[ ! -f "${scripts}/gpu_integration_job.sh" ]]; then
+    scripts=/lint/ci
   fi
   mkdir -p "${FAKE}/script/ci" "${FAKE}/test" "${FAKE}/bin"
-  for f in gpu_job_lib.sh gpu_integration_job.sh stream_smoke_job.sh; do
+  for f in gpu_job_lib.sh gpu_integration_job.sh stream_smoke_job.sh stream_visual_e2e_job.sh; do
     cp "${scripts}/${f}" "${FAKE}/script/ci/${f}"
   done
   cp "${scripts}/official_startuptests.sh" "${FAKE}/script/ci/"
@@ -46,7 +48,14 @@ setup() {
   export HOME="${BATS_TEST_TMPDIR}/home"
   export ISAAC_CI_CACHE_ROOT="${BATS_TEST_TMPDIR}/runner-cache"
   mkdir -p "${HOME}"
-  unset ISAAC_CI_CACHE_KEY
+  unset ISAAC_CI_CACHE_KEY ISAAC_CI_COLD_CACHE GITHUB_REF_TYPE GITHUB_REF
+  unset GITHUB_EVENT_NAME GITHUB_EVENT_PATH
+  cat > "${FAKE}/bin/nvidia-smi" <<'STUB'
+#!/usr/bin/env bash
+[[ "$#" == 2 && "$1" == --query-gpu=driver_version && "$2" == --format=csv,noheader ]] || exit 2
+printf '%s\n' 550.54.15 560.35.03
+STUB
+  chmod +x "${FAKE}/bin/nvidia-smi"
   export GITHUB_RUN_ID=1234
   export GITHUB_RUN_ATTEMPT=2
   unset ISAAC_ALLOW_SHARED_IDENTITY BASELINE_PROJECT \
@@ -105,6 +114,87 @@ STUB
 
 teardown() {
   rm -rf "${FAKE}"
+}
+
+# Run in place of a GPU workload. Snapshot the bind mounts while the job owns
+# them and write through both links. Once the job exits, the run may be gone.
+install_cache_probe() {
+  local workload="${FAKE}/${1:-test/assert_pytest_baseline.sh}"
+  cat > "${workload}" <<'STUB'
+#!/usr/bin/env bash
+set -eu
+mkdir -p observed
+probe_mount() {
+  local mount="$1" name="$2" target
+  [[ -L "${mount}" ]]
+  target="$(realpath -e "${mount}")"
+  echo "${target}" > "observed/${name}.target"
+  stat -c '%d:%i' "$(dirname "${target}")" > "observed/${name}.parent-inode"
+  cp -a "${mount}/." "observed/${name}"
+  rm -f "${mount}/obsolete"
+  echo "${GITHUB_RUN_ID}" > "${mount}/writer"
+}
+probe_mount isaac-sim/kit/cache kit-cache
+probe_mount isaac-sim/nvidia/computecache computecache
+if [[ -f after-cache-write.sh ]]; then
+  # shellcheck disable=SC1091
+  source ./after-cache-write.sh
+fi
+STUB
+  chmod +x "${workload}"
+}
+
+# Discover the key independently of the separator between version and driver.
+# The first warm job runs under a different ID from the job under test.
+prepare_seed() {
+  GITHUB_RUN_ID=100 SMOKE_RC=7 run bash "${FAKE}/script/ci/stream_smoke_job.sh"
+  [ "${status}" -eq 7 ]
+  key_dir="$(find "${ISAAC_CI_CACHE_ROOT}" -mindepth 1 -maxdepth 1 -type d)"
+  seed="${key_dir}/seed"
+  run_dir="${key_dir}/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+  local name
+  for name in kit-cache computecache; do
+    mkdir -p "${seed}/${name}"
+    printf '%s\0seed\n' "${name}" > "${seed}/${name}/marker"
+    touch "${seed}/${name}/obsolete"
+  done
+  cp -a "${seed}" "${BATS_TEST_TMPDIR}/original"
+}
+
+assert_run_mounts() {
+  local expected="$1" workspace="${2:-${FAKE}}" name
+  for name in kit-cache computecache; do
+    [ "$(cat "${workspace}/observed/${name}.target")" = "${expected}/${name}" ]
+  done
+}
+
+assert_discarded_run() {
+  assert_run_mounts "${run_dir}"
+  [ ! -e "${run_dir}" ]
+  [ -f "${key_dir}/run-9876-1/active" ]
+  diff -r "${BATS_TEST_TMPDIR}/original" "${seed}"
+}
+
+prepare_discarded_run() {
+  prepare_seed
+  mkdir -p "${key_dir}/run-9876-1"
+  touch "${key_dir}/run-9876-1/active"
+  install_cache_probe script/ci/stream_smoke.sh
+}
+
+check_cold_job() {
+  prepare_discarded_run
+  # A retry may encounter a leftover run directory with the same identity.
+  mkdir -p "${run_dir}/"{kit-cache,computecache}
+  touch "${run_dir}/"{kit-cache,computecache}/leftover
+  run env "$@" bash "${FAKE}/script/ci/stream_smoke_job.sh"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"cache mode: cold (empty cache dir ${run_dir})"* ]]
+  local name
+  for name in kit-cache computecache; do
+    [ -z "$(find "${FAKE}/observed/${name}" -mindepth 1 -print -quit)" ]
+  done
+  assert_discarded_run
 }
 
 @test "gpu integration job: apply, pin WS_PATH, build test, caches, gpu baseline, official startuptests -- in order" {
@@ -195,50 +285,62 @@ PY
   grep -qx "setup apply" "${CALLS}"
 }
 
-@test "gpu integration job: replaces existing cache dirs with links keyed by the BASE_IMAGE tag" {
+@test "gpu integration job: replaces existing cache dirs with run links keyed by BASE_IMAGE and first GPU driver" {
   echo 'ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:9.9.9"' > "${FAKE}/Dockerfile"
-  local sim="${FAKE}/isaac-sim" cache="${ISAAC_CI_CACHE_ROOT}/9.9.9"
+  local sim="${FAKE}/isaac-sim" observed_key
   mkdir -p "${sim}/kit/cache" "${sim}/nvidia/computecache"
   touch "${sim}/kit/cache/old" "${sim}/nvidia/computecache/old"
+  install_cache_probe
 
   run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
-  [ -L "${sim}/kit/cache" ]
-  [ -L "${sim}/nvidia/computecache" ]
-  [ "${sim}/kit/cache" -ef "${cache}/kit-cache" ]
-  [ "${sim}/nvidia/computecache" -ef "${cache}/computecache" ]
-  [ ! -e "${sim}/kit/cache/old" ]
-  [ ! -e "${sim}/nvidia/computecache/old" ]
+  [[ "${output}" == *"cache mode: warm (no seed yet)"* ]]
+  observed_key="$(find "${ISAAC_CI_CACHE_ROOT}" -mindepth 1 -maxdepth 1 -type d)"
+  [[ "${observed_key##*/}" == 9.9.9*550.54.15 ]]
+  assert_run_mounts "${observed_key}/run-1234-2"
+  [ ! -e "${FAKE}/observed/kit-cache/old" ]
+  [ ! -e "${FAKE}/observed/computecache/old" ]
 }
 
-@test "gpu integration job: ISAAC_CI_CACHE_KEY overrides the BASE_IMAGE tag" {
+@test "gpu integration job: sanitizes the BASE_IMAGE override and still includes the driver" {
   echo 'ARG BASE_IMAGE="nvcr.io/nvidia/isaac-sim:9.9.9"' > "${FAKE}/Dockerfile"
-  export ISAAC_CI_CACHE_KEY="Runner_2.test-cache"
-  local cache="${ISAAC_CI_CACHE_ROOT}/${ISAAC_CI_CACHE_KEY}"
-
+  export ISAAC_CI_CACHE_KEY="Runner_2.test/cache"
+  install_cache_probe
   run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
-  [ "${FAKE}/isaac-sim/kit/cache" -ef "${cache}/kit-cache" ]
-  [ "${FAKE}/isaac-sim/nvidia/computecache" -ef "${cache}/computecache" ]
+  local observed_key
+  observed_key="$(find "${ISAAC_CI_CACHE_ROOT}" -mindepth 1 -maxdepth 1 -type d)"
+  [[ "${observed_key##*/}" == Runner_2.test_cache*550.54.15 ]]
+  assert_run_mounts "${observed_key}/run-1234-2"
+}
+
+@test "gpu integration job: a failed nvidia-smi query uses nodriver" {
+  printf '#!/bin/sh\nexit 1\n' > "${FAKE}/bin/nvidia-smi"
+  install_cache_probe
+  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  local observed_key
+  observed_key="$(find "${ISAAC_CI_CACHE_ROOT}" -mindepth 1 -maxdepth 1 -type d)"
+  [[ "${observed_key##*/}" == default*nodriver ]]
+  assert_run_mounts "${observed_key}/run-1234-2"
 }
 
 @test "gpu integration job: both caches survive workspace cleanup between runs" {
   unset ISAAC_CI_CACHE_ROOT
-  local sim="${FAKE}/isaac-sim" cache="${HOME}/isaac-ci-cache/default"
-
+  local sim="${FAKE}/isaac-sim" observed_key
+  install_cache_probe
   run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
-  [ -d "${cache}/kit-cache" ]
-  [ -d "${cache}/computecache" ]
-  echo shader > "${cache}/kit-cache/marker"
-  echo compute > "${cache}/computecache/marker"
+  observed_key="$(find "${HOME}/isaac-ci-cache" -mindepth 1 -maxdepth 1 -type d)"
+  [[ "${observed_key##*/}" == default*550.54.15 ]]
   touch "${sim}/kit/data/previous-run"
-  rm -rf "${sim}"
+  rm -rf "${sim}" "${FAKE}/observed"
 
-  run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  GITHUB_RUN_ID=1235 run bash "${FAKE}/script/ci/gpu_integration_job.sh"
   [ "${status}" -eq 0 ]
-  grep -qx shader "${sim}/kit/cache/marker"
-  grep -qx compute "${sim}/nvidia/computecache/marker"
+  assert_run_mounts "${observed_key}/run-1235-2"
+  grep -Fxq 1234 "${FAKE}/observed/kit-cache/writer"
+  grep -Fxq 1234 "${FAKE}/observed/computecache/writer"
   [ -d "${sim}/kit/data" ]
   [ ! -L "${sim}/kit/data" ]
   [ ! -e "${sim}/kit/data/previous-run" ]
@@ -249,16 +351,11 @@ PY
   [ "${status}" -eq 0 ]
   grep -qx 'caches=writable' "${CALLS}"
 
-  local state target
+  local state path
   for state in kit/data kit/logs ov/cache ov/data ov/logs pip nvidia/glcache documents; do
-    local path="${FAKE}/isaac-sim/${state}"
+    path="${FAKE}/isaac-sim/${state}"
     [ -d "${path}" ]
     [ ! -L "${path}" ]
-  done
-  for target in kit-cache computecache; do
-    local path="${ISAAC_CI_CACHE_ROOT}/default/${target}"
-    [ -d "${path}" ]
-    [[ "$(stat -c '%a' "${path}")" == *777 ]]
   done
 }
 
@@ -306,7 +403,7 @@ PY
 
   # Directories must have the 'other' execute+read+write bits set.
   local dir_perms
-  dir_perms=$(stat -c '%a' "${FAKE}/isaac-sim/kit/cache")
+  dir_perms=$(stat -c '%a' "${FAKE}/isaac-sim/kit/data")
   [[ "${dir_perms}" == *7 ]]
 
   # Regular files must have the 'other' read+write bits set (X does not set
@@ -323,4 +420,184 @@ exit 4
 STUB
   run bash "${FAKE}/script/ci/stream_smoke_job.sh"
   [ "${status}" -eq 4 ]
+}
+
+@test "warm job sees a writable copy of each seeded cache and leaves the live seed untouched" {
+  prepare_seed
+  chmod 444 "${seed}/"{kit-cache,computecache}/marker
+  chmod 755 "${seed}/"{kit-cache,computecache}
+  install_cache_probe
+  export ORIGINAL_SEED="${seed}"
+  cat > "${FAKE}/after-cache-write.sh" <<'STUB'
+diff -r "${BATS_TEST_TMPDIR}/original" "${ORIGINAL_SEED}"
+STUB
+  printf '%s\n' '{"inputs":{"final_acceptance":"false"}}' > "${FAKE}/event.json"
+
+  GITHUB_EVENT_NAME=workflow_dispatch GITHUB_EVENT_PATH="${FAKE}/event.json" \
+    run bash "${FAKE}/script/ci/gpu_integration_job.sh"
+  [ "${status}" -eq 0 ]
+  [[ "${output}" == *"cache mode: warm (seed copied from ${seed})"* ]]
+  assert_run_mounts "${run_dir}"
+  local name snapshot
+  for name in kit-cache computecache; do
+    snapshot="${FAKE}/observed/${name}"
+    diff -r "${BATS_TEST_TMPDIR}/original/${name}" "${snapshot}"
+    [[ "$(stat -c '%a' "${snapshot}")" == *777 ]]
+    [[ "$(stat -c '%a' "${snapshot}/marker")" == *666 ]]
+  done
+}
+
+@test "successful visual stream job promotes the whole run directory and removes the old seed" {
+  prepare_seed
+  install_cache_probe script/ci/stream_visual_e2e.sh
+  # Probe the real lock at the instant the job moves either directory.
+  export SEED_DIR="${seed}" RUN_DIR="${run_dir}"
+  local mv_bin
+  mv_bin="$(command -v mv)"
+  export REAL_MV="${mv_bin}"
+  cat > "${FAKE}/bin/mv" <<'STUB'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  if [[ "${arg}" -ef "${SEED_DIR}" || "${arg}" -ef "${RUN_DIR}" ]]; then
+    if flock -sn "${SEED_DIR%/*}/seed.lock" true; then
+      echo "seed promotion requires an exclusive seed.lock" >&2
+      exit 1
+    fi
+    break
+  fi
+done
+exec "${REAL_MV}" "$@"
+STUB
+  chmod +x "${FAKE}/bin/mv"
+  run bash "${FAKE}/script/ci/stream_visual_e2e_job.sh"
+  [ "${status}" -eq 0 ]
+  assert_run_mounts "${run_dir}"
+  [ ! -e "${run_dir}" ]
+  # A rename preserves the run directory's inode; copying back in place does not.
+  [ "$(stat -c '%d:%i' "${seed}")" = "$(cat "${FAKE}/observed/kit-cache.parent-inode")" ]
+  local name
+  for name in kit-cache computecache; do
+    grep -Fxq "${GITHUB_RUN_ID}" "${seed}/${name}/writer"
+    cmp "${BATS_TEST_TMPDIR}/original/${name}/marker" "${seed}/${name}/marker"
+    [ ! -e "${seed}/${name}/obsolete" ]
+  done
+  [ "$(find "${key_dir}" -mindepth 1 -maxdepth 1 -type d)" = "${seed}" ]
+}
+
+@test "failed smoke job deletes only its run and preserves both seed caches byte for byte" {
+  prepare_discarded_run
+  echo 'exit 23' > "${FAKE}/after-cache-write.sh"
+  run bash "${FAKE}/script/ci/stream_smoke_job.sh"
+  [ "${status}" -eq 23 ]
+  assert_discarded_run
+}
+
+@test "SIGTERM after cache writes cancels the job and preserves both seed caches byte for byte" {
+  prepare_discarded_run
+  # Signal the job shell itself. Its foreground workload then exits successfully.
+  cat > "${FAKE}/after-cache-write.sh" <<'STUB'
+kill -TERM "${PPID}"
+touch observed/term-sent
+STUB
+  run bash "${FAKE}/script/ci/stream_smoke_job.sh"
+  [ "${status}" -ne 0 ]
+  [ -f "${FAKE}/observed/term-sent" ]
+  assert_discarded_run
+}
+
+@test "tag ref type uses an empty cold cache" {
+  check_cold_job GITHUB_REF_TYPE=tag
+}
+
+@test "tag ref path uses an empty cold cache" {
+  check_cold_job GITHUB_REF=refs/tags/v1.0
+}
+
+@test "ISAAC_CI_COLD_CACHE=1 uses an empty cold cache" {
+  check_cold_job ISAAC_CI_COLD_CACHE=1
+}
+
+@test "workflow_dispatch final acceptance uses an empty cold cache" {
+  command -v jq >/dev/null || skip "dispatch payload parsing requires jq"
+  printf '%s\n' '{"inputs":{"final_acceptance":"true"}}' > "${FAKE}/event.json"
+  check_cold_job GITHUB_EVENT_NAME=workflow_dispatch GITHUB_EVENT_PATH="${FAKE}/event.json"
+}
+
+@test "job startup removes day-old runs and preserves recent runs" {
+  prepare_discarded_run
+  export STALE_RUN="${key_dir}/run-2345-1"
+  mkdir "${STALE_RUN}"
+  touch -d '25 hours ago' "${STALE_RUN}"
+  touch -d '23 hours ago' "${key_dir}/run-9876-1"
+  cat > "${FAKE}/after-cache-write.sh" <<'STUB'
+[[ ! -e "${STALE_RUN}" ]]
+STUB
+
+  run bash "${FAKE}/script/ci/stream_smoke_job.sh"
+  [ "${status}" -eq 0 ]
+  [ -f "${key_dir}/run-9876-1/active" ]
+}
+
+@test "retention keeps exactly the current key and the most recent other key" {
+  prepare_seed
+  local other
+  for other in previous oldest newest; do
+    mkdir -p "${ISAAC_CI_CACHE_ROOT}/${other}/seed/"{kit-cache,computecache}
+    touch "${ISAAC_CI_CACHE_ROOT}/${other}/seed/kit-cache/marker"
+  done
+  # Both newer keys sort ahead of the current key even if it is touched at exit.
+  touch -d '1 day ago' "${ISAAC_CI_CACHE_ROOT}/oldest"
+  touch -d '1 day hence' "${ISAAC_CI_CACHE_ROOT}/previous"
+  touch -d '2 days hence' "${ISAAC_CI_CACHE_ROOT}/newest"
+  run bash "${FAKE}/script/ci/stream_smoke_job.sh"
+  [ "${status}" -eq 0 ]
+  [ -d "${seed}" ]
+  [ -f "${ISAAC_CI_CACHE_ROOT}/newest/seed/kit-cache/marker" ]
+  [ "$(find "${ISAAC_CI_CACHE_ROOT}" -mindepth 1 -maxdepth 1 -type d | wc -l)" -eq 2 ]
+}
+
+@test "concurrent successful jobs use separate runs and publish one complete seed" {
+  prepare_seed
+  install_cache_probe script/ci/stream_smoke.sh
+  export BARRIER="${BATS_TEST_TMPDIR}/ready"
+  mkdir "${BARRIER}"
+  cat > "${FAKE}/after-cache-write.sh" <<'STUB'
+touch "isaac-sim/kit/cache/job-${GITHUB_RUN_ID}" "isaac-sim/nvidia/computecache/job-${GITHUB_RUN_ID}"
+touch "${BARRIER}/${GITHUB_RUN_ID}"
+# Both jobs must have written their caches before either job exits.
+for ((i = 0; i < 200; i++)); do
+  [[ -f "${BARRIER}/1234" && -f "${BARRIER}/1235" ]] && exit 0
+  sleep 0.05
+done
+exit 1
+STUB
+  local second="${BATS_TEST_TMPDIR}/second-workspace" first_pid second_pid
+  cp -a "${FAKE}" "${second}"
+  bash "${FAKE}/script/ci/stream_smoke_job.sh" > "${FAKE}/job.log" 2>&1 &
+  first_pid=$!
+  GITHUB_RUN_ID=1235 GITHUB_WORKSPACE="${second}" \
+    bash "${second}/script/ci/stream_smoke_job.sh" > "${second}/job.log" 2>&1 &
+  second_pid=$!
+  local first_rc=0 second_rc=0
+  wait "${first_pid}" || first_rc=$?
+  wait "${second_pid}" || second_rc=$?
+  [ "${first_rc}" -eq 0 ]
+  [ "${second_rc}" -eq 0 ]
+  assert_run_mounts "${run_dir}"
+  assert_run_mounts "${key_dir}/run-1235-2" "${second}"
+  [ ! -e "${run_dir}" ]
+  [ ! -e "${key_dir}/run-1235-2" ]
+
+  local winner name expected
+  winner="$(cat "${seed}/kit-cache/writer")"
+  [[ "${winner}" == 1234 || "${winner}" == 1235 ]]
+  for name in kit-cache computecache; do
+    expected="${BATS_TEST_TMPDIR}/original/${name}"
+    diff -r "${expected}" "${FAKE}/observed/${name}"
+    diff -r "${expected}" "${second}/observed/${name}"
+    rm "${expected}/obsolete"
+    echo "${winner}" > "${expected}/writer"
+    touch "${expected}/job-${winner}"
+  done
+  diff -r "${BATS_TEST_TMPDIR}/original" "${seed}"
 }

@@ -293,6 +293,10 @@ All Isaac Sim runtime state persists under `${WS_PATH}/isaac-sim/` on the host. 
 | `isaac-sim/nvidia/computecache` | `/home/${USER_NAME}/.nv/ComputeCache` | CUDA compute cache |
 | `isaac-sim/documents` | `/home/${USER_NAME}/Documents` | User Documents (USD scenes etc.) |
 
+Self-hosted GPU CI mounts a separate copy of the Kit and CUDA compute caches for each run. The runner stores the seed under `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/seed`. The key combines the Dockerfile `BASE_IMAGE` tag (overridable with `ISAAC_CI_CACHE_KEY`) and the NVIDIA driver version (`nodriver` if unavailable).
+
+A warm job copies the seed into `run-<GITHUB_RUN_ID>-<GITHUB_RUN_ATTEMPT>` beside it. A successful job replaces the seed under a lock. Failed and cancelled jobs discard their copy. Release tags, the manual **final_acceptance** input, and `ISAAC_CI_COLD_CACHE=1` start with empty caches and discard them on exit. The runner cleans up abandoned runs older than a day and retains the two most recent keys.
+
 Pre-2026-05-21 layout (`cache/{kit,ov,pip,glcache,computecache}`, flat `logs/`, flat `data/`) is auto-migrated to the new namespaced paths by `./script/init_isaac_dirs.sh` on first run after upgrade (issue #21 fix-A). Pre-existing shader / pip / compute caches are preserved through the move.
 
 Kit creates `isaac-sim/documents/Kit/shared/screenshots` with mode 000 when the directory does not exist yet. `init_isaac_dirs.sh` pre-creates it as 0755 and repairs a mode-000 one.
