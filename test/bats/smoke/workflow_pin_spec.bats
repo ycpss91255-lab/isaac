@@ -128,6 +128,7 @@ print(job["uses"] if field == "uses" else job["with"][field])
   cp "${src}/gpu_job_lib.sh" "${src}/gpu_integration_job.sh" "${fake}/script/ci/"
   printf '#!/usr/bin/env bash\nprintf "WS_PATH=/x\\n" > .env.generated\n' > "${fake}/script/setup.sh"
   printf '#!/usr/bin/env bash\nexit 0\n' > "${fake}/script/build.sh"
+  cp "${fake}/script/build.sh" "${fake}/script/ci/uid_matrix.sh"
   printf '#!/usr/bin/env bash\necho "${BASELINE_PROJECT}" > "${OBSERVED}"\n' \
     > "${fake}/test/assert_pytest_baseline.sh"
   printf '#!/usr/bin/env bash\ntrue\n' > "${fake}/script/ci/official_startuptests.sh"

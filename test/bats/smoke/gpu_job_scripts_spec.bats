@@ -90,7 +90,10 @@ if [ -n "${SMOKE_RC:-}" ]; then
   exit "${SMOKE_RC}"
 fi
 STUB
+  # uid_matrix_spec exercises the matrix and its failure status separately.
+  printf '#!/bin/sh\nexit 0\n' > "${FAKE}/script/ci/uid_matrix.sh"
   chmod +x "${FAKE}/script/setup.sh" "${FAKE}/script/build.sh" \
+    "${FAKE}/script/ci/uid_matrix.sh" \
     "${FAKE}/test/assert_pytest_baseline.sh" "${FAKE}/script/ci/stream_smoke.sh"
 }
 

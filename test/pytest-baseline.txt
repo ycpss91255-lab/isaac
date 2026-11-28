@@ -302,8 +302,11 @@
 # isaac#436: official startuptests wiring adds 3 core cases (882 -> 885).
 # isaac#484 adds 3 hosted tests on top of main's 885 -> 888 (core 744 -> 745, stream 52 -> 54).
 # isaac#276 removes ROS I/O and its host round-trip guards (888 -> 853, all core).
-# isaac#429: after merging #276, hosted 853 -> 871 and core 710 -> 728.
-HOSTED_UNIT_BASELINE = 871
+# isaac#375: test_sim_version.py adds 6 core cases (hosted 853 -> 859, core 710 -> 716).
+# isaac#446: test_dockerfile_numpy_pin.py adds 4 core cases (859 -> 863, core 716 -> 720).
+# isaac#474 adds 40 core cases (ownership guard 27, UID setup 13): 863 -> 903.
+# isaac#429: hosted 903 -> 921 and core 760 -> 778.
+HOSTED_UNIT_BASELINE = 921
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -311,7 +314,7 @@ HOSTED_UNIT_BASELINE = 871
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 853。
+#   以下五組的測試數量下限合計為 921。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -351,7 +354,10 @@ HOSTED_UNIT_BASELINE = 871
 #   official experience and removal of the custom file (stream 52 -> 54), and
 #   adds 1 core case (core 744 -> 745).
 #   isaac#276 removes 35 net core cases (745 -> 710).
-HOSTED_UNIT_BASELINE_CORE = 728
+#   isaac#375 adds 6 core cases (core 710 -> 716).
+#   isaac#446 adds 4 core cases (core 716 -> 720).
+#   isaac#474 adds 40 core cases (720 -> 760).
+HOSTED_UNIT_BASELINE_CORE = 778
 HOSTED_UNIT_BASELINE_GUI = 0
 HOSTED_UNIT_BASELINE_STREAM = 54
 HOSTED_UNIT_BASELINE_HEADLESS = 6
@@ -458,8 +464,9 @@ AGGREGATE_TARGET = 126
 #   isaac#430 removes 11 core bats tests (119 -> 108); isaac#428 then adds seven GUI configuration and PR policy cases (108 -> 115); isaac#260 adds four cache-mount cases, 119.
 #   isaac#497 adds 9 stream smoke cases (stream 81 -> 90).
 #   isaac#276 removes 4 host-leg cases (core 119 -> 115, total 223 -> 219), then isaac#436 adds 5 (core 115 -> 120, total 224).
-#   isaac#429 adds four GPU baseline guard cases (core 120 -> 124).
-BATS_BASELINE_CORE = 124
+#   isaac#474 adds six UID matrix cases (core 120 -> 126).
+#   isaac#429 adds four GPU baseline guard cases (core 126 -> 130).
+BATS_BASELINE_CORE = 130
 BATS_BASELINE_GUI = 0
 BATS_BASELINE_STREAM = 91
 BATS_BASELINE_HEADLESS = 13
