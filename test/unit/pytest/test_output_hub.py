@@ -10,7 +10,7 @@ np = pytest.importorskip("numpy")
 _FRAMEWORK_DIR = Path(__file__).resolve().parents[3] / "framework"
 sys.path.insert(0, str(_FRAMEWORK_DIR))
 
-from isaac_devkit.output_hub import KINDS, OutputHub  # noqa: E402
+from isaac_devkit.output_hub import KINDS, Frame, OutputHub  # noqa: E402
 
 pytestmark = pytest.mark.core
 
@@ -56,19 +56,25 @@ def _imu():
 
 
 def _all_sources():
+    points = np.arange(15, dtype=np.float64).reshape(3, 5).T
+    scan = {"ranges": [2.5, 4.0], "angles": [-0.5, 0.5]}
     return [
         _Source("cam", "rgb", _rgba()),
         _Source("depth", "depth", np.ones((_H, _W), np.float64)),
         _Source("js", "joint_state", _joint()),
         _Source("imu", "imu", _imu()),
+        _Source("cloud", "lidar_3d", points),
+        _Source("scan", "lidar_2d", scan),
     ]
 
 
-def test_kinds_are_the_four_documented_ones():
-    assert set(KINDS) == {"rgb", "depth", "joint_state", "imu"}
+def test_kinds_are_the_documented_ones():
+    assert set(KINDS) == {
+        "rgb", "depth", "joint_state", "imu", "lidar_3d", "lidar_2d",
+    }
 
 
-def test_delivery_of_the_four_kinds():
+def test_delivery_of_all_kinds():
     hub = OutputHub()
     got = {}
     hub.register(lambda f: got.setdefault(f.kind, f))
@@ -92,6 +98,40 @@ def test_delivery_of_the_four_kinds():
     assert got["rgb"].stamp == 1.5 and got["rgb"].name == "cam"
 
 
+def _receive_one_kind(kind):
+    hub = OutputHub()
+    sources = _all_sources()
+    got = []
+    hub.register(got.append, kinds=[kind])
+    hub.emit(1.5, [s.as_tuple() for s in sources])
+
+    assert [s.kind for s in sources if s.calls] == [kind]
+    (frame,) = got
+    assert isinstance(frame, Frame)
+    assert (frame.kind, frame.stamp) == (kind, 1.5)
+    return frame
+
+
+def test_lidar_3d_subscription_delivers_contiguous_float32_points():
+    frame = _receive_one_kind("lidar_3d")
+    assert frame.name == "cloud"
+    points = frame.data
+    assert points.dtype == np.float32 and points.shape == (5, 3)
+    assert points.flags.c_contiguous
+    np.testing.assert_array_equal(points, np.arange(15).reshape(3, 5).T)
+
+
+def test_lidar_2d_subscription_delivers_paired_float32_vectors():
+    frame = _receive_one_kind("lidar_2d")
+    assert frame.name == "scan"
+    assert isinstance(frame.data, dict)
+    assert set(frame.data) == {"ranges", "angles"}
+    for key, values in (("ranges", [2.5, 4.0]), ("angles", [-0.5, 0.5])):
+        vector = frame.data[key]
+        assert vector.dtype == np.float32 and vector.shape == (2,)
+        np.testing.assert_array_equal(vector, values)
+
+
 def test_depth_with_trailing_unit_axis_is_squeezed():
     hub = OutputHub()
     got = []
@@ -104,7 +144,7 @@ def test_reader_not_called_without_consumer():
     hub = OutputHub()
     sources = _all_sources()
     hub.emit(0.0, [s.as_tuple() for s in sources])
-    assert [s.calls for s in sources] == [0, 0, 0, 0]
+    assert all(s.calls == 0 for s in sources)
 
 
 def test_reader_called_once_per_emit_with_consumer():
@@ -115,6 +155,7 @@ def test_reader_called_once_per_emit_with_consumer():
     hub.emit(0.0, [s.as_tuple() for s in sources])
     assert {s.kind: s.calls for s in sources} == {
         "rgb": 0, "depth": 1, "joint_state": 0, "imu": 0,
+        "lidar_3d": 0, "lidar_2d": 0,
     }
     hub.emit(1.0, [s.as_tuple() for s in sources])
     assert {s.kind: s.calls for s in sources}["depth"] == 2
@@ -172,10 +213,27 @@ def test_emit_rejects_unknown_source_kind_only_when_wanted():
         ("depth", np.zeros((_H,), np.float32)),
         ("imu", {"lin_acc": [0, 0, 0], "ang_vel": [0, 0, 0],
                  "orientation": [1, 0, 0]}),
+        pytest.param("lidar_3d", np.zeros(3), id="flat-point"),
+        pytest.param("lidar_3d", np.zeros((3, 2)), id="wrong-coordinate-count"),
+        pytest.param("lidar_3d", [[0, np.nan, 1]], id="nonfinite-point"),
+        pytest.param("lidar_2d", {"ranges": [1]}, id="missing-angles"),
+        pytest.param("lidar_2d", {"angles": [0]}, id="missing-ranges"),
+        pytest.param("lidar_2d", {"ranges": [1, 2], "angles": [0]},
+                     id="unequal-lengths"),
+        pytest.param("lidar_2d", {"ranges": [[1]], "angles": [0]},
+                     id="ranges-rank"),
+        pytest.param("lidar_2d", {"ranges": [1], "angles": [[0]]},
+                     id="angles-rank"),
+        pytest.param("lidar_2d", {"ranges": [np.inf], "angles": [0]},
+                     id="nonfinite-range"),
+        pytest.param("lidar_2d", {"ranges": [1], "angles": [np.nan]},
+                     id="nonfinite-angle"),
     ],
 )
 def test_malformed_payload_raises_value_error(kind, bad):
     hub = OutputHub()
-    hub.register(lambda f: None)
+    hub.register(lambda f: None, kinds=[kind])
+    source = _Source("s", kind, bad)
     with pytest.raises(ValueError):
-        hub.emit(0.0, [("s", kind, lambda: bad)])
+        hub.emit(0.0, [source.as_tuple()])
+    assert source.calls == 1

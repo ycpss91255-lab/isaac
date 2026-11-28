@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- **新增 3D 與 2D 光達的 Python 輸出回呼（isaac#88）。** `setup_output` 支援 `lidars_3d` 與 `lidars_2d`，分別輸出 XYZ 點雲（公尺）與平面掃描（距離以公尺計，角度以弧度計）。 單元測試要求 3D 點雲為 C 連續的 float32 `(N,3)` 陣列，2D 掃描的距離與角度各為等長的 float32 一維陣列。測試也檢查格式錯誤與非有限值會引發 `ValueError`，並確認未訂閱的光達不會被讀取。GPU 整合測試在 Jetbot 上掛載兩種光達，要求各自至少回傳一筆非空資料。Hosted 基準新增 12 項（merge main 後由 1072 增至 1084，core 由 909 增至 921），GPU 基準由 40 增至 42。
 - **新增 Git worktree 掛載的回歸測試（isaac#574）。** 驗證一般 clone 不需額外掛載，連結工作樹則須將共用 Git 目錄掛載到容器內相同的絕對路徑。另檢查執行與收集 hosted pytest 的兩處 Docker 指令都引用掛載腳本。Hosted 基準由 1069 增至 1072，core 組由 906 增至 909。
 - **GPU 整合測試依檔案列出 Kit 啟動與測試耗時（isaac#527）。** 計時範圍僅限 `test/integration/pytest/`，`test/integration/no_ros/` 的 GPU 測試檔案尚未納入。每次建立 `SimulationApp` 時計時，共用 fixture 的啟動時間只計一次。pytest 摘要列出各檔與總計的秒數，可用 `KIT_TIMING_JSON` 指定 JSON 報表路徑。新增 4 項 hosted 測試，基準由 1047 提高至 1051（core 888 → 892）。此 PR 僅提供量測工具，驗收項目仍在 #527 追蹤，尚待完成。
 - **新增 [isaac 架構總覽](../arch/overview.html)（isaac#274）。** 七張圖說明 Python 介面、USD 場景生成、物理層級、容器與 CI，並提供 21 份 ADR 的交叉索引。新增 8 項文件測試，hosted 基準由 1023 增至 1031，docs 由 83 增至 91。
@@ -16,12 +17,13 @@
 - **啟動前檢查本機掛載（isaac#528）。** `just docker run` 列出 `setup.local.toml` 套用後缺少的專案掛載，發出警告後繼續啟動。沿用 base 的掛載清單繼承與取代規則。新增 7 個 core 測試，hosted 基準由 944 提高至 951（core 800 → 807）。
 
 ### Changed
+- **串流 viewer 改用固定版本的公開映像（isaac#284）。** 本機缺少映像時，post-run hook 會從 GHCR 拉取 `0.3.0` 版，可用 `OWV_IMAGE` 覆寫。移除 `web_viewer` 子模組與 `.gitmodules`。
 - **縮減容器的預設權限（isaac#549）。** 預設關閉特權模式，移除整個 `/dev` 的映射、額外的 Linux capabilities 與 `seccomp:unconfined`，並改用容器自己的 PID 與 IPC 命名空間。串流仍使用主機網路。保留 `shm_size = "16g"` 為 Kit 媒體管線預留共享記憶體空間，使用預設的 64 MB 也通過了 stream-smoke。四語 README 說明如何在 `setup.local.toml` 為 GUI 或特殊裝置開放所需權限。
 - **預設相機設定通用化（isaac#136）。** 三種相機共用掛載點 `/World/Robot/carriage`、ROS topic 前綴 `/robot/camera` 與 frame ID 前綴 `robot_camera`。RViz 與無頭相機測試已同步。移除其餘堆高機文字殘留並新增掃描測試，應用模型與場景資產已移交 [sim_asset#146](https://github.com/ycpss91255-lab/sim_asset/issues/146)。
 - **IMU 改用 Isaac Sim 6.2 的 `IMU.create`（isaac#520）。** 建立感測器後回傳實際的 prim 路徑。IMU 隨每個物理步驟取樣，舊設定中的 `frequency_hz` 不再控制取樣頻率。
 - **場景生成與關節 drive 改用 Isaac Sim Core Experimental（isaac#478）。** 純函式轉接器改名為 `to_spawn_specs`。場景覆蓋採允許清單，支援可見性及語意標籤等選項。遇到 `rigid_props`、`mass_props`、`collision_props` 或物理材質鍵會指引使用者在 sim_asset 設定，由 asset_converter 寫入 USD。Hosted 基準由 924 提高至 946（core 780 → 802），GPU 基準由 35 提高至 36。
 - **串流來源產生器改用 Isaac Sim 的 `ViewportManager.set_camera_view`（isaac#535）。** 移除舊版視窗 API 與備援匯入，新增一項 hosted 測試驗證相機路徑、位置和對準目標（924 項，stream 55 項）。
-- **自架 GPU 作業隔離 Kit 與 CUDA 運算快取（isaac#260）。** 每次執行依 Isaac Sim 標籤與 NVIDIA 驅動版本選取種子，複製到專屬目錄。成功時取得鎖並以整個目錄替換種子，失敗或取消時丟棄副本。發行標籤、手動勾選 `final_acceptance` 或設定 `ISAAC_CI_COLD_CACHE=1` 時從空快取啟動，結束後丟棄。Runner 清理超過一天的殘留執行目錄，保留最近兩組鍵值。本次修訂新增 12 個 core Bats 案例，GPU 作業規格由 16 增至 28 項，core 由 129 增至 141 項，Bats 總數由 236 增至 248 項。
+- **自架 GPU 作業隔離 Kit 與 CUDA 運算快取（isaac#260）。** 每次執行依 Isaac Sim 標籤與 NVIDIA 驅動版本選取種子，複製到專屬目錄。成功時取得鎖並以整個目錄替換種子，失敗或取消時丟棄副本。發行標籤、手動勾選 `final_acceptance` 或設定 `ISAAC_CI_COLD_CACHE=1` 時從空快取啟動，結束後丟棄。Runner 清理超過一天的殘留執行目錄，保留最近兩組鍵值。本次修訂新增 12 個 core Bats 案例，GPU 作業規格由 16 增至 28 項，core 由 129 增至 141 項，Bats 總數由 239 增至 251 項。
 
 ### Removed
 

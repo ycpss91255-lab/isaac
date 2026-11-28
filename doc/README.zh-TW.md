@@ -158,11 +158,10 @@ Isaac Sim 6.2.0 用 NVCF（`omni.services.livestream.nvcf`）livestream 協定�
 
 ### 瀏覽器 viewer (omniverse_web_viewer)
 
-[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo 提供瀏覽器版 client，以 sidecar 容器形式運行。已作為 submodule 掛在本 repo 的 `web_viewer/`。
+[`omniverse_web_viewer`](https://github.com/ycpss91255-lab/omniverse_web_viewer) repo 提供瀏覽器版 client，以 sidecar 容器形式運行。若本機沒有固定版本的映像 `ghcr.io/ycpss91255-lab/omniverse_web_viewer:0.3.0`，post-run hook 會自動拉取。
 
 ```bash
-# First time: init submodules + create per-host config
-git submodule update --init --recursive web_viewer
+# 首次執行時建立本機設定
 cp config/host.yaml.example config/host.yaml
 # Edit config/host.yaml: set network.public_ip to this host's LAN IP
 
@@ -189,7 +188,7 @@ just docker stop
 
 `config/host.yaml` 是 gitignored、per-machine。它的 `network.public_ip` 會 mount 進兩個 container：Isaac 端由 `runheadless-host-config.sh` 讀取轉成 Kit `publicEndpointAddress` 參數；web-viewer 端由 entrypoint 讀取設成 `SIGNALING_SERVER`。
 
-post-run hook 同時也把 `network.public_ip` 當 `SIGNALING_SERVER` env 傳給 viewer container — defense in depth，當本機 cache 的 viewer image 早於 `omniverse_web_viewer#12`（讀 `/etc/host.yaml` 的 entrypoint）時還能拿到正確的 host IP。`web_viewer/` submodule pointer 升級後請手動 rebuild `owv:runtime` 拉取新 entrypoint。
+如需切換 viewer 版本，請在執行 `just docker run -t stream -d` 時，於環境變數或 `.env` 中設定 `OWV_IMAGE=ghcr.io/ycpss91255-lab/omniverse_web_viewer:<tag>`。
 
 需求：Chrome 或 Chromium（Firefox 不相容）。每個正在跑的 Isaac Sim 只能同時連一個互動 client。
 
@@ -276,7 +275,7 @@ ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 
 ### Python 輸出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。`ISAAC_OUTPUT_MODE` 僅支援預設值 `python`。其他值（包括 `ros`）都會引發 `ValueError`。`isaac_ros_io` 透過 `ISAAC_IO_PLUGIN` 提供 ROS 輸出（ADR-0025 已被取代）。
+`isaac_devkit.output.setup_output` 不經 ROS，直接把模擬資料交給 Python callback。種類：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，順序 `w, x, y, z`）、`lidar_3d`（C 連續的 float32 `(N, 3)` 陣列，每列是一組以公尺為單位的 XYZ 座標）、`lidar_2d`（`ranges` 為距離，單位為公尺，`angles` 為角度，單位為弧度，兩者皆為長度 N 的 float32 向量）。只有已註冊 consumer 的種類才會做 GPU 到 CPU 複製。`ISAAC_OUTPUT_MODE` 僅支援預設值 `python`。其他值（包括 `ros`）都會引發 `ValueError`。`isaac_ros_io` 透過 `ISAAC_IO_PLUGIN` 提供 ROS 輸出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output
