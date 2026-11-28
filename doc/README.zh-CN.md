@@ -275,7 +275,7 @@ ISAAC_IO_PLUGIN='my_pkg.io:setup_io' /isaac-sim/python.sh my_driver.py
 
 ### Python 输出 API（isaac#365）
 
-`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。`ISAAC_OUTPUT_MODE` 仅支持默认值 `python`。其他值（包括 `ros`）都会引发 `ValueError`。`isaac_ros_io` 通过 `ISAAC_IO_PLUGIN` 提供 ROS 输出（ADR-0025 已被取代）。
+`isaac_devkit.output.setup_output` 不经 ROS，直接把仿真数据交给 Python callback。类型：`rgb`（uint8 `(H, W, 3)`）、`depth`（float32 `(H, W)`）、`joint_state`（`names` / `positions` / `velocities` / `efforts`）、`imu`（`lin_acc` / `ang_vel` / `orientation`，顺序 `w, x, y, z`）、`lidar_3d`（C 连续的 float32 `(N, 3)` 数组，每行是一组以米为单位的 XYZ 坐标）、`lidar_2d`（`ranges` 为距离，单位为米，`angles` 为角度，单位为弧度，两者均为长度为 N 的 float32 向量）。只有已注册 consumer 的类型才会做 GPU 到 CPU 复制。`ISAAC_OUTPUT_MODE` 仅支持默认值 `python`。其他值（包括 `ros`）都会引发 `ValueError`。`isaac_ros_io` 通过 `ISAAC_IO_PLUGIN` 提供 ROS 输出（ADR-0025 已被取代）。
 
 ```python
 from isaac_devkit.output import CameraOutput, JointOutput, setup_output

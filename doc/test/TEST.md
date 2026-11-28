@@ -1,6 +1,6 @@
 # TEST.md
 
-**239 tests** total (bats). Hosted pytest collects **1080 tests**.
+**239 tests** total (bats). Hosted pytest collects **1092 tests**.
 
 ## Tests by group (isaac#434)
 
@@ -8,7 +8,7 @@ CI runs per scope, so every test belongs to exactly one group: core (framework, 
 
 | Group | bats | pytest hosted | pytest GPU | Total |
 |-------|-----:|--------------:|-----------:|------:|
-| core | 129 | 909 | 40 | 1078 |
+| core | 129 | 921 | 42 | 1092 |
 | gui | 0 | 0 | 0 | 0 |
 | stream | 97 | 62 | 0 | 159 |
 | headless | 13 | 6 | 0 | 19 |
@@ -487,7 +487,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 | `test_import_safety.py` | 15 | Hosted import of each `isaac_devkit.*` module (incl. `__init__`) leaves `sys.modules` free of `omni` / `pxr` / `isaacsim` (ADR-0017 section 8 / PRD A1). |
 | `test_no_module_top_isaac_import.py` | 17 | AST static guard: no module-top `import omni\|pxr\|isaacsim` in any package source (catches try/except-disguised module-top imports; mirrors the ruff TID253 config). |
 | `test_output_mode.py` | 12 | `isaac_devkit.output_mode.resolve_output_mode` (isaac#366, #514): unset -> `python`; only `python` passes through; `ros`, `ROS`, `Python`, empty, `both`, leading / trailing space raise `ValueError` naming the offending value, `ISAAC_OUTPUT_MODE` and the allowed set; unrelated variables ignored; defaults to `os.environ`; constants. |
-| `test_output_hub.py` | 17 | `isaac_devkit.output_hub.OutputHub` (isaac#365): delivery of the four kinds with the documented payloads (RGB uint8 `(H,W,3)` alpha dropped, depth float32 `(H,W)`, joint `names/positions/velocities/efforts`, IMU `lin_acc/ang_vel/orientation` w,x,y,z), `test_reader_not_called_without_consumer`, `test_reader_called_once_per_emit_with_consumer` (incl. unregister), shared copy for several consumers, `None` readings skipped, unknown kinds and malformed payloads raise `ValueError`. Fake sources only. |
+| `test_output_hub.py` | 29 | Fake sources exercise callback delivery for RGB, depth, joint state, IMU and both lidars (isaac#365, isaac#88). Lidar callbacks receive C-contiguous float32 `(N,3)` points or paired float32 `(N,)` ranges and angles. Tests cover filtered registration, idle readers, unregistering, a shared copy for multiple consumers, skipped `None` readings, and `ValueError` for unknown kinds or malformed data, including non-finite lidar values. |
 | `test_output.py` | 8 | `isaac_devkit.output.setup_output` (isaac#365 / #366): spec defaults, python mode builds readers (monkeypatched), unset -> python, invalid mode raises, `step` / `unregister`, `ros` raises `ValueError`, `OutputModeError` hierarchy. |
 | `test_stamp.py` | 4 | `isaac_devkit.stamp.split_stamp` (isaac#365, Bug 1 regression): `1.0 - 1e-10 -> (1, 0)` nanosecond carry, exact values, strictly increasing `(sec, nanosec)` pairs across second boundaries, `0 <= nanosec < 1e9` for seeded random times. |
 | `test_buffers.py` | 7 | `isaac_devkit.buffers.to_u8_buffer` (isaac#365, Bug 2 regression): a float32 depth image is 4 bytes per pixel and equals `tobytes()`, uint8 RGB round-trips, returns `array.array('B')`, accepts stdlib buffers, and the non-contiguous contract (strided / Fortran-ordered input raises `ValueError`, `np.ascontiguousarray` input passes). Needs `numpy` (installed by `assert_pytest_baseline.sh`). |
@@ -551,7 +551,7 @@ The hosted suite runs without Isaac Sim. isaac#336 adds 14 core cases for the US
 
 ### test/integration/pytest/
 
-The GPU suite collects **40 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
+The GPU suite collects **42 tests**, all inside the Isaac test container. `test/assert_pytest_baseline.sh --gpu` requires at least one pass, enforces the collection floor and checks the cross-runner aggregate. Both directories under `test/integration/` are collected.
 
 For `test/integration/pytest/`, the terminal summary prints a `[FILE-TIMING]` row per file and a `TOTAL` row. Each row splits elapsed time, including fixture setup and teardown, into Kit construction (`kit_boot_sec`) and the remaining time (`test_body_sec`). Set `KIT_TIMING_JSON` to a file path to save the same measurements.
 
@@ -561,7 +561,7 @@ For `test/integration/pytest/`, the terminal summary prints a `[FILE-TIMING]` ro
 | `test_example_gpu_integration.py` (6) | 檢查 Jetbot 場景啟動與結束、CUDA 與 Vulkan 初始化、底盤剛體、連桿與關節數量、底盤下的 Camera prim，以及 SIGINT 關閉流程。 |
 | `test_sensor_setup_integration.py` (5) | 使用含 `ros:` 的 YAML 建立 RealSense、兩種 LiDAR 及 IMU，檢查回傳的 prim 與掛載位置，並驗證 IMU 拒絕非剛體的父節點。 |
 | `test_joint_drive_integration.py` (1) | Creates a revolute USD joint, applies a runtime drive and reads the angular stiffness and damping back from its DriveAPI. |
-| `test_output_hub_gpu.py` (4) | OutputHub delivery (isaac#365): one runner boot (`_output_hub_runner.py`, official Jetbot) builds python-mode output with an RGB and a depth camera, joint state and an IMU prim, steps 300 ticks and the four tests assert RGB uint8 `480x640x3`, depth float32 `480x640`, joint names present, IMU orientation length 4. Marker-line acceptance. Executed on a real GPU in the devel-test container (isaac#384): 4 passed, 0 skipped; the runtime `IMU.create(...)` + IMU reader path is confirmed (orientation length 4). |
+| `test_output_hub_gpu.py` (6) | The runner steps the official Jetbot scene for 300 ticks. Callback markers report RGB uint8 `480x640x3`, depth float32 `480x640`, joint names and IMU orientation length 4 (isaac#365, isaac#384). The Ouster OS1 and Example Rotary 2D profiles must each deliver a populated frame. The lidar markers check float32 `(N,3)` points and equal-length float32 `(N,)` ranges and angles (isaac#88). |
 | `test_kit_extra_args_integration.py` (2) | `ISAAC_KIT_EXTRA_ARGS` (isaac#422): `_kit_extra_args_runner.py` boots a minimal `IsaacDriver` and reads `/app/isaac_test/marker` back through carb settings. With `ISAAC_KIT_EXTRA_ARGS=--/app/isaac_test/marker=1` the value is `1`; without the variable the setting is absent (control). First proof is the CI GPU job. |
 | `test_build_scene_adapter.py` (5) | The runner builds an in-memory scene from the official Jetbot and NVIDIA cube USDs fetched via `test/test_assets.py` (#325). Checks clean exit, ground and light creation, the robot and its `/World/Robot/chassis` prim, a dynamic cube with `RigidBodyAPI`, the existing ground and prop collision schemas, optional variant sets, and identity orientation for zero roll, pitch and yaw. |
 | `test_capture_noise.py` (3) | Capture-speckle fix (isaac#266): one Kit boot (`_capture_noise_runner.py`) builds a lit room and captures it TWICE through the SAME render product -- once as replicator creates it, once after `apply_converged_render_settings` (inlined from the former `viz_render` module, now in `ycpss91255-lab/isaac_physics_test`) authors the recipe on the RenderProduct prim. Asserts the default leg is CLEAN, i.e. NGX-denoised (isaac#294: since #285 set `gpu_capabilities = all` the container gets the `ngx` capability, so the old "default must still be noisy" guard was inverted -- a default leg back near 53 now means NGX dropped out again), that the mode reads back as `PathTracing` off the live prim (a carb `/rtx/rendermode` write reads back unchanged, so this is what separates "applied" from "attempted"), and that the converged frame is clean (absolute ceiling, no relative-to-default check since both legs are now clean) with no fully black pixels. The metric is neighbouring-pixel mean absolute difference, NOT frame `std`: `std` is dominated by scene contrast, which is why every failed hypothesis in the issue "left std unchanged" and looked equally inert. Reference on the RTX 5090: pre-#285 default 53.0 vs converged 2.1; post-#285 default ~0.41 vs converged ~1.53 (CI run 34233956492). |
