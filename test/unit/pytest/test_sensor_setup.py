@@ -353,35 +353,22 @@ class TestEnableExtensions:
     ``isaacsim.core.utils.extensions`` (isaac#248)."""
 
     def test_enables_missing_extension_via_ext_manager(self, fake_kit):
-        sensor_setup._enable_extensions("isaacsim.ros2.bridge")
-        assert fake_kit.immediate_calls == [("isaacsim.ros2.bridge", True)]
+        sensor_setup._enable_extensions("isaacsim.sensors.physics")
+        assert fake_kit.immediate_calls == [("isaacsim.sensors.physics", True)]
 
     def test_skips_already_enabled_extension(self, fake_kit):
-        fake_kit.enabled.add("isaacsim.ros2.bridge")
-        sensor_setup._enable_extensions("isaacsim.ros2.bridge")
+        fake_kit.enabled.add("isaacsim.sensors.physics")
+        sensor_setup._enable_extensions("isaacsim.sensors.physics")
         assert fake_kit.immediate_calls == []
 
     def test_enables_several_in_order(self, fake_kit):
-        fake_kit.enabled.add("isaacsim.ros2.bridge")
+        fake_kit.enabled.add("isaacsim.sensors.physics")
         sensor_setup._enable_extensions(
-            "isaacsim.core.nodes", "isaacsim.ros2.bridge", "isaacsim.sensors.rtx"
+            "isaacsim.core.nodes", "isaacsim.sensors.physics", "isaacsim.sensors.rtx"
         )
         assert fake_kit.immediate_calls == [
             ("isaacsim.core.nodes", True),
             ("isaacsim.sensors.rtx", True),
-        ]
-
-    def test_camera_path_enables_core_nodes_and_bridge(self, fake_kit):
-        # The setup_camera entry path enables both isaacsim.core.nodes
-        # (for IsaacCreateRenderProduct) and isaacsim.ros2.bridge (for
-        # ROS2CameraHelper). With BOOT_EXTENSIONS = () the pre-fix code
-        # fell through to the fatal deprecated import here (isaac#248).
-        sensor_setup._enable_extensions(
-            "isaacsim.core.nodes", "isaacsim.ros2.bridge",
-        )
-        assert fake_kit.immediate_calls == [
-            ("isaacsim.core.nodes", True),
-            ("isaacsim.ros2.bridge", True),
         ]
 
     def test_failed_enable_raises(self, fake_kit, monkeypatch):
@@ -390,8 +377,8 @@ class TestEnableExtensions:
         monkeypatch.setattr(
             fake_kit, "set_extension_enabled_immediate", lambda *_a: False
         )
-        with pytest.raises(RuntimeError, match="isaacsim.ros2.bridge"):
-            sensor_setup._enable_extensions("isaacsim.ros2.bridge")
+        with pytest.raises(RuntimeError, match="isaacsim.sensors.physics"):
+            sensor_setup._enable_extensions("isaacsim.sensors.physics")
 
     def test_no_deprecated_core_utils_import_in_framework(self):
         # Static guard over the whole package: the lidar / IMU setup paths

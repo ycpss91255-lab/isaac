@@ -28,9 +28,9 @@ Pattern A 適合有自己 runtime engine 的框架（ROS 2 executor、Unity engi
 
 ## Key Sub-Decisions
 
-### rclpy signal handler: helper method（不是 auto-flag）
+### rclpy signal handler（原決策，已由 isaac#276 取代）
 
-Isaac Sim 5.1 的 3-way signal handler 衝突（Kit handler + driver handler + rclpy handler）會導致 segfault。Base class 提供 `init_rclpy()` 讓 subclass 在 `setup()` 中顯式呼叫，而非 `use_rclpy = True` auto-flag。理由：subclass 控制 init 時機（先 `init_rclpy()` 才能 `Node()`），顯式呼叫比隱式 flag 清楚。
+Isaac Sim 5.1 的 3-way signal handler 衝突（Kit handler + driver handler + rclpy handler）會導致 segfault。當時的 base class 提供 `init_rclpy()` 讓 subclass 在 `setup()` 中顯式呼叫，而非 `use_rclpy = True` auto-flag。理由：subclass 控制 init 時機（先 `init_rclpy()` 才能 `Node()`），顯式呼叫比隱式 flag 清楚。isaac#276 已將 ROS 初始化移交給透過 `ISAAC_IO_PLUGIN` 載入的外部插件。
 
 ### USD 路徑: repo-relative（不是絕對 hardcode）
 
@@ -55,7 +55,7 @@ Isaac Sim 5.1 的 3-way signal handler 衝突（Kit handler + driver handler + r
 
 - **ycpss91255-docker/isaac#28**: Docker stage 整合（headless / headless-stream），`ISAAC_LIVESTREAM` env var 來源
 - **ycpss91255/isaac#23**: 實作 issue
-- **ADR-0007**: custom streaming Kit experience（`isaacsim.exp.base.python.streaming.kit`），由 `create_sim_app()` 在 `ISAAC_LIVESTREAM=2` 時自動選用
+- **ADR-0007**: custom streaming Kit experience（`isaacsim.exp.base.python.streaming.kit`），由 `create_sim_app()` 在 `ISAAC_LIVESTREAM=2` 時自動選用（此自訂 experience 已由 isaac#484 取代，見 ADR-0007 狀態說明。）
 - **[ADR-0008](https://github.com/ycpss91255-docker/isaac_physics_test/blob/main/src/doc/adr/0008-l2-l3-physics-level-vocabulary-and-coexistence-rules.md)**: L2/L3 physics level vocabulary — `cmd_vel_planar_standalone_l2.py` 是首個 L2 driver，將由 `IsaacDriver` 重構
 
 ## Editorial note (2026-06-11)
@@ -66,4 +66,4 @@ Incidental application-specific example names in this ADR were replaced with gen
 
 This ADR chose the lifecycle-only pattern (base class owns init/shutdown, subclass owns the main loop) and pointed at Isaac Lab's `AppLauncher` and the Isaac Sim standalone examples as the industry precedent for it. ADR-0018 (the Isaac Lab spawn-backend re-base) now *realizes* the driver on those very primitives instead of merely aligning with them: `IsaacDriver` launches the app via Isaac Lab `AppLauncher` (using its `app`) rather than constructing a raw `SimulationApp`, and runs the loop via `SimulationContext` (`sim.step()`). The `ISAAC_LIVESTREAM` (0/1/2) selection described above maps directly onto `AppLauncher`'s `HEADLESS` / `LIVESTREAM={1,2}` env vars (CLI args override), so `create_sim_app` becomes "set these env/args and hand back `AppLauncher(...).app`"; `enable_cameras` must be set so cameras render under headless (watch the known headless+enable_cameras item, Isaac Lab issue #3250).
 
-The lifecycle-only pattern itself is **unchanged**: the `setup` / `main` / `shutdown` hooks are kept as a thin wrapper over `AppLauncher` + `SimulationContext`, so everything decided here (subclass owns the loop, explicit `init_rclpy()`, repo-relative scene paths, opt-out scene defaults) still stands. Only the underlying primitive moves from `SimulationApp` to `AppLauncher` + `SimulationContext` — which also makes the later move to Isaac Lab `InteractiveScene` cheap. See ADR-0018 (decision 8) and ADR-0017 section 9, whose driver-lifecycle first line changes accordingly from `SimulationApp(parse_livestream_env(...))` to `AppLauncher(...).app` + `SimulationContext`.
+The lifecycle-only pattern itself is **unchanged**: the `setup` / `main` / `shutdown` hooks are kept as a thin wrapper over `AppLauncher` + `SimulationContext`, so everything decided here (subclass owns the loop, repo-relative scene paths, opt-out scene defaults) still stands. Only the underlying primitive moves from `SimulationApp` to `AppLauncher` + `SimulationContext` — which also makes the later move to Isaac Lab `InteractiveScene` cheap. See ADR-0018 (decision 8) and ADR-0017 section 9, whose driver-lifecycle first line changes accordingly from `SimulationApp(parse_livestream_env(...))` to `AppLauncher(...).app` + `SimulationContext`.

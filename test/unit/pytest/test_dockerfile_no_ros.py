@@ -2,8 +2,6 @@
 
 import os
 import re
-import runpy
-import shutil
 import tomllib
 from pathlib import Path
 
@@ -77,16 +75,3 @@ def test_dockerfile_instructions_have_no_ros_setup_or_entrypoint_wrapper():
         elif "/etc/isaac/ros-distro" in args:
             hits.append(line)
     assert not hits, "\n".join(hits)
-
-
-def test_cross_container_roundtrip_uses_test_fastdds_profile(monkeypatch):
-    test_dir = REPO_ROOT / "test"
-    fixture = test_dir / "fixtures" / "ros2" / "fastdds.xml"
-    assert fixture.is_file()
-
-    # The integration module checks for Docker while defining its skip marker.
-    monkeypatch.setattr(shutil, "which", lambda name: None)
-    monkeypatch.syspath_prepend(str(test_dir))
-    roundtrip = test_dir / "integration/pytest/test_cross_container_roundtrip.py"
-    module = runpy.run_path(str(roundtrip))
-    assert module["FASTDDS_PROFILE"] == fixture

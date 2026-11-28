@@ -21,20 +21,10 @@ setup() {
   assert_cmd_installed bash
 }
 
-@test "custom streaming kit experience baked at /isaac-sim/apps/ (issue #21 fix-B)" {
-  # SimulationApp drivers opt in via experience="/isaac-sim/apps/<name>.kit".
-  # Lacking this file, the driver falls back to the bundled
-  # isaacsim.exp.base.python.kit which has no livestream extensions →
-  # `livestream: 2` becomes a no-op and the WebRTC Streaming Client has
-  # no server to connect to.
-  assert_file_exists /isaac-sim/apps/isaacsim.exp.base.python.streaming.kit
-  test -r /isaac-sim/apps/isaacsim.exp.base.python.streaming.kit
-  # Confirms the file actually bundles the streaming extensions instead of
-  # being a stub. Grep for both core + webrtc to catch a partial copy.
-  run grep -q 'omni.kit.livestream.core' /isaac-sim/apps/isaacsim.exp.base.python.streaming.kit
-  assert_success
-  run grep -q 'omni.kit.livestream.webrtc' /isaac-sim/apps/isaacsim.exp.base.python.streaming.kit
-  assert_success
+@test "NVIDIA's full streaming Kit experience is present and readable" {
+  local experience=/isaac-sim/apps/isaacsim.exp.full.streaming.kit
+  assert_file_exists "$experience"
+  test -r "$experience"
 }
 
 @test "devel stage drops the NGC Kit healthcheck (idle containers are not 'unhealthy')" {

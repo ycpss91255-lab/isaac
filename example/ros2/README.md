@@ -83,10 +83,8 @@ Each `[CMD_VEL OK]` line reports a Twist published by the node. The C++ package 
 `ros2 run example_app_cpp camera_subscriber` /
 `ros2 run example_app_cpp cmd_vel_publisher`.
 
-The full Isaac <-> ament cross-container round-trip (a node actually
-receiving the live sim topic) is asserted by the GPU integration test
-(#132); the templates here are verified hosted with `colcon build` +
-`ament_lint`, no GPU required.
+The Isaac–ament round-trip test moved to `isaac_ros_io` (isaac#276). Hosted CI
+checks these templates with `colcon build` and `ament_lint`.
 
 ## Make it yours
 
