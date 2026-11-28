@@ -18,14 +18,14 @@ The total above counts Bats tests. The GUI configuration and PR policy checks (#
 
 ## Official Isaac Sim standalone tests (#437)
 
-`core-official-nativepython` uses the shared GPU runner used by `stream-smoke`. It runs on same-repository PRs that select `core`, on main and release tags, and via manual dispatch of `CI: Official Native Python`. The job builds the repository's `headless` stage and runs NVIDIA's `nativepythontests:testing` bucket (41 cases) and the official livestream and hello_world examples. The examples check process exit status. The stream jobs verify client connectivity and video separately.
+`core-official-nativepython` shares the GPU runner with `stream-smoke`. It runs on same-repository PRs that select `core`, on main and release tags, and via manual dispatch of `CI: Official Native Python`. The job builds the repository's `headless` stage and runs NVIDIA's `nativepythontests:testing` bucket (41 cases) and the official livestream and hello_world examples. The examples check process exit status. The stream jobs verify client connectivity and video separately.
 
 ```sh
 GITHUB_WORKSPACE="$PWD" GITHUB_RUN_ID=local437 GITHUB_RUN_ATTEMPT=1 \
   ./script/ci/official_nativepython_job.sh
 ```
 
-The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations) both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist. With the Isaac Lab dependencies still installed, `python_sh.import_scipy` fails when SciPy resolves from Kit's site-packages. #480 tracks removal of Isaac Lab from the image.
+The container needs NVIDIA GPU access and outbound pip index access on the default Docker bridge. The job mounts a writable tmpfs on `/isaac-sim/_testoutput` and reuses the CI Kit cache. CI uploads `artifacts/official-nativepython` on success and failure, including `testing.xml` (case results and durations), both example logs and the driver launch log. The job fails on a nonzero exit, incomplete or invalid JUnit, or any failed, errored or skipped case. Revision 3 of #437 records the reference runs and per-case durations. The job has an empty allowlist. With the Isaac Lab dependencies still installed, `python_sh.import_scipy` fails when SciPy resolves from Kit's site-packages. #480 tracks removal of Isaac Lab from the image.
 
 The job also runs the existing Kit settings probe through this repository's `IsaacDriver`. The probe requires the running app to report the setting passed in its launch configuration.
 
