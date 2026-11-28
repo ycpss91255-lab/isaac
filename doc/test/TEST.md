@@ -409,8 +409,7 @@ Guard: every reusable-workflow reference to the org's `gpu-self-hosted.yml` must
 
 ## test/unit/pytest/ — hosted unit (pytest, not in the bats count above)
 
-The hosted suite collects **882 tests** on a host without Isaac Sim. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
-The hosted suite collects **922 tests** on a host without Isaac Sim. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
+The hosted suite collects **922 tests** on a host without Isaac Sim. isaac#493 adds 6 core cases for PR scope and build selection. isaac#491 adds 19 core cases, including checks that non-Markdown docs paths select only the `docs` group. CI runs `test/assert_pytest_baseline.sh` to enforce the per-group floors in `test/pytest-baseline.txt` and the 80% coverage floor for the framework’s pure Python code.
 
 | File | Collected | Scope |
 |------|:---------:|-------|
