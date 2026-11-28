@@ -319,6 +319,8 @@ stream 組的 `stream-visual-e2e` GPU job 會啟動 stream stage，驗證 Chromi
 
 `core-gpu` 工作依序執行 Isaac Sim 官方 `asset` 與 `deprecated` Python 測試，並將兩份 JUnit 報告上傳至 `official-tests` 產物。
 
+`core-official-nativepython` 工作依 core 變更範圍執行 NVIDIA 官方的 standalone Python 測試桶，以及 livestream 與 hello_world 範例。本機執行方式與產物請見 [TEST.md](test/TEST.md#official-isaac-sim-standalone-tests-437)。
+
 Workflow 與 job 的命名規則見 [doc/workflow-naming.md](workflow-naming.md)，由 `script/ci/lint_workflow_names.py` 檢查。
 
 ## Python 測試工具鏈（devel-test 階段）
