@@ -482,3 +482,5 @@ line and segfaulted on driver 610; the self-hosted GPU runner had moved to 610. 
 runs on driver 610 (and keeps the published 580.95.05+ minimum). The migration was done
 specifically so the runner stays on 610 rather than being pinned back to 580.x. All 31 GPU
 integration tests are green on 6.0.1 / driver 610.
+
+> Note (#567): Isaac reads materials from USD. Define them in URDF/sim_asset so asset_converter writes them into the asset. [Issue #567](https://github.com/ycpss91255-lab/isaac/issues/567)

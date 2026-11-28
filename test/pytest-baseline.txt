@@ -335,7 +335,8 @@
 # isaac#574 adds three core cases for Git metadata mounts (hosted 1069 -> 1072, core 906 -> 909).
 # isaac#284 adds 8 docs cases for the published viewer image (merged with main: hosted 1084 -> 1092).
 # isaac#88: add 12 core cases for 3D and 2D lidar callbacks (merged with main: hosted 1072 -> 1084, core 909 -> 921).
-HOSTED_UNIT_BASELINE = 1092
+# isaac#567 retires the material suite, two diffuse-color cases and three per-module checks, adds 14 core and 2 stream cases, then 5 core cases for material keys (merged with main: hosted 1092 -> 1079, core 921 -> 906, stream 62 -> 64).
+HOSTED_UNIT_BASELINE = 1079
 
 # Per-group floors (isaac#434). CI runs per scope, so each group has its own
 #   floor: a deleted test cannot hide behind another group's growth. Every
@@ -343,7 +344,7 @@ HOSTED_UNIT_BASELINE = 1092
 #   enforced at collection by test/group_markers.py and statically by
 #   script/ci/scope_groups.py), so the five floors below sum to
 #   HOSTED_UNIT_BASELINE (test_test_groups.py pins that). assert_pytest_baseline.sh
-#   以下五組的測試數量下限合計為 1069。
+#   以下五組的測試數量下限合計為 1056。
 #   collects each group with `-m <group>` and checks it against its own floor.
 #   A group with no tests yet (gui) has floor 0.
 #   core     -- framework, shared Docker layers, shared scripts, CI tooling
@@ -386,9 +387,9 @@ HOSTED_UNIT_BASELINE = 1092
 #   isaac#375 adds 6 core cases (core 710 -> 716).
 #   isaac#446 adds 4 core cases (core 716 -> 720).
 #   isaac#474 adds 40 core cases (720 -> 760).
-HOSTED_UNIT_BASELINE_CORE = 921
+HOSTED_UNIT_BASELINE_CORE = 906
 HOSTED_UNIT_BASELINE_GUI = 0
-HOSTED_UNIT_BASELINE_STREAM = 62
+HOSTED_UNIT_BASELINE_STREAM = 64
 HOSTED_UNIT_BASELINE_HEADLESS = 6
 #   isaac#289 adds 24 docs cases (docs 44 -> 68).
 #   isaac#363 adds 11 docs cases (docs 68 -> 79).
@@ -416,7 +417,7 @@ HOSTED_UNIT_BASELINE_DOCS = 103
 #
 #   MR (#153, ADR-0018 decision 7): color is a spawn-time material cfg
 #   param, not a USD variant set. The variant-set GPU coverage
-#   (test_material_setup_integration.py: 2 in-container tests, plus the
+#   (2 in-container tests, plus the
 #   _apply_materials_runner.py helper) is REMOVED; spawn-time material
 #   application gets GPU coverage later in the spawn-adapter work
 #   (#152/#154). In-container GPU suite collects 25 - 2 = 23; aggregate

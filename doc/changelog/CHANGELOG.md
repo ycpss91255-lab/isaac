@@ -26,6 +26,7 @@
 - **GPU job 的 Isaac shader / compute cache 持久化到 workspace 外（isaac#260）。** `gpu_job_cache_dirs` 把 `isaac-sim/kit/cache` 與 `isaac-sim/nvidia/computecache` 改成指向 `${ISAAC_CI_CACHE_ROOT:-$HOME/isaac-ci-cache}/<key>/{kit-cache,computecache}` 的 symlink，`<key>` 預設取 Dockerfile `ARG BASE_IMAGE` 的 tag（可用 `ISAAC_CI_CACHE_KEY` 覆寫），所以升級 Isaac Sim 會換一份新 cache；checkout 不會碰到 workspace 外的 cache。state 類目錄（`kit/data`、`ov/*`、logs 等）仍在 workspace 內、每次執行前清除，維持冷啟動。新增 4 個 bats 測試（`gpu_job_scripts_spec.bats` 7 -> 11）。Bats core 119 -> 123（併入 main 後重算）。
 
 ### Removed
+- **移除場景材質設定與生成物件時的材質綁定（isaac#567）。** 請在 URDF/sim_asset 中設定材質，由 asset_converter 寫入 USD。載入場景時，若場景頂層、`robot`、`environment`、`environment.light`、`objects` 的項目或生成時的覆寫設定含有材質欄位，就會回報錯誤。場景仍支援 USD 結構變體，串流測試的棋盤格則透過 USD 的 `displayColor` 屬性交錯顯示兩種顏色。
 
 - **精簡 Isaac Sim 執行映像（isaac#480）。** 移除額外安裝的 Isaac Lab、CUDA 13 PyTorch、建置工具與 NumPy 還原步驟。沿用 NVIDIA 隨附的套件及 Newton 元件。新增 standalone Python 冒煙檢查，確認 Isaac Lab、torch 和 xacro 均未安裝。Hosted 基準為 944（core 800），Bats 基準為 233（core 129）。
 

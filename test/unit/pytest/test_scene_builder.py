@@ -610,55 +610,6 @@ class TestToSpawnSpecs:
         # NamedTuple -> list of fields; every field is plain data.
         json.dumps([list(s) for s in specs])
 
-    def test_material_diffuse_recorded(self, repo_root, tmp_path):
-        # A material YAML referenced by an object records a diffuse color
-        # under visual_material_diffuse so build_scene can attach it.
-        material = {
-            "materials": {
-                "/Looks/Body": {
-                    "shader": "OmniPBR",
-                    "diffuse_color": [0.1, 0.2, 0.3],
-                }
-            }
-        }
-        mat_path = repo_root / "model" / "usd" / "object" / "pallet" / "mat.yaml"
-        mat_path.write_text(yaml.dump(material))
-        specs = scene_builder.to_spawn_specs(
-            _scene_dict(
-                objects=[
-                    {
-                        "model": "object/pallet/pallet.usd",
-                        "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
-                        "material": "model/usd/object/pallet/mat.yaml",
-                    }
-                ]
-            ),
-            repo_root,
-        )
-        obj = next(
-            s for s in specs if s.prim_path.startswith("/World/Objects/")
-        )
-        assert obj.kwargs["visual_material_diffuse"] == pytest.approx(
-            (0.1, 0.2, 0.3)
-        )
-
-    def test_no_material_no_diffuse_key(self, repo_root):
-        specs = scene_builder.to_spawn_specs(
-            _scene_dict(
-                objects=[
-                    {
-                        "model": "object/pallet/pallet.usd",
-                        "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
-                    }
-                ]
-            ),
-            repo_root,
-        )
-        obj = next(
-            s for s in specs if s.prim_path.startswith("/World/Objects/")
-        )
-        assert "visual_material_diffuse" not in obj.kwargs
-
 
 @pytest.mark.parametrize("key", [
     "rigid_props", "mass_props", "collision_props", "physics_material",
@@ -701,3 +652,94 @@ def test_load_scene_rejects_asset_physics_before_resolving_models(repo_root, tmp
     path.write_text(yaml.safe_dump(scene))
     with pytest.raises(ValueError, match="physics_material.*sim_asset.*asset_converter"):
         scene_builder.load_scene(path, repo_root)
+
+
+@pytest.mark.parametrize("fields", [
+    pytest.param({"material": "paint.yaml"}, id="material"),
+    pytest.param({"materials": {}}, id="materials"),
+    pytest.param({"visual_material": None}, id="visual-material"),
+    pytest.param({"visual_material_diffuse": [1, 0, 0]}, id="visual-material-diffuse"),
+])
+def test_load_scene_rejects_object_material_before_resolving_models(tmp_path, fields):
+    scene = _scene_dict(robot={"model": "missing-robot.usd"})
+    scene["objects"] = [{
+        "model": "missing-object.usd",
+        "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
+        **fields,
+    }]
+    path = tmp_path / "scene.yaml"
+    path.write_text(yaml.safe_dump(scene))
+    with pytest.raises(ValueError, match="material.*sim_asset.*asset_converter") as exc:
+        scene_builder.load_scene(path, tmp_path)
+    assert "URDF" in str(exc.value) and "USD" in str(exc.value)
+
+
+@pytest.mark.parametrize("field", [
+    "robot.material",
+    "robot.visual_material",
+    "environment.material",
+    "environment.light.material",
+    "material",
+])
+def test_load_scene_rejects_scene_material_before_resolving_models(tmp_path, field):
+    scene = _scene_dict(robot={"model": "missing-robot.usd"}, environment={"light": {}})
+    *sections, key = field.split(".")
+    target = scene
+    for section in sections:
+        target = target[section]
+    target[key] = None
+
+    path = tmp_path / "scene.yaml"
+    path.write_text(yaml.safe_dump(scene))
+    with pytest.raises(ValueError, match="material.*sim_asset.*asset_converter") as exc:
+        scene_builder.load_scene(path, tmp_path)
+    assert "URDF" in str(exc.value) and "USD" in str(exc.value)
+
+
+@pytest.mark.parametrize(("section", "key"), [
+    ("object", "visual_material"),
+    ("light", "material_path"),
+    ("ground", "visual_material_diffuse"),
+])
+def test_load_scene_rejects_material_overrides_before_resolving_models(tmp_path, section, key):
+    overrides = {key: None}
+    scene = _scene_dict(robot={"model": "missing-robot.usd"})
+    if section == "object":
+        scene["objects"] = [dict(scene["robot"], spawn_overrides=overrides)]
+    elif section == "light":
+        scene["environment"] = {"light": {"spawn_overrides": overrides}}
+    else:
+        scene["environment"] = {"ground_plane": True, "ground_overrides": overrides}
+
+    path = tmp_path / "scene.yaml"
+    path.write_text(yaml.safe_dump(scene))
+    with pytest.raises(ValueError, match="material.*sim_asset.*asset_converter") as exc:
+        scene_builder.load_scene(path, tmp_path)
+    assert "URDF" in str(exc.value) and "USD" in str(exc.value)
+
+
+def test_load_scene_distinguishes_physics_and_material_overrides(tmp_path):
+    path = tmp_path / "scene.yaml"
+    for key, guidance in (
+        ("physics_material", r"physics_material.*physics.*sim_asset.*asset_converter"),
+        ("material", r"material.*sim_asset.*asset_converter"),
+    ):
+        scene = _scene_dict(robot={"model": "missing.usd", "spawn_overrides": {key: None}})
+        path.write_text(yaml.safe_dump(scene))
+        with pytest.raises(ValueError, match=guidance):
+            scene_builder.load_scene(path, tmp_path)
+
+
+def test_generate_instances_drops_material_and_preserves_structural_variant():
+    entry = {
+        "model": "crate.usd",
+        "pose": {"xyz": [0, 0, 0], "rpy": [0, 0, 0]},
+        "count": 2,
+        "variant": {"shape": "tall"},
+        "material": "paint.yaml",
+    }
+    instances = scene_builder.generate_instances(entry)
+    assert len(instances) == 2
+    for instance in instances:
+        assert "material" not in instance
+        assert instance["variant"] == {"shape": "tall"}

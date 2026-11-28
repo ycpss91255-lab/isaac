@@ -35,7 +35,6 @@ _DEVKIT_MODULES = (
     "isaac_devkit",
     "isaac_devkit.exceptions",
     "isaac_devkit.usd_model",
-    "isaac_devkit.materials",
     "isaac_devkit.sensors",
     "isaac_devkit.sensor_prim",
     "isaac_devkit.scene",

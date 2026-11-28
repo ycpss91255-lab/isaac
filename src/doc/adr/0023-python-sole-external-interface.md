@@ -102,3 +102,5 @@ belong to Module 2.
 - ADR-0017 sections 3, 6, 8 -- amended by annotations pointing here.
 - ADR-0018 -- Isaac Lab spawn backend (sensors/ros_io unchanged by spawn
   re-base; this ADR's module split is orthogonal).
+
+> Note (#567): Isaac reads materials from USD. Define them in URDF/sim_asset so asset_converter writes them into the asset. [Issue #567](https://github.com/ycpss91255-lab/isaac/issues/567)

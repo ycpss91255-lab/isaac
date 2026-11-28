@@ -107,7 +107,7 @@ def _build_arg_parser():
 def _build_empty_lit_stage():
     """Author the deterministic empty-but-lit checkerboard stage."""
     import omni.usd
-    from pxr import Gf, Sdf, UsdGeom, UsdLux, UsdPhysics, UsdShade
+    from pxr import Gf, UsdGeom, UsdLux, UsdPhysics
 
     ctx = omni.usd.get_context()
     ctx.new_stage()
@@ -130,24 +130,8 @@ def _build_empty_lit_stage():
         Gf.Vec3f(-45.0, 30.0, 0.0)
     )
 
-    # A checkerboard floor (alternating light/dark tiles) -- a clearly-lit
-    # reference surface that reads far better than a flat pale plane, and is
-    # deterministic (no external texture asset). Built as an N x N grid of
-    # flat tiles bound to two UsdPreviewSurface materials by parity.
-    def _mat(path, rgb):
-        m = UsdShade.Material.Define(stage, path)
-        s = UsdShade.Shader.Define(stage, path + "/Shader")
-        s.CreateIdAttr("UsdPreviewSurface")
-        s.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(
-            Gf.Vec3f(*rgb)
-        )
-        s.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(0.7)
-        s.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(0.0)
-        m.CreateSurfaceOutput().ConnectToSource(s.ConnectableAPI(), "surface")
-        return m
-
-    light_tile = _mat("/World/Looks/TileLight", (0.62, 0.62, 0.64))
-    dark_tile = _mat("/World/Looks/TileDark", (0.15, 0.15, 0.17))
+    light_tile = Gf.Vec3f(0.62, 0.62, 0.64)
+    dark_tile = Gf.Vec3f(0.15, 0.15, 0.17)
 
     UsdGeom.Xform.Define(stage, "/World/Ground")
     n_tiles = 12
@@ -162,9 +146,8 @@ def _build_empty_lit_stage():
             cy = -half + (j + 0.5) * tile_m
             tx.AddTranslateOp().Set(Gf.Vec3d(cx, cy, -0.01))
             tx.AddScaleOp().Set(Gf.Vec3f(tile_m, tile_m, 0.02))
-            UsdShade.MaterialBindingAPI.Apply(t.GetPrim()).Bind(
-                light_tile if (i + j) % 2 == 0 else dark_tile
-            )
+            color = light_tile if (i + j) % 2 == 0 else dark_tile
+            t.CreateDisplayColorAttr([color])
 
 
 def _frame_camera():
