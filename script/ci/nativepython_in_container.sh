@@ -35,7 +35,7 @@ bucket_rc=0
 mkdir "${work_dir}/bucket"
 (
   cd "${work_dir}/bucket" || exit
-  python3 "${sim_dir}/run_tests.py" --suite nativepythontests --bucket testing \
+  python3 /tmp/bucket_watchdog.py "${sim_dir}/run_tests.py" --suite nativepythontests --bucket testing \
     --output "${artifacts}/testing.xml"
 ) || bucket_rc=$?
 if (( rc == 0 )); then rc=${bucket_rc}; fi

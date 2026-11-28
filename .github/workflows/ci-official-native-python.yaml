@@ -13,7 +13,9 @@ jobs:
     uses: ycpss91255-lab/.github/.github/workflows/gpu-self-hosted.yml@v0.4.0
     with:
       run-script: ./script/ci/official_nativepython_job.sh
-      timeout-minutes: 120
+      timeout-minutes: 60
+      # Reserve five minutes for cleanup and artifact upload.
+      step-timeout-minutes: 55
       artifact-name: official-nativepython
       artifact-path: artifacts/official-nativepython
       artifact-when: always
